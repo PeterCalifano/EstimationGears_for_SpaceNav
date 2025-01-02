@@ -19,7 +19,7 @@ function  [o_dPointPixCoord, o_dPosVec] = pinholeProjectIDP(i_dInvDepParams, ...
 % o_dPointPixCoord:  [2, 1]
 % -------------------------------------------------------------------------------------------------------------
 %% CHANGELOG
-% 14-12-2023        Pietro Califano         First prototype.
+% 14-12-2023        Pietro Califano         First prototype using quaternions.
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % [-]
