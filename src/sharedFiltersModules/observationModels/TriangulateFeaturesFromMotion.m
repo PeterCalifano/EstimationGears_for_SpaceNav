@@ -1,4 +1,4 @@
-function [dFeaturePosVec_CAM, dFeaturePosVec_IN, dRelPos_CkFromCi_Ci, dDCM_CiFromCk] = ...
+function [dFeatPosVec_NavFrame, dFeatPosVec_Ck, dRelPos_CkFromCi_Ci, dDCM_CiFromCk] = ...
     TriangulateFeaturesFromMotion(dyMeasVec, ...
                                   dDCM_NavFrameFromC, ...
                                   dPositionCam_NavFrame, ...
@@ -38,36 +38,23 @@ end
 % -------------------------------------------------------------------------------------------------------------
 %% OUTPUT
 % out1 [dim] description
-% Name1                     []
-% Name2                     []
-% Name3                     []
-% Name4                     []
-% Name5                     []
-% Name6                     []
-% Name7                     []
-% Name8                     []
-% Name9                     []
+
 % -------------------------------------------------------------------------------------------------------------
 %% CHANGELOG
-% 14-12-2023        Pietro Califano        First prototype coded.
-% 29-12-2023        Pietro Califano        Major reworking. Validation TO DO.
+% 14-12-2023    Pietro Califano     First prototype coded.
+% 29-12-2023    Pietro Califano     Major reworking. Validation needed.
+% 03-01-2024    Pietro Califano     Update of function to new coding rules; upgrade to support estimation 
+%                                   of multiple features together.
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % pinholeProjectIDP()
-% Custom quaternion mathUtils library
 % -------------------------------------------------------------------------------------------------------------
 %% Future upgrades
-% 1) Replace WLS with Givens Rotations for improved efficiency
+% 1) Replace WLS with Givens Rotations for improved efficiency TBC
 % 2) Modify code for static memory allocation
 % -------------------------------------------------------------------------------------------------------------
 %% Function code
 ui32SOLVED_FOR_SIZE = uint32(3 * ui32NumOfFeatures); % DEPENDS ON NUMBER OF FEATURES; 3 +
-
-% TODO: DEVNOTE, this implementation works for one single feature at a time. But it does not make sense as
-% multiple features may be handled and estimated together. The implementation becomes more tricky though as
-% different features may be seen from different poses.
-% Best solution: cluster features per track length. The max amount of times this function will be called is
-% the possible "classes" --> length = max, max-1, max-2 and so on up to min_length
 
 % Input validation checks
 assert(ui32WindowSize == size(dDCM_NavFrameFromC, 3));
@@ -82,7 +69,7 @@ dDCM_CiFromCk       = coder.nullcopy( zeros(3, 3, ui32WindowSize) );
 %% Computation of relative camera pose Ci wrt initial Ck
 
 dPositionCk_NavFrame = dPositionCam_NavFrame(1:3, ui32EstimationTimeID);
-dDCM_NavFrameFromCk = dDCM_NavFrameFromC(:,:, ui32EstimationTimeID);
+dDCM_NavFrameFromCk  = dDCM_NavFrameFromC(:,:, ui32EstimationTimeID);
 
 for ui32IdPose = 1:ui32WindowSize
 
@@ -205,29 +192,41 @@ while dDeltaResRelNorm2 > dDeltaResNormRelTol2
     ui8IterCounter = ui8IterCounter + uint8(1);
 end
 
-% Compute output in CAM frame at tk time
-% dFeaturePosVec_CAM = (1/dFeaturesPosIDP(3)) * [dFeaturesPosIDP(1);
-%                                                dFeaturesPosIDP(2);
-%                                                 1];
+% Compute output in Camera frame at tk time
+dFeatPosVec_Ck = (ones(1,ui32NumOfFeatures)./dFeatInverseDepth_Ck(3,:)) .* [dFeatInverseDepth_Ck(1, :);
+                                                                            dFeatInverseDepth_Ck(2, :);
+                                                                            ones(1,ui32NumOfFeatures)];
 
-% Output in Global frame IN at tk time
-% dFeaturePosVec_IN = Quat2DCM(dDCM_NavFrameFromC(ui32EstimationTimeID, :), bIS_JPL_CONV) * dFeaturePosVec_CAM + ...
-%                                             dPositionCam_NavFrame(1:3, ui32EstimationTimeID);
+% Compute landmarks positions in Navigation frame at tk time
+dDCM_NavFrameFromCk = dDCM_NavFrameFromC(:,:,ui32EstimationTimeID);
+dFeatPosVec_NavFrame = coder.nullcopy(zeros(size(dFeatPosVec_Ck)));
 
-    function [dPosVec_Ck, dPointPix_UV] = pinholeProjectIDP(dDCM_CkfromCi, dDeltaPos_CkfromCi_Ci, dPosInvDepParams, dPrincipalPoint_UV)
-
-        % dAlpha = dPosVec(1)/dPosVec(3); i_dInvDepParams(1)
-        % dBeta  = dPosVec(2)/dPosVec(3); i_dInvDepParams(2)
-        % dRho   = 1/i_dPosVec(3); i_dInvDepParams(3)
-
-        % Inverse depth model
-        % dPosVec = Quat2DCM(i_dqC1wrtC2, i_bIS_JPL_CONV) * [i_dInvDepParams(1:2); 1] + i_dInvDepParams(3) * i_drC1wrtC2_C2;
-        dPosVec_Ck = dDCM_CkfromCi * [dPosInvDepParams(1:2); 1.0] + dPosInvDepParams(3) * dDeltaPos_CkfromCi_Ci; % TBC
-
-        % Compute pixel coordinates
-        dPointPix_UV = 1/dPosVec_Ck(3) * [dPosVec_Ck(1); dPosVec_Ck(2)] + dPrincipalPoint_UV;
-
-    end
-
+for ui32FeatID = 1:ui32NumOfFeatures
+    dFeatPosVec_NavFrame(1:3, :) =  ( dDCM_NavFrameFromCk * dFeatPosVec_Ck(1:3, ui32FeatID) ) ...
+                                    +  dPositionCk_NavFrame;
 end
 
+
+
+
+
+
+end
+%% LOCAL FUNCTION
+function [dPosVec_Ck, dPointPix_UV] = pinholeProjectIDP(dDCM_CkfromCi, ...
+                                                        dDeltaPos_CkfromCi_Ci, ...
+                                                        dPosInvDepParams, ...
+                                                        dPrincipalPoint_UV) %#codegen
+
+% dAlpha = dPosVec(1)/dPosVec(3); i_dInvDepParams(1)
+% dBeta  = dPosVec(2)/dPosVec(3); i_dInvDepParams(2)
+% dRho   = 1/i_dPosVec(3); i_dInvDepParams(3)
+
+% Inverse depth model
+% dPosVec = Quat2DCM(i_dqC1wrtC2, i_bIS_JPL_CONV) * [i_dInvDepParams(1:2); 1] + i_dInvDepParams(3) * i_drC1wrtC2_C2;
+dPosVec_Ck = dDCM_CkfromCi * [dPosInvDepParams(1:2); 1.0] + dPosInvDepParams(3) * dDeltaPos_CkfromCi_Ci; % TBC
+
+% Compute pixel coordinates
+dPointPix_UV = 1/dPosVec_Ck(3) * [dPosVec_Ck(1); dPosVec_Ck(2)] + dPrincipalPoint_UV;
+
+end
