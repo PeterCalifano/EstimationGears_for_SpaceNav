@@ -25,13 +25,28 @@ function [o_dSignalBuffer, o_bValidFlagBuffer, o_dTimetagBuffer, o_bIsBufferFull
 % Function generating a buffer containing "i_ui8BufferSize" number of
 % entries of a generic vector signal [N, 1] where N is the number of
 % components of the signal. Timetag and Validity flag associated to each
-% signal entry must be provided as well.
+% signal entry must be provided as well. 
+% Note: this works for code-generation in Simulink (tested in Hera GNC simulator).
 % -------------------------------------------------------------------------------------------------------------
 %% INPUT
-% in1 [dim] description
+% i_bNewMeas
+% i_dSignalEntry
+% i_dEntryTimetag
+% i_bEntryValidFlag
+% i_dSignalBuffer
+% i_bValidFlagBuffer
+% i_dTimetagBuffer
+% i_ui16BufferSize
+% i_ui16EntryPointer
+% i_ui8SignalDim
+% i_bResetFlag
 % -------------------------------------------------------------------------------------------------------------
 %% OUTPUT
-% out1 [dim] description
+% o_dSignalBuffer
+% o_bValidFlagBuffer
+% o_dTimetagBuffer
+% o_bIsBufferFull
+% o_ui16EntryPointer
 % -------------------------------------------------------------------------------------------------------------
 %% CHANGELOG
 % 19-06-2023    Pietro Califano     First version: simple buffering of 
