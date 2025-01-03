@@ -1,34 +1,34 @@
-function o_dRHS_FOGM = evalRHS_DynFOGM(i_dxState, i_dTimeConst, i_ui16StatesIdx) %#codegen
+function dStateFOGMdot = evalRHS_DynFOGM(dStateFOGM, dTimeConst) %#codegen
+arguments
+    dStateFOGM (:, 1) double {ismatrix, isnumeric}
+    dTimeConst (:, 1) double {isvector, isnumeric}
+end
 %% PROTOTYPE
-% o_dRHS_FOGM = evalRHS_DynFOGM(i_dxState, i_dTimeConst, i_ui16StatesIdx)
+% dStateFOGMdot = evalRHS_DynFOGM(dStateFOGM, dTimeConst) %#codegen
 % -------------------------------------------------------------------------------------------------------------
 %% DESCRIPTION
-% What the function does
+% Function evaluating the Right Hand Side of the a state vector of First Order Gauss Markov processes, for
+% numerical integration (not analytical).
 % -------------------------------------------------------------------------------------------------------------
 %% INPUT
-% i_dxState
-% i_dTimeConst
-% i_ui16StatesIdx
+% dStateFOGM
+% dTimeConst
 % -------------------------------------------------------------------------------------------------------------
 %% OUTPUT
-% o_dRHS_FOGM
+% dStateFOGMdot
 % -------------------------------------------------------------------------------------------------------------
 %% CHANGELOG
-% 29-03-2024        Pietro Califano        Prototype coded.
-% -------------------------------------------------------------------------------------------------------------
-%% DEPENDENCIES
-% [-]
-% -------------------------------------------------------------------------------------------------------------
-%% Future upgrades
-% [-]
+% 29-03-2024    Pietro Califano     First prototype coded.
+% 03-01-2025    Pietro Califano     Function upgrade to support any dimension; indexing moved to caller.
 % -------------------------------------------------------------------------------------------------------------
 %% Function code
-assert(size(i_dTimeConst)==size(i_dxState(i_ui16StatesIdx)), ...
-    'Dimension mismatch between time constants vector and indexed states vector')
 
-o_dRHS_FOGM = coder.nullcopy(zeros(3,1));
+assert( all( size(dTimeConst) == size(dStateFOGM), 'all' ) || size(dTimeConst,1) == 1, ...
+    'Dimension mismatch between time constants vector and indexed state vector');
+
+dStateFOGMdot = coder.nullcopy(zeros(size(dStateFOGM)));
 % First Order Gauss Markov deterministic dynamics
-o_dRHS_FOGM(1:3) = -( 1./i_dTimeConst ) .* i_dxState(i_ui16StatesIdx);
+dStateFOGMdot(:) = - ( 1./dTimeConst ) .* dStateFOGM;
 
 end
 
