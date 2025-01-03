@@ -36,7 +36,7 @@ end
 % i_bIS_VSRPplus) %#codegen
 % -------------------------------------------------------------------------------------------------------------
 %% DESCRIPTION
-% Measurement model for Tightly Coupled navigation architectures (any filter). The naming is inherited from
+% Measurement model for tightly coupled navigation architectures (any filter). The naming is inherited from
 % an UKF code ("csi" refers to the ith Sigma point state). For EKF, use it identically as mean state.
 % ACHTUNG: If UKF, 2*Nz+1 columns. If EKF, 1 column. Consider this when generating code! For improved
 % performance: remove checks and for loop.

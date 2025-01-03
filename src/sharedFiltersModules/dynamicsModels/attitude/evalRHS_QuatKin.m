@@ -4,12 +4,19 @@ arguments
     dAngVelocity    (3,1) double {isvector, isnumeric}
     bIsQuatVSRPplus (1,1) logical {islogical} = true 
 end
-%% FUNCTIONS
-% COPY FROM HERE
 %% SIGNATURE
+% [dQuatDot] = evalRHS_QuatKin(dQuat, dAngVelocity, bIsQuatVSRPplus) %#codegen
 % -------------------------------------------------------------------------------------------------------------
 %% DESCRIPTION
-% What the function does
+% Function computing the Right Hand Side of the quaternion kinematics
+% Meaning of the quaternion VSRP+ convention:
+% (right-handed) Set bIsQuatVSRPplus = false if SVRP+ convention with scalar first is being used. 
+% The conversion is made numerically optimal. Only supports one conversion per call.
+% (SV) Scalar first, Vector last
+% (P) Passive 
+% (R) Successive coordinate transformations have the unmodified quaternion chain on the Right side of
+%     the triple product.
+% (plus) Right-Handed Rule for the imaginary numbers i, j, k. (aka Hamilton)
 % -------------------------------------------------------------------------------------------------------------
 %% INPUT
 % dQuat                    (4,1) double {isvector, isnumeric}
@@ -28,16 +35,6 @@ end
 %% Future upgrades
 % [-]
 % -------------------------------------------------------------------------------------------------------------
-
-
-% Function converting a DCM to Attitude quaternion. Conversion occurs according to VSRP+ convention
-% (right-handed) Set bIsQuatVSRPplus = false if SVRP+ convention with scalar first is being used. 
-% The conversion is made numerically optimal. Only supports one conversion per call.
-% (SV) Scalar first, Vector last
-% (P) Passive 
-% (R) Successive coordinate transformations have the unmodified quaternion chain on the Right side of
-%     the triple product.
-% (plus) Right-Handed Rule for the imaginary numbers i, j, k. (aka Hamilton)
 
 % Build Omega matrix (from Quaternion Time derivative)
 if bIsQuatVSRPplus
