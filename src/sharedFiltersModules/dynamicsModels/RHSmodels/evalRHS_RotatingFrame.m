@@ -12,21 +12,17 @@ end
 %                                                dRotatingFrameAngVel) %#codegen
 % -------------------------------------------------------------------------------------------------------------
 %% DESCRIPTION
+% Function computing the Right Hand Side of a state vector [position, velocity] in a rotating frame adding
+% non-inertial acceleration terms (Coriolis + Centrifugal). Euler term is assumed zero (no acceleration of
+% the rotating frame).
+% -------------------------------------------------------------------------------------------------------------
+%% INPUT
 % drvState_RotFrame           (6,1) double {isvector, isnumeric}
 % dInertialAccel_RotFrame     (3,1) double {isvector, isnumeric}
 % dRotatingFrameAngVel        (3,1) double {isvector, isnumeric} = zeros(3,1)
 % -------------------------------------------------------------------------------------------------------------
-%% INPUT
-% in1 [dim] description
-% Name1                     []
-% Name2                     []
-% Name3                     []
-% -------------------------------------------------------------------------------------------------------------
 %% OUTPUT
-% out1 [dim] description
-% Name1                     []
-% Name2                     []
-% Name3                     []
+% drvStateDot_RotFrame        (6,1) double {isvector, isnumeric}
 % -------------------------------------------------------------------------------------------------------------
 %% CHANGELOG
 % 03-01-2025    Pietro Califano     First prototype coded to generalize any RHS of [position, velocity]
