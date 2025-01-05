@@ -1,2 +1,2 @@
-# EstimationGears_for_SpaceNav
-Collection of MATLAB/C++ general-purpose building blocks of estimators for spacecraft navigation 
+# cpp_template_project
+Template with pre-configured cmake project for small builds
