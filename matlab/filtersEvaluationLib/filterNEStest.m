@@ -1,18 +1,21 @@
-function [o_dNEStrajectory, o_dEstErrorTrajectory, o_dAvgNEStrajectory, o_dNESinterval, o_bFilterConsistencyFlag] = ...
-    filterNEStest(i_dxReferenceTrajectory, ...
-    i_dxStateTrajectory, ...
-    i_dPxStateTrajectory, ...
-    i_dAlphaLevel, ...
-    i_ui8QuatID, ...
-    i_bIS_ERROR_STATE)
+function [dNEStrajectory, ...
+    dEstErrorTrajectory, ...
+    dAvgNEStrajectory, ...
+    dNESinterval, ...
+    bFilterConsistencyFlag] = filterNEStest(dxReferenceTrajectory, ...
+                                        dxStateTrajectory, ...
+                                        dPxStateTrajectory, ...
+                                        dAlphaLevel, ...
+                                        ui8QuatID, ...
+                                        bIS_ERROR_STATE)
 %% PROTOTYPE
-% [o_dNEStrajectory, o_dEstErrorTrajectory, o_dAvgNEStrajectory, o_dNESinterval, o_bFilterConsistencyFlag] = ...
-%     filterNEStest(i_dxReferenceTrajectory, ...
-%                   i_dxStateTrajectory, ...
-%                   i_dPxStateTrajectory, ...
-%                   i_dAlphaLevel,...
-%                   i_ui8QuatID, ...
-%                   i_bIS_ERROR_STATE)
+% [dNEStrajectory, dEstErrorTrajectory, dAvgNEStrajectory, dNESinterval, bFilterConsistencyFlag] = ...
+%     filterNEStest(dxReferenceTrajectory, ...
+%                   dxStateTrajectory, ...
+%                   dPxStateTrajectory, ...
+%                   dAlphaLevel,...
+%                   ui8QuatID, ...
+%                   bIS_ERROR_STATE)
 % -------------------------------------------------------------------------------------------------------------
 %% DESCRIPTION
 % Function performing hypothesis testing for filter consistency check. The
@@ -26,24 +29,24 @@ function [o_dNEStrajectory, o_dEstErrorTrajectory, o_dAvgNEStrajectory, o_dNESin
 % 1) On the Consider Kalman Filter, Woodbury, 2010
 % -------------------------------------------------------------------------------------------------------------
 %% INPUT
-% i_dxReferenceTrajectory: [Nx, Nt, Ns] Reference ("truth") state trajectory
-% i_dxStateTrajectory: [Nx, Nt, Ns] Estimated state trajectory
-% i_dPxStateTrajectory: [Nx, Nx, Nt, Ns] Estimates state covariance 
-% i_dAlphaLevel: [1] Level of confidence for Chi2 hypothesis test
-% i_ui8QuatID: [1] ID pointer to first quaternion component in the state
+% dxReferenceTrajectory: [Nx, Nt, Ns] Reference ("truth") state trajectory
+% dxStateTrajectory: [Nx, Nt, Ns] Estimated state trajectory
+% dPxStateTrajectory: [Nx, Nx, Nt, Ns] Estimates state covariance 
+% dAlphaLevel: [1] Level of confidence for Chi2 hypothesis test
+% ui8QuatID: [1] ID pointer to first quaternion component in the state
 %                   vector. Default: 0 (No attitude states).
-% i_bIS_ERROR_STATE: [bool] Boolean flag indicating if estimated state is
+% bIS_ERROR_STATE: [bool] Boolean flag indicating if estimated state is
 %                    Error state trajectory
 % NOTE: Nx = state vector size, Nt = time grid size, Ns = population size
 % -------------------------------------------------------------------------------------------------------------
 %% OUTPUT
-% o_dNEStrajectory: [Nx, Nt, Ns] NES time evolution for each estimated 
+% dNEStrajectory: [Nx, Nt, Ns] NES time evolution for each estimated 
 %                   state trajectory
-% o_dEstErrorTrajectory: [Nx, Nt, Ns] Estimation error evolution for each  
+% dEstErrorTrajectory: [Nx, Nt, Ns] Estimation error evolution for each  
 %                         estimated state trajectory
-% o_dAvgNEStrajectory: [Nx, Nt] Averaged (ensemble) NES time evolution
-% o_dNESinterval: [2] Confidence interval of NEES test
-% o_bFilterConsistencyFlag: [Nx, Nt] Array of booleans indicating if test
+% dAvgNEStrajectory: [Nx, Nt] Averaged (ensemble) NES time evolution
+% dNESinterval: [2] Confidence interval of NEES test
+% bFilterConsistencyFlag: [Nx, Nt] Array of booleans indicating if test
 %                           is PASSED (true)
 % -------------------------------------------------------------------------------------------------------------
 %% CHANGELOG
@@ -63,51 +66,51 @@ function [o_dNEStrajectory, o_dEstErrorTrajectory, o_dAvgNEStrajectory, o_dNESin
 
 %% Function code
 % Get sizes ans execute checks
-Nx = size(i_dxReferenceTrajectory, 1);
-Nt = size(i_dxReferenceTrajectory, 2);
-Ns = size(i_dPxStateTrajectory, 4);
+Nx = size(dxReferenceTrajectory, 1);
+Nt = size(dxReferenceTrajectory, 2);
+Ns = size(dPxStateTrajectory, 4);
 
-assert(Nx == size(i_dxStateTrajectory, 1), 'Reference and estimated trajectory have different state vector size!')
-assert(Nx == size(i_dPxStateTrajectory, 1) || and(Nx == size(i_dPxStateTrajectory, 1) + 1, i_bQuatErr), ...
+assert(Nx == size(dxStateTrajectory, 1), 'Reference and estimated trajectory have different state vector size!')
+assert(Nx == size(dPxStateTrajectory, 1) || and(Nx == size(dPxStateTrajectory, 1) + 1, bQuatErr), ...
     'Reference trajectory have a different state vector size wrt Covariance!')
-assert(Nt == size(i_dxStateTrajectory, 2), 'Reference and estimated trajectory timegrids do not match!');
-assert(Ns == size(i_dxStateTrajectory, 3), 'Numbers of samples of estimated trajectory and covariance do not match!');
+assert(Nt == size(dxStateTrajectory, 2), 'Reference and estimated trajectory timegrids do not match!');
+assert(Ns == size(dxStateTrajectory, 3), 'Numbers of samples of estimated trajectory and covariance do not match!');
 
 
 %% NES computation
 % Computation of posterior estimation error 
 % TO DO: VALIDATE ERROR COMPUTATION 
 
-if i_bIS_ERROR_STATE == false
+if bIS_ERROR_STATE == false
     % Computation of posterior estimation error
-    o_dEstErrorTrajectory = computeEstimError(i_dxReferenceTrajectory, i_dxStateTrajectory, i_ui8QuatID);
-elseif i_bIS_ERROR_STATE == true
+    dEstErrorTrajectory = computeEstimError(dxReferenceTrajectory, dxStateTrajectory, ui8QuatID);
+elseif bIS_ERROR_STATE == true
     % Use estimated error state trajectory (TO VERIFY if it makes sense)
-    o_dEstErrorTrajectory = i_dxStateTrajectory;
+    dEstErrorTrajectory = dxStateTrajectory;
 else
-    error('Invalid i_bIS_ERROR_STATE specified.')
+    error('Invalid bIS_ERROR_STATE specified.')
 end
 
 % Computation of Normalized Error Square test statistic
-o_dNEStrajectory = zeros(Nt, Ns);
+dNEStrajectory = zeros(Nt, Ns);
 
 for idS = 1:Ns
     for idT = 1:Nt
-        if any(o_dEstErrorTrajectory(:, idT, idS))
-            o_dNEStrajectory(idT, idS) = (o_dEstErrorTrajectory(:, idT, idS)'/i_dPxStateTrajectory(:, :, idT, idS))...
-            * o_dEstErrorTrajectory(:, idT, idS);
+        if any(dEstErrorTrajectory(:, idT, idS))
+            dNEStrajectory(idT, idS) = (dEstErrorTrajectory(:, idT, idS)'/dPxStateTrajectory(:, :, idT, idS))...
+            * dEstErrorTrajectory(:, idT, idS);
         end
     end
 end
 
 % Compute average NES statistics
-o_dAvgNEStrajectory = mean(o_dNEStrajectory, 2, 'omitnan');
+dAvgNEStrajectory = mean(dNEStrajectory, 2, 'omitnan');
 
 %% Filter consistency hypothesis test
 % Determine confidence interval at input confidence level from Chi-Squared 
 % if more than 1 sample is available
-if not(exist('i_dAlphaLevel', 'var'))
-    i_dAlphaLevel = 0.05; % Default value: 95% confidence interval
+if not(exist('dAlphaLevel', 'var'))
+    dAlphaLevel = 0.05; % Default value: 95% confidence interval
 end
 
 % Hypothesis: filter is consistent (Alternative) if Average NES inside
@@ -118,8 +121,8 @@ if Ns >= 1
     ChiNdofs = Nx * Ns; % Chi-Squared Degrees of freedom: Nstates * Nsamples
 
     % Evaluation points
-    ChiLB = (i_dAlphaLevel/2);
-    ChiUB = 1 - i_dAlphaLevel/2;
+    ChiLB = (dAlphaLevel/2);
+    ChiUB = 1 - dAlphaLevel/2;
     
     % Chi-squared inverse CDF
     dNESlb = chi2inv(ChiLB, ChiNdofs)/Ns;
@@ -127,14 +130,14 @@ if Ns >= 1
 
     % Evaluate inference test at any time instant checking if Average NES
     % is within confidence interval
-    o_bFilterConsistencyFlag = and(o_dAvgNEStrajectory >= dNESlb, o_dAvgNEStrajectory <= dNESub);
+    bFilterConsistencyFlag = and(dAvgNEStrajectory >= dNESlb, dAvgNEStrajectory <= dNESub);
 else
     dNESlb = 0;
     dNESub = 0;
-    o_bFilterConsistencyFlag = zeros(size(o_dAvgNEStrajectory));
+    bFilterConsistencyFlag = zeros(size(dAvgNEStrajectory));
 end
 
-o_dNESinterval = [dNESlb, dNESub];
+dNESinterval = [dNESlb, dNESub];
 
 
 end
