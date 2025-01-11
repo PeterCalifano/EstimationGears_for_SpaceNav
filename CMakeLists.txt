@@ -2,23 +2,30 @@
 cmake_minimum_required(VERSION 3.15 FATAL_ERROR)
 
 # PROJECT DEFINITION
-set(project_name "template_project")
-project( ${project_name} )
-
 # Set version number
 set(PROJECT_VERSION_MAJOR 0)
 set(PROJECT_VERSION_MINOR 1)
 set(PROJECT_VERSION_PATCH 0)
+
+project( ${project_name} 
+        LANGUAGES ${languages}
+        VERSION "${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}.${PROJECT_VERSION_PATCH}") # ACHTUNG: PTX code requires C language!
 
 # Set C++ standard
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-# TIP: if different options need to be specified for different targets of the build, use INTERFACE targets
+#set(CMAKE_C_COMPILER gcc-11)
+#set(CMAKE_CXX_COMPILER g++-11)
 
 if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE relwithdebinfo)
+endif()
+
+# Guard against in-source builds
+if(${CMAKE_SOURCE_DIR} STREQUAL ${CMAKE_BINARY_DIR})
+  message(FATAL_ERROR "In-source builds not allowed. Please make a new directory (called a build directory) and run CMake from there. You may need to remove CMakeCache.txt. ")
 endif()
 
 message(STATUS "==============================================================")
@@ -74,16 +81,9 @@ endif()
 
 # OPTIONS
 option(ENABLE_OMP "Enable OpenMP" OFF)
-set(installable_targets "")
 
 # COMPILER FLAGS
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra")
-
-# TIP: To set target compilation options (or any other thing) that must be specific for a target or propagated, use the following cmake pattern (example). Requires cmake 3.15 or later. Here flag BUILD_INTERFACE regulates whether the compile flags are added to the target_compile_options. If true, they are added.
-#add_library(library_compile_flags INTERFACE)
-#target_compile_options(library_compile_flags INTERFACE 
-#"$<${gcc_like_cxx}: $<BUILD_INTERFACE: -Wall;-Wextra;-Wshadow;-Wformat=2;-Wunused>>")
-#target_link_libraries(library_target PUBLIC any_other_target library_compile_flags)
 
 if (ENABLE_OMP)
     find_package(OpenMP REQUIRED)
@@ -277,7 +277,6 @@ if(BUILD_PYTHON_WRAPPER OR BUILD_MATLAB_WRAPPER)
   
 endif()
 
-
 # AUXILIARY 
 # Set dashboard properties (needed for CDash)
 set(CTEST_PROJECT_NAME ${project_name})
@@ -288,3 +287,15 @@ set(CTEST_NIGHTLY_START_TIME "00:00:00 CET")
 #set(CTEST_DROP_SITE "my.cdash.org")
 #set(CTEST_DROP_LOCATION "/submit.php?project=CMakeTutorial")
 #set(CTEST_DROP_SITE_CDASH TRUE)
+
+# PACKAGING CONFIGURATION # TODO test and extended prototype cmake code (this is copied from tutorials)
+#include(InstallRequiredSystemLibraries)
+#set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/License")
+#set(CPACK_PACKAGE_VERSION_MAJOR "${PROJECT_VERSION_MAJOR}")
+#set(CPACK_PACKAGE_VERSION_MINOR "${PROJECT_VERSION_MINOR}")
+#set(CPACK_GENERATOR "TGZ")
+#set(CPACK_SOURCE_GENERATOR "TGZ")
+#include(CPack)
+
+# TODO: add cmake configuration to export project, such that it can be found by other projects using find_package()
+# See https://cmake.org/cmake/help/latest/guide/tutorial/Adding%20Export%20Configuration.html
