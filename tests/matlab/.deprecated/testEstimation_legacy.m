@@ -20,7 +20,7 @@ testcase = 16;
 % Test 8: Test and validation of POLRLS:                                                        FAILING
 % Test 9: GivensRotSRIF validation + MEX equivalence test                                       PASSED
 % Test 10: GivensRotEKF validation                                                              PASSED
-% Test 11: Feature init. problem using Newton-Raphson triangulation:                            FAILING
+% Test 11: Feature ini6t. problem using Newton-Raphson triangulation:                            FAILING
 % Test 12: Test AdaptQCovASNC runtime (verification):                                           TODO
 % Test 13: EM Algorithm for GMM fitting and testing of Covariance generator                     TODO                            
 % Test 14: Test Weighted Modified Gram-Schmidt, UD Covariance Time Update                       TODO
