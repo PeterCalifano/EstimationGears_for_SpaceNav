@@ -5,18 +5,18 @@ function [dFeatPosVec_NavFrame, dFeatPosVec_Ck, dRelPos_CkFromCi_Ci, dDCM_CiFrom
                                   ui32EstimationTimeID, ...
                                   dFeatInverseDepthGuess_Ck, ...
                                   dPrincipalPoint_UV, ...
-                                  ui32WindowSize,...
+                                  ui32NumOfPoses,...
                                   ui32NumOfFeatures, ...
                                   ui32MaxIter,...
                                   dDeltaResNormRelTol) %#codegen
 arguments
-    dyMeasVec                   (:,:)   double  {ismatrix, isnumeric}   % Actual size: (2*MaxWindowSize, MaxNumberOfFeatures)
-    dDCM_NavFrameFromC          (3,3,:) double  {ismatrix, isnumeric}   % Actual size: (3, 3, ui32WindowSize)
-    dPositionCam_NavFrame       (3,:)   double  {ismatrix, isnumeric}   % Actual size: (3, ui32WindowSize)
+    dyMeasVec                   (:,:)   double  {ismatrix, isnumeric}   % Actual size: (2*ui32NumOfPoses, MaxNumberOfFeatures)
+    dDCM_NavFrameFromC          (3,3,:) double  {ismatrix, isnumeric}   % Actual size: (3, 3, ui32NumOfPoses)
+    dPositionCam_NavFrame       (3,:)   double  {ismatrix, isnumeric}   % Actual size: (3, ui32NumOfPoses)
     ui32EstimationTimeID        (1,1)   double  {isscalar, isnumeric}   
     dFeatInverseDepthGuess_Ck   (3,:)   double  {ismatrix, isnumeric}   % Actual size: (3, MaxNumberOfFeatures)
     dPrincipalPoint_UV          (2,1)   double  {ismatrix, isnumeric}
-    ui32WindowSize              (1,1)   uint32  {isscalar, isnumeric}
+    ui32NumOfPoses              (1,1)   uint32  {isscalar, isnumeric}
     ui32NumOfFeatures           (1,1)   uint32  {isscalar, isnumeric}
     ui32MaxIter                 (1,1)   uint32  {isscalar, isnumeric} = uint32(5);
     dDeltaResNormRelTol         (1,1)   double  {isscalar, isnumeric} = 1E-6;
@@ -57,21 +57,21 @@ end
 ui32SOLVED_FOR_SIZE = uint32(3 * ui32NumOfFeatures); % DEPENDS ON NUMBER OF FEATURES; 3 +
 
 % Input validation checks
-assert(ui32WindowSize == size(dDCM_NavFrameFromC, 3));
+assert(ui32NumOfPoses == size(dDCM_NavFrameFromC, 3));
 % assert()
 
 
 % Instantiate temporary variables
 % dPixMeasResVec      = coder.nullcopy( zeros( size(dyMeasVec,1) * size(dyMeasVec,2), 1 ) );
-dRelPos_CkFromCi_Ci = coder.nullcopy( zeros(3, ui32WindowSize) );
-dDCM_CiFromCk       = coder.nullcopy( zeros(3, 3, ui32WindowSize) );
+dRelPos_CkFromCi_Ci = coder.nullcopy( zeros(3, ui32NumOfPoses) );
+dDCM_CiFromCk       = coder.nullcopy( zeros(3, 3, ui32NumOfPoses) );
 
 %% Computation of relative camera pose Ci wrt initial Ck
 
 dPositionCk_NavFrame = dPositionCam_NavFrame(1:3, ui32EstimationTimeID);
 dDCM_NavFrameFromCk  = dDCM_NavFrameFromC(:,:, ui32EstimationTimeID);
 
-for ui32IdPose = 1:ui32WindowSize
+for ui32IdPose = 1:ui32NumOfPoses
 
     % Compute position of Ck wrt Ci in Ci camera frame
     dDCM_CiFromNavFrame = transpose( dDCM_NavFrameFromC(:,:, ui32IdPose) );
@@ -110,7 +110,7 @@ while dDeltaResRelNorm2 > dDeltaResNormRelTol2
     dResVecNorm2 = 0.0;
 
     % Compute Observation matrix and residual vector (linerized problem)
-    for ui32IdPose = 1:ui32WindowSize % Loop through Ci 
+    for ui32IdPose = 1:ui32NumOfPoses % Loop through Ci 
 
         % Reset Measurement extraction index
         ui32IdMeas = uint32(1); % ACHTUNG: DENVOTE Indexing below NOT CONSISTENT. BUG, FIXME
