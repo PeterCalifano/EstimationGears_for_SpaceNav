@@ -1,0 +1,4 @@
+[submodule "lib/UnitTesting4MATLAB"]
+	path = lib/UnitTesting4MATLAB
+	url = git@github.com:PeterCalifano/UnitTesting4MATLAB.git
+	branch = main
