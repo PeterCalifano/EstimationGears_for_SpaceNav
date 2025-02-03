@@ -1,8 +1,15 @@
-function  [o_dPointPixCoord, o_dPosVec] = pinholeProjectIDP(i_dInvDepParams, ...
-                                             i_dqC1wrtC2, ...
-                                             i_drC1wrtC2_C2, ...
-                                             i_dOptCentreCoord, ...
-                                             i_bIS_JPL_CONV) %#codegen
+function  [dPointPixCoord, dPosVec] = pinholeProjectIDP(dInvDepParams, ...
+                                                        dQuatC2fromC1, ...
+                                                        dPosC1fromC2_C2, ...
+                                                        dOptCentreCoord, ...
+                                                        bIs_VSRPplus) %#codegen
+arguments
+    dInvDepParams
+    dQuatC2fromC1
+    dPosC1fromC2_C2
+    dOptCentreCoord
+    bIs_VSRPplus
+end
 %% PROTOTYPE
 % -------------------------------------------------------------------------------------------------------------
 %% DESCRIPTION
@@ -33,9 +40,10 @@ function  [o_dPointPixCoord, o_dPosVec] = pinholeProjectIDP(i_dInvDepParams, ...
 % o_dRho   = 1/i_dPosVec(3); i_dInvDepParams(3)
 
 % Inverse depth model 
-o_dPosVec = Quat2DCM(i_dqC1wrtC2, i_bIS_JPL_CONV) * [i_dInvDepParams(1:2); 1] + i_dInvDepParams(3) * i_drC1wrtC2_C2;
+% TODO check dPosVec calculation and determine which frame!
+dPosVec = Quat2DCM(dQuatC2fromC1, bIs_VSRPplus) * [dInvDepParams(1:2); 1] + dInvDepParams(3) * dPosC1fromC2_C2;
 % Compute pixel coordinates
-o_dPointPixCoord = 1/o_dPosVec(3) * [o_dPosVec(1); o_dPosVec(2)] + i_dOptCentreCoord;
+dPointPixCoord = 1/dPosVec(3) * [dPosVec(1); dPosVec(2)] + dOptCentreCoord;
 
 
 end
