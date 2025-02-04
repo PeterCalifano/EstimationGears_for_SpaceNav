@@ -10,6 +10,8 @@ end
 %% DESCRIPTION
 % Function transforming euclidean 3D points into the corresponding Inverse Depth representation (homogeneous
 % point + inverse depth dRho). Implemented as vectorized with optional static allocation for SLX.
+% DEVNOTE: the conversion is exaclty the same of IDPtoEP, but for clarity and flexibility at codegen time
+% they are separated. TODO determine which best choice.
 % -------------------------------------------------------------------------------------------------------------
 %% INPUT
 % dEuclidPointsArray (3,:) {ismatrix, isnumeric}
@@ -42,9 +44,11 @@ assert( all(abs( dEuclidPointsArray(3, 1:ui32PtrToLast)) > eps('single')) )
 % Define output static-sized array 
 dInvDepthPointsArray = -ones(3, ui32MaxNumOfPoints); % Not zero to prevent any possibility of nan/inf
 
-% Convert position (Euclidean Point) to Inverse Depth parameters
-dInvDepthPointsArray(1:3, 1:ui32PtrToLast) = [dEuclidPointsArray(1, 1:ui32PtrToLast); dEuclidPointsArray(2, 1:ui32PtrToLast); ones(1, ui32PtrToLast)] ...
-                                                ./ dEuclidPointsArray(3, 1:ui32PtrToLast);
+% Convert position (Euclidean Point) to Inverse Depth parameters (minimize number of divisions)
+dInvDepthPointsArray(1:3, 1:ui32PtrToLast) = ones(1, ui32PtrToLast)./ dEuclidPointsArray(3, 1:ui32PtrToLast) ...
+                                                .* [dEuclidPointsArray(1, 1:ui32PtrToLast); 
+                                                    dEuclidPointsArray(2, 1:ui32PtrToLast); 
+                                                    ones(1, ui32PtrToLast)];
 
 % Resize output array (TBC: not allowed by static allocation!)
 % dInvDepthPointsArray = dInvDepthPointsArray(1:3, 1:ui32PtrToLast);
