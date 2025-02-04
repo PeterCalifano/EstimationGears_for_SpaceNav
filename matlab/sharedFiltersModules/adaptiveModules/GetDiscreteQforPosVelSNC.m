@@ -1,4 +1,4 @@
-function [o_dDiscreteQposVelSNC] = GetDiscreteQforPosVelSNC(i_dContProcessNoiseQ, i_dTimeStep) %#codegen
+function [dDiscreteQposVelSNC] = GetDiscreteQforPosVelSNC(dContProcessNoiseQ, dTimeStep) %#codegen
 %% PROTOTYPE
 % [o_dDiscreteQposVelSNC] = GetDiscreteQforPosVelSNC(i_dContProcessNoiseQ, i_dTimeStep)%#codegen
 % -------------------------------------------------------------------------------------------------------------
@@ -26,19 +26,19 @@ function [o_dDiscreteQposVelSNC] = GetDiscreteQforPosVelSNC(i_dContProcessNoiseQ
 % -------------------------------------------------------------------------------------------------------------
 %% Function code
 % Input asserts
-assert(all(size(i_dContProcessNoiseQ) == [3, 3]), 'Size of continuous time process noise covariance must be [3,3].' )
+assert(all(size(dContProcessNoiseQ) == [3, 3]), 'Size of continuous time process noise covariance must be [3,3].' )
 
 % Allocation
-o_dDiscreteQposVelSNC = coder.nullcopy(zeros(6,6));
-dt2 = i_dTimeStep*i_dTimeStep;
+dDiscreteQposVelSNC = coder.nullcopy(zeros(6,6));
+dt2 = dTimeStep*dTimeStep;
 
 % Compute Discrete Time Process noise covariance entries
 % Position Autocovariance
-o_dDiscreteQposVelSNC(1:3, 1:3) = i_dTimeStep*dt2/3.0 * i_dContProcessNoiseQ;
+dDiscreteQposVelSNC(1:3, 1:3) = dTimeStep*dt2/3.0 * dContProcessNoiseQ;
 % Velocity Autocovariance
-o_dDiscreteQposVelSNC(4:6, 4:6) = i_dTimeStep * i_dContProcessNoiseQ;
+dDiscreteQposVelSNC(4:6, 4:6) = dTimeStep * dContProcessNoiseQ;
 % Position-Velocity Cross-crovariance
-o_dDiscreteQposVelSNC(4:6, 1:3) = dt2/2.0 * i_dContProcessNoiseQ;
-o_dDiscreteQposVelSNC(1:3, 4:6) = o_dDiscreteQposVelSNC(4:6, 1:3);
+dDiscreteQposVelSNC(4:6, 1:3) = dt2/2.0 * dContProcessNoiseQ;
+dDiscreteQposVelSNC(1:3, 4:6) = dDiscreteQposVelSNC(4:6, 1:3);
 
 end
