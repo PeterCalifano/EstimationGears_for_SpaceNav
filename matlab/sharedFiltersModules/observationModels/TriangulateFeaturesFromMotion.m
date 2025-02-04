@@ -1,25 +1,34 @@
 function [dFeatPosVec_NavFrame, dFeatPosVec_Ck, dRelPos_CkFromCi_Ci, dDCM_CiFromCk] = ...
-    TriangulateFeaturesFromMotion(dyMeasVec, ...
-                                  dDCM_NavFrameFromC, ...
-                                  dPositionCam_NavFrame, ...
-                                  ui32EstimationTimeID, ...
-                                  dFeatInverseDepthGuess_Ck, ...
-                                  dPrincipalPoint_UV, ...
-                                  ui32NumOfPoses,...
-                                  ui32NumOfFeatures, ...
-                                  ui32MaxIter,...
-                                  dDeltaResNormRelTol) %#codegen
+                            TriangulateFeaturesFromMotion(dyMeasVec, ...
+                            dMeasCovSigma, ...
+                                                          dDCM_CiFromCk, ...
+                                                          dRelPos_CkFromCi_Ci, ...
+                                                          dDCM_NavFrameFromCk, ...
+                                                          dPositionCk_NavFrame, ...
+                                                          dFeatInverseDepthGuess_Ck, ...
+                                                          dPrincipalPoint_UV, ...
+                                                          ui32NumOfPoses,...
+                                                          ui32NumOfFeatures, ...
+                                                          ui32MaxIter,...
+                                                          dDeltaResNormRelTol, ...
+                                                          ui32MaxNumOfPoses, ...
+                                                          ui32MaxNumOfFeatures) %#codegen
 arguments
+    % DEVNOTE: comment validation args for speed
     dyMeasVec                   (:,:)   double  {ismatrix, isnumeric}   % Actual size: (2*ui32NumOfPoses, MaxNumberOfFeatures)
-    dDCM_NavFrameFromC          (3,3,:) double  {ismatrix, isnumeric}   % Actual size: (3, 3, ui32NumOfPoses)
-    dPositionCam_NavFrame       (3,:)   double  {ismatrix, isnumeric}   % Actual size: (3, ui32NumOfPoses)
-    ui32EstimationTimeID        (1,1)   double  {isscalar, isnumeric}   
+    dMeasCovSigma               (1,1)   double  {isscalar, isnumeric}
+    dDCM_CiFromCk               (3,3,:) double  {ismatrix, isnumeric}
+    dRelPos_CkFromCi_Ci         (3,:)   double  {ismatrix, isnumeric} 
+    dDCM_NavFrameFromCk         (3,3)   double  {ismatrix, isnumeric}   % Attitude of anchor pose
+    dPositionCk_NavFrame        (3,1)   double  {ismatrix, isnumeric}   % Position of anchor pose
     dFeatInverseDepthGuess_Ck   (3,:)   double  {ismatrix, isnumeric}   % Actual size: (3, MaxNumberOfFeatures)
     dPrincipalPoint_UV          (2,1)   double  {ismatrix, isnumeric}
     ui32NumOfPoses              (1,1)   uint32  {isscalar, isnumeric}
     ui32NumOfFeatures           (1,1)   uint32  {isscalar, isnumeric}
     ui32MaxIter                 (1,1)   uint32  {isscalar, isnumeric} = uint32(5);
     dDeltaResNormRelTol         (1,1)   double  {isscalar, isnumeric} = 1E-6;
+    ui32MaxNumOfPoses           (1,1)   uint32  {isscalar, isnumeric} = ui32NumOfPoses; 
+    ui32MaxNumOfFeatures        (1,1)   uint32  {isscalar, isnumeric} = ui32NumOfFeatures;
 end
 %% PROTOTYPE
 % 
@@ -51,48 +60,26 @@ end
 % -------------------------------------------------------------------------------------------------------------
 %% Future upgrades
 % 1) Replace WLS with Givens Rotations for improved efficiency TBC
-% 2) Modify code for static memory allocation
+% 2) Modify code for static memory allocation (NEED MASKS)
 % -------------------------------------------------------------------------------------------------------------
 %% Function code
-ui32SOLVED_FOR_SIZE = uint32(3 * ui32NumOfFeatures); % DEPENDS ON NUMBER OF FEATURES; 3 +
+ui32SOLVED_FOR_SIZE = uint32(3 * ui32MaxNumOfFeatures); % DEPENDS ON NUMBER OF FEATURES; 3 +
 
 % Input validation checks
-assert(ui32NumOfPoses == size(dDCM_NavFrameFromC, 3));
+% assert(ui32NumOfPoses <= size(dDCM_NavFrameFromC, 3));
 % assert()
 
-
-% Instantiate temporary variables
-% dPixMeasResVec      = coder.nullcopy( zeros( size(dyMeasVec,1) * size(dyMeasVec,2), 1 ) );
-dRelPos_CkFromCi_Ci = coder.nullcopy( zeros(3, ui32NumOfPoses) );
-dDCM_CiFromCk       = coder.nullcopy( zeros(3, 3, ui32NumOfPoses) );
-
-%% Computation of relative camera pose Ci wrt initial Ck
-
-dPositionCk_NavFrame = dPositionCam_NavFrame(1:3, ui32EstimationTimeID);
-dDCM_NavFrameFromCk  = dDCM_NavFrameFromC(:,:, ui32EstimationTimeID);
-
-for ui32IdPose = 1:ui32NumOfPoses
-
-    % Compute position of Ck wrt Ci in Ci camera frame
-    dDCM_CiFromNavFrame = transpose( dDCM_NavFrameFromC(:,:, ui32IdPose) );
-    dRelPos_CkFromCi_Ci(:, ui32IdPose) = dDCM_CiFromNavFrame * (dPositionCk_NavFrame - dPositionCam_NavFrame(1:3, ui32IdPose) );
-
-    % Compute attitudes of Ck wrt Ci camera frames (DCM from Ck to Ci)
-    dDCM_CiFromCk(:,:,ui32IdPose) = dDCM_CiFromNavFrame * dDCM_NavFrameFromCk;
-
-end
+% Covariance weight
+dMeasInformCoeff = 1./dMeasCovSigma; % ACHTUNG, here we assume scalar to reduce (a lot) computations
 
 %% Gauss-Newton iteration loop
 ui8IterCounter = uint8(0);
 
 
-
 % Initialize inverse depth parameterization at estimation time tk
-% NOTE: do division only ONCE!
-% dFeaturesPosIDP = [dFeatInverseDepthGuess_Ck(1,:)./dFeatInverseDepthGuess_Ck(3,:);
-%                    dFeatInverseDepthGuess_Ck(2,:)./dFeatInverseDepthGuess_Ck(3,:);
-%                    ones()./dFeatInverseDepthGuess_Ck(3,:)];
+% NOTE: do division only ONCE (like in transformEPtoIDP!
 dFeatInverseDepth_Ck = reshape(dFeatInverseDepthGuess_Ck, 3*size(dFeatInverseDepthGuess_Ck, 2), 1);
+% TODO: line above MUST be modified for static size allocation
 
 % Compute squared relative change threshold
 dDeltaResNormRelTol2 = dDeltaResNormRelTol*dDeltaResNormRelTol; 
@@ -110,14 +97,17 @@ while dDeltaResRelNorm2 > dDeltaResNormRelTol2
     dResVecNorm2 = 0.0;
 
     % Compute Observation matrix and residual vector (linerized problem)
+    dFeatHobs = coder.nullcopy(zeros(2, 3));
+
     for ui32IdPose = 1:ui32NumOfPoses % Loop through Ci 
 
         % Reset Measurement extraction index
         ui32IdMeas = uint32(1); % ACHTUNG: DENVOTE Indexing below NOT CONSISTENT. BUG, FIXME
         ui32IdFeat = uint32(1);
 
-        dDCM_CkFromCid          = transpose( dDCM_CiFromCk(:,:, ui32IdPose) );
-        dRelPos_CkFromCid_Cid   = dRelPos_CkFromCi_Ci(:, ui32IdPose);
+        dDCM_CkFromCi          = transpose( dDCM_CiFromCk(:,:, ui32IdPose) ); % TBD remove transpose!
+        dRelPos_CkFromCi_Ci   = dRelPos_CkFromCi_Ci(:, ui32IdPose);
+
 
         for ui32FeatID = 1:ui32NumOfFeatures % Loop through features
     
@@ -125,32 +115,38 @@ while dDeltaResRelNorm2 > dDeltaResNormRelTol2
             ui32TmpFeatIDs = ui32IdFeat : ui32IdFeat + uint32(2);
 
             % Compute ith predicted measurement [2x1]
-            [dFeatPosPred_Ck, dFeatProjPred_UV] =  pinholeProjectIDP(dFeatInverseDepth_Ck(ui32TmpFeatIDs, 1), ...
-                                                         dDCM_CkFromCid, ...
-                                                         dRelPos_CkFromCid_Cid, ...
-                                                         dPrincipalPoint_UV);
+            % [dFeatPosPred_Ci, dFeatProjPred_UVi] =  pinholeProjectIDP(dDCM_CkFromCid, ...
+            %                                                          dRelPos_CkFromCid_Cid, ...
+            %                                                          dFeatInverseDepth_Ck(ui32TmpFeatIDs, 1), ...
+            %                                                          dPrincipalPoint_UV);
+
+            [dFeatPosPred_Ci, dFeatProjPred_UVi] = normalizedProjectIDP(dDCM_CkFromCi, ...
+                                                                     dRelPos_CkFromCi_Ci, ...
+                                                                     dFeatInverseDepth_Ck(ui32TmpFeatIDs, 1) );
 
             % Compute relative attitude as DCM
+            % DEVNOTE: original implementation uses normalized coordinates, but working in pixel coordinats
+            % is likely better to reduce computations (avoid conversion to normalized coordinates, i.e. lots
+            % of divisions).
 
             % Compute ith Observation Matrix [2x3] per feature
-            % Hobs = dzdh * dh/dInvDep; (Ref.[1] notation)
+            % Hobs = dzdh * dh/dInvDep; (Ref.[1] notation, normalized coordinates)
             % dDCM required in Jacobian --> dDeltaDCM_CiFromCk(:, ui32IdPose);
 
-            dFeatHobs = coder.nullcopy(zeros(2, 3));
-
-            dFeatHobs(1,:) = [ 1/dFeatProjPred_UV(3), 0, - dFeatProjPred_UV(1) / dFeatProjPred_UV(3) ^ 2];
+            dFeatHobs(1,:) = [ 1/dFeatPosPred_Ci(3), 0, - dFeatPosPred_Ci(1) / dFeatPosPred_Ci(3) ^ 2];
             
             % TODO: verify that dDCM_CkFromCid is the correct matrix here
-            dFeatHobs(2,:) = [0, 1/dFeatProjPred_UV(3), -dFeatProjPred_UV(2)/dFeatProjPred_UV(3)^2] * ...
-                                [transpose(dDCM_CkFromCid(1,:)), transpose(dDCM_CkFromCid(2,:)), dRelPos_CkFromCid_Cid] ;
+            dFeatHobs(2,:) = [0, 1/dFeatPosPred_Ci(3), -dFeatPosPred_Ci(2)/dFeatPosPred_Ci(3)^2] * ...
+                                [transpose(dDCM_CkFromCi(1,:)), transpose(dDCM_CkFromCi(2,:)), dRelPos_CkFromCi_Ci] ;
             
             % Accumulate LAMBDA Information matrix and Nmatrix residuals projection vector
             % NOTE: NO measurement noise covariance
-            dFeatureProjResVec = dyMeasVec( ui32IdMeas:ui32IdMeas + uint32(1) , 1) - dFeatProjPred_UV;
+            dFeatureProjResVec = dyMeasVec( ui32IdMeas:ui32IdMeas + uint32(1) , 1) - dFeatProjPred_UVi;
             
             % Accumulate LAMBDA matrix % DEVNOTE: index required
-            dLAMBDA(ui32TmpFeatIDs, ui32TmpFeatIDs) = dLAMBDA(ui32TmpFeatIDs, ui32TmpFeatIDs) + dFeatHobs' * dFeatHobs; % NEED TO UPDATE with correct size! Actual matrix is band diagonal here TBC
-            dLeastSquaresRHS(ui32IdMeas:ui32IdMeas + uint32(1)) = dLeastSquaresRHS(ui32IdMeas:ui32IdMeas + uint32(1)) + dFeatHobs' * dFeatureProjResVec;
+            dLAMBDA(ui32TmpFeatIDs, ui32TmpFeatIDs) = dLAMBDA(ui32TmpFeatIDs, ui32TmpFeatIDs) + dMeasInformCoeff * transpose(dFeatHobs) * dFeatHobs; % NEED TO UPDATE with correct size! Actual matrix is band diagonal here TBC
+            
+            dLeastSquaresRHS(ui32IdMeas:ui32IdMeas + uint32(2)) = dLeastSquaresRHS(ui32IdMeas:ui32IdMeas + uint32(2)) + transpose(dFeatHobs) * dMeasInformCoeff * dFeatProjPred_UVi;
 
             % Accumulate residual vector norm squared
             dResVecNorm2 = dResVecNorm2 + dFeatureProjResVec' * dFeatureProjResVec;
@@ -193,34 +189,33 @@ while dDeltaResRelNorm2 > dDeltaResNormRelTol2
 end
 
 % Compute output in Camera frame at tk time
-dFeatPosVec_Ck = (ones(1,ui32NumOfFeatures)./dFeatInverseDepth_Ck(3,:)) .* [dFeatInverseDepth_Ck(1, :);
-                                                                            dFeatInverseDepth_Ck(2, :);
-                                                                            ones(1,ui32NumOfFeatures)];
+dFeatPosVec_Ck = transformIDPtoEP(dFeatInverseDepth_Ck, ui32NumOfFeatures, ui32MaxNumOfFeatures);
 
 % Compute landmarks positions in Navigation frame at tk time
-dDCM_NavFrameFromCk = dDCM_NavFrameFromC(:,:,ui32EstimationTimeID);
-dFeatPosVec_NavFrame = coder.nullcopy(zeros(size(dFeatPosVec_Ck)));
+dFeatPosVec_NavFrame = coder.nullcopy(zeros(3, ui32MaxNumOfFeatures));
 
 for ui32FeatID = 1:ui32NumOfFeatures
-    dFeatPosVec_NavFrame(1:3, :) =  ( dDCM_NavFrameFromCk * dFeatPosVec_Ck(1:3, ui32FeatID) ) ...
-                                    +  dPositionCk_NavFrame;
+    dFeatPosVec_NavFrame(1:3, ui32FeatID) =  ( dDCM_NavFrameFromCk * dFeatPosVec_Ck(1:3, ui32FeatID) ) ...
+                                              +  dPositionCk_NavFrame;
 end
 
 
 
 
-
-
 end
+
 %% LOCAL FUNCTION
 function [dPosVec_Ck, dPointPix_UV] = pinholeProjectIDP(dDCM_CkfromCi, ...
                                                         dDeltaPos_CkfromCi_Ci, ...
                                                         dPosInvDepParams, ...
                                                         dPrincipalPoint_UV) %#codegen
 
-% dAlpha = dPosVec(1)/dPosVec(3); i_dInvDepParams(1)
-% dBeta  = dPosVec(2)/dPosVec(3); i_dInvDepParams(2)
-% dRho   = 1/i_dPosVec(3); i_dInvDepParams(3)
+% dAlpha = dPosVec(1)/dPosVec(3); --> dInvDepParams(1)
+% dBeta  = dPosVec(2)/dPosVec(3); --> dInvDepParams(2)
+% dRho   = 1/i_dPosVec(3);        --> dInvDepParams(3)
+
+% TODO modify for optimization: the first two components of the IDP are already the x/z, y/z normalized
+% components to project. Is there a way to conv
 
 % Inverse depth model
 % dPosVec = Quat2DCM(i_dqC1wrtC2, i_bIS_JPL_CONV) * [i_dInvDepParams(1:2); 1] + i_dInvDepParams(3) * i_drC1wrtC2_C2;
@@ -228,5 +223,24 @@ dPosVec_Ck = dDCM_CkfromCi * [dPosInvDepParams(1:2); 1.0] + dPosInvDepParams(3) 
 
 % Compute pixel coordinates
 dPointPix_UV = 1/dPosVec_Ck(3) * [dPosVec_Ck(1); dPosVec_Ck(2)] + dPrincipalPoint_UV;
+
+end
+
+function [dPosVec_Ci, dNormalizedCoords_Ci] = normalizedProjectIDP(dDCM_CkfromCi, ...
+                                                        dDeltaPos_CkfromCi_Ci, ...
+                                                        dPosInvDepParams_Ck) % %#codegen
+
+% dAlpha = dPosVec(1)/dPosVec(3); --> dInvDepParams(1)
+% dBeta  = dPosVec(2)/dPosVec(3); --> dInvDepParams(2)
+% dRho   = 1/i_dPosVec(3);        --> dInvDepParams(3)
+
+% Inverse depth model
+% TODO: verify sign of relative position vector 
+dPosVec_Ci = ( transpose(dDCM_CkfromCi) * [dPosInvDepParams_Ck(1:2); 1.0]) + dPosInvDepParams_Ck(3) * dDeltaPos_CkfromCi_Ci ; % TBC
+
+% Compute pixel coordinates
+% dNormalizedCoords_Ck = 1/dPosVec_Ck(3) * [dPosVec_Ck(1); dPosVec_Ck(2)];
+dNormalizedCoords_Ci = coder.nullcopy(zeros(2,1));
+dNormalizedCoords_Ci(:) = dPosVec_Ci(1:2);
 
 end
