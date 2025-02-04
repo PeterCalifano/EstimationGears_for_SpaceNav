@@ -2,7 +2,7 @@ function [dxPost, dSRInfoMatPost, dInfoVecPost, dErrorVec, dSqrtPxPost, dJcost] 
                                                                                                 dSRInfoMatPrior, ...
                                                                                                 dYobs, ...
                                                                                                 dHobsMatrix, ...
-                                                                                                bNO_PRIOR_INFO, ...
+                                                                                                bNPRIOR_INFO, ...
                                                                                                 bRUN_WHITENING, ...
                                                                                                 dMeasCovSR) %#codegen
 arguments
@@ -10,7 +10,7 @@ arguments
     dSRInfoMatPrior
     dYobs
     dHobsMatrix
-    bNO_PRIOR_INFO
+    bNPRIOR_INFO
     bRUN_WHITENING
     dMeasCovSR
 end
@@ -19,7 +19,7 @@ end
 %                                                                                        dSRInfoMatPrior, ...
 %                                                                                        dYobs, ...
 %                                                                                        dHobsMatrix, ...
-%                                                                                        bNO_PRIOR_INFO, ...
+%                                                                                        bNPRIOR_INFO, ...
 %                                                                                        bRUN_WHITENING, ...
 %                                                                                        dMeasCovSR) %#codegen
 % -------------------------------------------------------------------------------------------------------------
@@ -28,9 +28,9 @@ end
 % filtering via Givens Rotations. The algorithm exploits square root free varchol(iant (UD decomposition of the 
 % Information matrix and of the Information vector). Interface code is added in this version to enable use 
 % in Full covariance Square root covariance EKF. The SRIF code is then called. Prior information in input 
-% is used by default. Boolean flag "i_bNO_PRIOR_INFO" can be set to TRUE to ignore it and initialize the 
+% is used by default. Boolean flag "bNPRIOR_INFO" can be set to TRUE to ignore it and initialize the 
 % Information matrix and vector equal to (eps-machine) zeros.
-% NOTE: The function requires PRE-WHITENED inputs if i_bRUN_WHITENING is
+% NOTE: The function requires PRE-WHITENED inputs if bRUN_WHITENING is
 % false. Else, it is executed before Givens rotations.
 % REFERENCES:
 % 1) Statistical Orbit Determination, chapter 5, Tapley 2004
@@ -42,24 +42,24 @@ end
 %    Vision-aided Inertial Navigation, Mourikis 2007
 % -------------------------------------------------------------------------------------------------------------
 %% INPUT
-% i_dxPrior:         [Nx, 1]    State vector prior observation update
-% i_dSRInfoMatPrior: [Nx, Nx]   Square Root Information matrix prior 
+% dxPrior:         [Nx, 1]    State vector prior observation update
+% dSRInfoMatPrior: [Nx, Nx]   Square Root Information matrix prior 
 %                               observation update
-% i_dYobs:           [Ny, 1]    ("Actual") Observations to process
-% i_dHobsMatrix:     [Ny, Nx]   Observation matrix at measurement timetags
-% i_bNO_PRIOR_INFO:  [1]        Boolean flag to select if prior information is used
-% i_bRUN_WHITENING:  [1]        Boolean flag to enable pre-whitening 
-% i_dMeasCovSR:      [Ny, Ny]   Measurement noise covariance Square Root
+% dYobs:           [Ny, 1]    ("Actual") Observations to process
+% dHobsMatrix:     [Ny, Nx]   Observation matrix at measurement timetags
+% bNPRIOR_INFO:  [1]        Boolean flag to select if prior information is used
+% bRUN_WHITENING:  [1]        Boolean flag to enable pre-whitening 
+% dMeasCovSR:      [Ny, Ny]   Measurement noise covariance Square Root
 % -------------------------------------------------------------------------------------------------------------
 %% OUTPUT
-% o_dxPost:          [Nx, 1]    State vector post observation update
-% o_dSRInfoMatPost:  [Nx, Nx]   Square Root Information matrix post 
+% dxPost:          [Nx, 1]    State vector post observation update
+% dSRInfoMatPost:  [Nx, Nx]   Square Root Information matrix post 
 %                               observation update
-% o_dInfoVecPost:    [Nx, 1]    Information vector post observation update
-% o_dErrorVec:       [Ny, 1]    Error vector post observation update (prior
+% dInfoVecPost:    [Nx, 1]    Information vector post observation update
+% dErrorVec:       [Ny, 1]    Error vector post observation update (prior
 %                               information error + residuals) 
-% o_dSqrtPxPost:     [Nx, Nx]   Square Root covariance (if requested)
-% o_dJcost:          [1]        Square Sum of the errors (cost value)
+% dSqrtPxPost:     [Nx, Nx]   Square Root covariance (if requested)
+% dJcost:          [1]        Square Sum of the errors (cost value)
 % -------------------------------------------------------------------------------------------------------------
 %% CHANGELOG
 % 02-12-2023    Pietro Califano     First prototype, basic functionality.
@@ -96,7 +96,7 @@ if bRUN_WHITENING
 end
 
 %% INITIALIZATION ROUTINE
-if bNO_PRIOR_INFO == true
+if bNPRIOR_INFO == true
     % Initialize without prior information
     InfoD = eps * eye(Nx);
     InfoU = eye(Nx);
@@ -132,7 +132,7 @@ for idk = 1:1:Ny
         yNewTmp = dYobs(idk) - InfoVec(idi) * dHobsMatrix(idk, idi);
         % Add Information in Information vector
         InfoVec(idi) = InfoVec(idi) + yNewTmp * SbarTmp;
-        % Replace entries in i_dYobs, deltaTmp and Dpost
+        % Replace entries in dYobs, deltaTmp and Dpost
         dYobs(idk) = yNewTmp;
         deltaTmp = deltaTmp * InfoD(idi, idi)/DnewEntry;
         InfoD(idi, idi) = DnewEntry;
