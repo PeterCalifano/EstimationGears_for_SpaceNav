@@ -1,18 +1,27 @@
-function o_dInvDepthPoint = transformEPtoIDP(i_dEuclidPoint) %#codegen
+function dInvDepthPointsArray = transformEPtoIDP(dEuclidPointsArray, ui32PtrToLast, ui32MaxNumOfPoints) %#codegen
+arguments
+    dEuclidPointsArray (3,:) {ismatrix, isnumeric}
+    ui32PtrToLast      (1,1) uint32 {isnumeric, isscalar} = size(dEuclidPointsArray, 2); 
+    ui32MaxNumOfPoints (1,1) uint32 {isnumeric, isscalar} = size(dEuclidPointsArray, 2); 
+end
 %% PROTOTYPE
-% o_dInvDepthPoint = transformEPtoIDP(i_dEuclidPoint) %#codegen
+% dInvDepthPointsArray = transformEPtoIDP(dEuclidPointsArray, ui32PtrToLast, ui32MaxNumOfPoints) %#codegen
 % -------------------------------------------------------------------------------------------------------------
 %% DESCRIPTION
-% What the function does
+% Function transforming euclidean 3D points into the corresponding Inverse Depth representation (homogeneous
+% point + inverse depth dRho). Implemented as vectorized with optional static allocation for SLX.
 % -------------------------------------------------------------------------------------------------------------
 %% INPUT
-% i_dEuclidPoint
+% dEuclidPointsArray (3,:) {ismatrix, isnumeric}
+% ui32PtrToLast      (1,1) uint32 {isnumeric, isscalar} = size(dEuclidPointsArray, 2);
+% ui32MaxNumOfPoints (1,1) uint32 {isnumeric, isscalar} = size(dEuclidPointsArray, 2);
 % -------------------------------------------------------------------------------------------------------------
 %% OUTPUT
-% o_dInvDepthPoint    
+% dInvDepthPointsArray    
 % -------------------------------------------------------------------------------------------------------------
 %% CHANGELOG
-% 14-12-2023        Pietro Califano         First version, single vector.
+% 14-12-2023        Pietro Califano     First version, single vector.
+% 04-02-2025        Pietro Califano     Upgrade to support multiple points and static-sized arrays     
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % [-]
@@ -21,14 +30,24 @@ function o_dInvDepthPoint = transformEPtoIDP(i_dEuclidPoint) %#codegen
 % [-]
 % -------------------------------------------------------------------------------------------------------------
 %% Function code
-% o_dAlpha = i_dPosVec(1)/i_dPosVec(3);
-% o_dBeta  = i_dPosVec(2)/i_dPosVec(3);
-% o_dRho   = 1/i_dPosVec(3);
+% Implemented conversion:
+% dAlpha = dPosVec(1)/dPosVec(3);
+% dBeta  = dPosVec(2)/dPosVec(3);
+% dRho   = 1/dPosVec(3);
 
-% Position (Euclidean Point) to Inverse Depth parameters
-o_dInvDepthPoint = [i_dEuclidPoint(1)/i_dEuclidPoint(3);
-                    i_dEuclidPoint(2)/i_dEuclidPoint(3);
-                    1/i_dEuclidPoint(3)];
+% DEVNOTE:
+% We may want to add an assert to ensure that third component of input array is not near zero.
+assert( all(abs( dEuclidPointsArray(3, 1:ui32PtrToLast)) > eps('single')) )
+
+% Define output static-sized array 
+dInvDepthPointsArray = -ones(3, ui32MaxNumOfPoints); % Not zero to prevent any possibility of nan/inf
+
+% Convert position (Euclidean Point) to Inverse Depth parameters
+dInvDepthPointsArray(1:3, 1:ui32PtrToLast) = [dEuclidPointsArray(1, 1:ui32PtrToLast); dEuclidPointsArray(2, 1:ui32PtrToLast); ones(1, ui32PtrToLast)] ...
+                                                ./ dEuclidPointsArray(3, 1:ui32PtrToLast);
+
+% Resize output array (TBC: not allowed by static allocation!)
+% dInvDepthPointsArray = dInvDepthPointsArray(1:3, 1:ui32PtrToLast);
 
 
 end
