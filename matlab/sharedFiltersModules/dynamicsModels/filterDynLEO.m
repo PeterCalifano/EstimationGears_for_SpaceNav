@@ -1,42 +1,39 @@
-function o_dxdt = filterDynLEO(i_dCurrentTime, ...
-    i_dxState_IN, ...
-    i_dDynParams, ...
-    i_dEPHcoeffs, ...
-    i_ui16StatesIdx)%#codegen
+function dxdt = filterDynLEO(dStateTimetag, ...
+                             dxState_IN, ...
+                             strDynParams, ...
+                             strStatesIdx   )%#codegen
+arguments
+    dStateTimetag (1, 1) double
+    dxState_IN    (:, 1) double
+    strDynParams  {isstruct}
+    strStatesIdx  {isstruct}
+end
 %% PROTOTYPE
+% dxdt = filterDynLEO(dStateTimetag, dxState_IN, dDynParams, ui16StatesIdx, dEPHcoeffs)
 % -------------------------------------------------------------------------------------------------------------
 %% DESCRIPTION
 % Orbital dynamics ODE model specialized for Low Earth Orbits. 
 % Predefined cceleration models considered by this function:
 % 1) Cannonball-like Drag (Exponential atm. model)
-% 2) Cannonball SRP model 
-% 3) Gravitational models: 
+% 2) Cannonball SRP model --> REMOVED
+% 3) Gravitational models: Earth (Main, J2), Moon
 
 % REFERENCES
 % -------------------------------------------------------------------------------------------------------------
 %% INPUT
-% i_strConst
-% Name1                     []
-% Name2                     []
-
-% Name4                     []
-% Name5                     []
-% Name6                     []
+% dStateTimetag
+% dxState_IN
+% strDynParams
+% strStatesIdx
 % -------------------------------------------------------------------------------------------------------------
 %% OUTPUT
-% i_dOBSWtime
-% i_dxState
-% out1 [dim] description
-% Name1                     []
-% Name2                     []
-% Name3                     []
-% Name4                     []
-% Name5                     []
-% Name6                     []
+% dxdt
 % -------------------------------------------------------------------------------------------------------------
 %% CHANGELOG
 % 13-02-2024        Pietro Califano         First prototype pseudocode and accelerations models.
 % 22-02-2024        Pietro Califano         Moved code to evalRHS function.
+% 08-05-2024        Pietro Califano         Fix of incorrect frame in computing SH acceleration. Added
+%                                           attitude ephemerides as evaluation of Chbv polynomials.
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % % evalAttQuatChbvPolyWithCoeffs()
@@ -48,90 +45,108 @@ function o_dxdt = filterDynLEO(i_dCurrentTime, ...
 % [-]
 % -------------------------------------------------------------------------------------------------------------
 %% Function code
+ui32PolyMaxDeg = 20; % TODO (PC) move to input configuration parameters as const
 
 % DEVNOTE
+assert(dStateTimetag >= 0, 'ERROR: input time instant is negative.') % TODO: this assert should become an error thrown to the caller in release
 
-% INTERFACE STRUCTURE: i_strDynParams fields
-% strEPHcoeffs = i_strDynParams.strEPHcoeffs;
-% strConst     = i_strDynParams.strConst;
-% strSCparams  = i_strDynParams.strSCparams;
+% INTERFACE STRUCTURE: strDynParams fields
+% TODO: documentation
 
 % Input checks and variables allocation
-o_dxdt = coder.nullcopy(size(i_dxState_IN, 1));
+dxdt = coder.nullcopy(zeros(size(dxState_IN, 1), 1)); % DEVNOTE: this may cause an error due to size being determined by an input TBC
+dAtmCoeffsData = zeros(length(strDynParams.strAtmExpModel.dh0), 3);
 
-% Extract Ephemerides interpolants coefficients
-% i_dEPHcoeffs
+% Get indices as array
+ui16StatesIdx = [strStatesIdx.ui8posVelIdx(1), strStatesIdx.ui8posVelIdx(end);
+                strStatesIdx.ui8unmodelAccIdx(1), strStatesIdx.ui8unmodelAccIdx(end);
+                strStatesIdx.ui8AImeasBiasIdx(1), strStatesIdx.ui8AImeasBiasIdx(end);
+                strStatesIdx.ui8CRAmeasBiasIdx(1), strStatesIdx.ui8CRAmeasBiasIdx(end)];
 
-dMoonPos_IN
-dSunPos_IN
+% Evaluate Ephemerides Chebyshev interpolant
+% strDynParams.strMoonEPHdata.dMoonEPHcoeffs;
+% strDynParams.strMoonEPHdata.ui8PolyDeg;
+% strDynParams.strMoonEPHdata.dEphTimeLowBound;
+% strDynParams.strstrMoonEPHdata.dEphTimeUpBound;
+% ui8OutputSize = 3; % Hardcoded value
 
-% Evaluate body position at current time 
-i_dBodyEphemeris = coder.nullcopy(zeros(6, 1));
+if dStateTimetag <= strDynParams.strMoonEPHdata.dTimeLowBound
+    evalPoint = strDynParams.strMoonEPHdata.dTimeLowBound;
 
-i_dBodyEphemeris(1:3) = dMoonPos_IN;
-i_dBodyEphemeris(4:6) = dSunPos_IN;
+elseif dStateTimetag >= strDynParams.strMoonEPHdata.dTimeUpBound
+    evalPoint = strDynParams.strMoonEPHdata.dTimeUpBound;
 
+else
+    evalPoint = dStateTimetag;
+end
 
-h_0 = ...
-[ 0 25 30 40 50 60 70 ...
-80 90 100 110 120 130 140 ...
-150 180 200 250 300 350 400 ...
-450 500 600 700 800 900 1000];
+% Moon Position in ECI
+dBodyEphemeris = coder.nullcopy(zeros(3, 1));
 
-%...Corresponding reference densities (kg/m^3) from USSA76:
-rho_0 = ...
-[1.225 4.008e-2 1.841e-2 3.996e-3 1.027e-3 3.097e-4 8.283e-5 ...
-1.846e-5 3.416e-6 5.606e-7 9.708e-8 2.222e-8 8.152e-9 3.831e-9 ...
-2.076e-9 5.194e-10 2.541e-10 6.073e-11 1.916e-11 7.014e-12 2.803e-12 ...
-1.184e-12 5.215e-13 1.137e-13 3.070e-14 1.136e-14 5.759e-15 3.561e-15];
+dBodyEphemeris(1:3) = evalChbvPolyWithCoeffs(strDynParams.strMoonEPHdata.ui32PolyDeg, 3, evalPoint,...
+    strDynParams.strMoonEPHdata.dChbvPolycoeffs, strDynParams.strMoonEPHdata.dTimeLowBound, ...
+    strDynParams.strMoonEPHdata.dTimeUpBound, 3*strDynParams.strMoonEPHdata.ui32PolyDeg, ui32PolyMaxDeg);
 
-%...Scale heights (km):
-H = ...
-[ 7.310 6.427 6.546 7.360 8.342 7.583 6.661 ...
-5.927 5.533 5.703 6.782 9.973 13.243 16.322 ...
-21.652 27.974 34.934 43.342 49.755 54.513 58.019 ...
-60.980 65.654 76.377 100.587 147.203 208.020];
+% Earth attitude matrix
+% TODO: add sign switch to remove discontinuities
+dDCMmainAtt_fromTFtoIN  = coder.nullcopy(zeros(3, 3));
 
-i_dAtmCoeffsData = zeros(length(h_0), 3);
+dTmpQuat = evalAttQuatChbvPolyWithCoeffs(strDynParams.strEarthAttData.ui32PolyDeg, 4, evalPoint,...
+    strDynParams.strEarthAttData.dChbvPolycoeffs, ...
+    strDynParams.strEarthAttData.dsignSwitchIntervals, ...
+    strDynParams.strEarthAttData.dTimeLowBound, ...
+    strDynParams.strEarthAttData.dTimeUpBound, ...
+    4*strDynParams.strMoonEPHdata.ui32PolyDeg, ui32PolyMaxDeg);
 
-i_dAtmCoeffsData(:, 1) = h_0;       % h0 reference altitudes [km]
-i_dAtmCoeffsData(:, 2) = rho_0;     % rho0 reference densities [km]
-i_dAtmCoeffsData(:, 3) = [H(1), H]; % H scale altitudes [km] TO CHECK
+dDCMmainAtt_fromTFtoIN(1:3, 1:3) = Quat2DCM(dTmpQuat, true);
 
+% Package Exponential Atmospheric Model data
+dAtmCoeffsData(:, 1) = strDynParams.strAtmExpModel.dh0;       % h0 reference altitudes [km]
+dAtmCoeffsData(:, 2) = strDynParams.strAtmExpModel.ddensity0; % rho0 reference densities [km]
+dAtmCoeffsData(:, 3) = strDynParams.strAtmExpModel.dH;        % H scale altitudes [km] TO CHECK
 
 %% Evaluate RHS 
-
-
 % Evaluate Position and Velocity states dynamics
-o_dxdt(i_ui16StatesIdx(1,:)) = evalRHS_DynLEO(i_dxState_IN, ...
-                        i_dDynParams, ...
-                        i_dBodyEphemeris, ...
-                        i_dAtmCoeffsData, ...
-                        i_ui16StatesIdx);
+
+% tmpIdx = strStatesIdx(1,1):strStatesIdx(2,2);
+
+dxdt(strStatesIdx.ui8posVelIdx) = evalRHS_DynLEO(dxState_IN, ...
+    dBodyEphemeris, ...
+    dDCMmainAtt_fromTFtoIN, ...
+    dAtmCoeffsData, ...
+    strDynParams.dEarthGM, ...
+    strDynParams.dCoeffJ2, ...
+    strDynParams.dRearth, ...
+    strDynParams.fDragCoeff, ...
+    strDynParams.fDragCrossArea, ...
+    strDynParams.dEarthSpinRate, ...
+    strDynParams.dSCmass, ...
+    strDynParams.dMoonGM, ...
+    ui16StatesIdx);
 
 % Evaluate Unmodelled acceleration states dynamics
-o_dxdt(i_ui16StatesIdx(2,:)) = evalRHS_DynFOGM(i_dxState, ...
-    i_dTimeConst, ...
-    i_ui16StatesIdx(2, :));
+dxdt(strStatesIdx.ui8unmodelAccIdx) = evalRHS_DynFOGM(dxState_IN, ...
+    strDynParams.dunmAccTimeConst, ...
+    strStatesIdx.ui8unmodelAccIdx);
 
 % Evaluate Measurement biases dynamics 
 % Position vector in ECEF bias (AI-frontend)
-o_dxdt(i_ui16StatesIdx(3,:)) = evalRHS_DynFOGM(i_dxState, ...
-    i_dTimeConst, ...
-    i_ui16StatesIdx(3, :));
+dxdt(strStatesIdx.ui8AImeasBiasIdx) = evalRHS_DynFOGM(dxState_IN, ...
+    strDynParams.dAImeasBiasTimeConst, ...
+    strStatesIdx.ui8AImeasBiasIdx);
 
+ 
 % Position vector in CAM bias (CRA-frontend)
-o_dxdt(i_ui16StatesIdx(4,:)) = evalRHS_DynFOGM(i_dxState, ...
-    i_dTimeConst, ...
-    i_ui16StatesIdx(4, :));
+dxdt(strStatesIdx.ui8CRAmeasBiasIdx) = evalRHS_DynFOGM(dxState_IN, ...
+    strDynParams.dCRAmeasBiasTimeConst, ...
+    strStatesIdx.ui8CRAmeasBiasIdx);
 
 % TBD: Atmospheric density bias
-o_dxdt(i_ui16StatesIdx(5,:)) = evalRHS_DynFOGM(i_dxState, ...
-    i_dTimeConst, ...
-    i_ui16StatesIdx(5, :));
+% dxdt(tmpIdx) = evalRHS_DynFOGM(dxState, ...
+%     dTimeConst, ...
+%     tmpIdx);
 
 end
-
 
 
 
