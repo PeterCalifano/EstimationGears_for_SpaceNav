@@ -1,14 +1,14 @@
 function [dxStateNext, dStateTimetag] = propagateDyn(dxState, ...
                                                      dStateTimetag, ...
                                                      dDeltaTime, ...
-                                                     dIntegTimeStep, ...
+                                                     dIntegrTimeStep, ...
                                                      strDynParams, ...
                                                      strStatesIdx) %#codegen
 arguments
     dxState         (:, 1) double {isnumeric, isvector}
     dStateTimetag   (1, 1) double {isnumeric, isscalar}
     dDeltaTime      (1, 1) double {isnumeric, isscalar}
-    dIntegTimeStep  (1, 1) double {isnumeric, isscalar} 
+    dIntegrTimeStep  (1, 1) double {isnumeric, isscalar} 
     strDynParams    (1, 1) {isstruct}
     strStatesIdx    (1, 1) {isstruct}
 end
@@ -21,22 +21,23 @@ end
 %                                             strStatesIdx) %#codegen
 % -------------------------------------------------------------------------------------------------------------
 %% DESCRIPTION
-% What the function does
+% Implementation of flow function propagating dxState forward/backward in time using the implementation in 
+% IntegrateStepRK4 function and the underlying dynamical model.
 % -------------------------------------------------------------------------------------------------------------
 %% INPUT
-% dxState         (:, 1) double {isnumeric, isvector}
-% dStateTimetag   (1, 1) double {isnumeric, isscalar}
-% dDeltaTime      (1, 1) double {isnumeric, isscalar}
-% dIntegTimeStep  (1, 1) double {isnumeric, isscalar}
-% strDynParams    (1, 1) {isstruct}
-% strStatesIdx    (1, 1) {isstruct}
+% dxState           (:, 1) double {isnumeric, isvector}
+% dStateTimetag     (1, 1) double {isnumeric, isscalar}
+% dDeltaTime        (1, 1) double {isnumeric, isscalar}
+% dIntegrTimeStep   (1, 1) double {isnumeric, isscalar}
+% strDynParams      (1, 1) {isstruct}
+% strStatesIdx      (1, 1) {isstruct}
 % -------------------------------------------------------------------------------------------------------------
 %% OUTPUT
 % dxStateNext
 % dStateTimetag
 % -------------------------------------------------------------------------------------------------------------
 %% CHANGELOG
-% 08-04-2024        Pietro Califano         First version. Verified (not validated).
+% 08-04-2024        Pietro Califano         Flow function implementation (function template)
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % [-]
@@ -47,11 +48,11 @@ end
 %% Function code
 
 % CALL INTEGRATOR
-[dxStateNext, dStateTimetag] = filterStepRK4(dxState, ...
-                                             dStateTimetag, ...
-                                             dDeltaTime, ...
-                                             dIntegTimeStep, ...
-                                             strDynParams, ...
-                                             strStatesIdx);
+[dxStateNext, dStateTimetag] = IntegrateStepRK4(dxState, ...
+                                                dStateTimetag, ...
+                                                dDeltaTime, ...
+                                                dIntegrTimeStep, ...
+                                                strDynParams, ...
+                                                strStatesIdx);
 
 end
