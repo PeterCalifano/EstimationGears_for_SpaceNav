@@ -38,6 +38,6 @@ end
 %% Function code
 
 % Define here the filter dynamics
-dxdt = filterDynLEO(dStateTimetag, dxState, strDynParams, strStatesIdx);
+dxdt = filterDynOrbit(dStateTimetag, dxState, strDynParams, strStatesIdx);
 
 end
