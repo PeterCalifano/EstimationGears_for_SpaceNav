@@ -1,14 +1,14 @@
 function [dxStateNext, dStateTimetag] = IntegratorStepRK4(dxState, ...
     dStateTimetag, ...
     dDeltaTime, ...
-    dIntegTimeStep, ...
+    dIntegrTimeStep, ...
     strDynParams, ...
     strStatesIdx) %#codegen
 arguments
     dxState         (:, 1) double {isnumeric, isvector}
     dStateTimetag   (1, 1) double {isnumeric, isscalar}
     dDeltaTime      (1, 1) double {isnumeric, isscalar}
-    dIntegTimeStep  (1, 1) double {isnumeric, isscalar} 
+    dIntegrTimeStep  (1, 1) double {isnumeric, isscalar} 
     strDynParams    (1, 1) {isstruct}
     strStatesIdx    (1, 1) {isstruct}
 end
@@ -74,12 +74,12 @@ end
 
 % Compute minimum number of integrator steps
 bSTEP_ADDED = false;
-if not(abs(dDeltaTime) == dIntegTimeStep)
+if not(abs(dDeltaTime) == dIntegrTimeStep)
 
-    ui16IntegrStepsNum = uint16( floor(abs(dDeltaTime) / dIntegTimeStep) );
+    ui16IntegrStepsNum = uint16( floor(abs(dDeltaTime) / dIntegrTimeStep) );
 
     % Add 1 step if i_dDeltaTime not multiple of i_dIntegTimeStep
-    dresidualTime = abs(dDeltaTime) - double(ui16IntegrStepsNum) * dIntegTimeStep;
+    dresidualTime = abs(dDeltaTime) - double(ui16IntegrStepsNum) * dIntegrTimeStep;
 
     if dresidualTime > 0.0
         bSTEP_ADDED = true;
@@ -91,7 +91,7 @@ else
 end
 
 % Handle backward propagation case
-dIntegTimeStep = sign(dDeltaTime) * dIntegTimeStep;
+dIntegrTimeStep = sign(dDeltaTime) * dIntegrTimeStep;
 
 %% Dynamics RK4 integration
 dTmpStateNext  = dxState; % State variable at current integration time
@@ -101,20 +101,20 @@ for idStep = 1:ui16IntegrStepsNum
 
     % Handle STEP_ADDED case adjusting integrator timestep
     if bSTEP_ADDED == true && idStep == ui16IntegrStepsNum 
-        dIntegTimeStep = sign(dDeltaTime) * dresidualTime;
+        dIntegrTimeStep = sign(dDeltaTime) * dresidualTime;
     end
 
     % Evaluate integrator stages over timestep domain
     dk1 = computeDynFcn(dIntegrAbsTime                   , dTmpStateNext                          , strDynParams, strStatesIdx);
-    dk2 = computeDynFcn(dIntegrAbsTime + 0.5*dIntegTimeStep, dTmpStateNext + (0.5*dIntegTimeStep) * dk1, strDynParams, strStatesIdx);
-    dk3 = computeDynFcn(dIntegrAbsTime + 0.5*dIntegTimeStep, dTmpStateNext + (0.5*dIntegTimeStep) * dk2, strDynParams, strStatesIdx);
-    dk4 = computeDynFcn(dIntegrAbsTime + dIntegTimeStep  , dTmpStateNext +     dIntegTimeStep * dk3, strDynParams, strStatesIdx);
+    dk2 = computeDynFcn(dIntegrAbsTime + 0.5*dIntegrTimeStep, dTmpStateNext + (0.5*dIntegrTimeStep) * dk1, strDynParams, strStatesIdx);
+    dk3 = computeDynFcn(dIntegrAbsTime + 0.5*dIntegrTimeStep, dTmpStateNext + (0.5*dIntegrTimeStep) * dk2, strDynParams, strStatesIdx);
+    dk4 = computeDynFcn(dIntegrAbsTime + dIntegrTimeStep  , dTmpStateNext +     dIntegrTimeStep * dk3, strDynParams, strStatesIdx);
 
     % Update state at new integrator absolute time (initial + Nsteps*TimeStep)
-    dTmpStateNext = dTmpStateNext + ( dIntegTimeStep/6 )*(dk1 + 2*dk2 + 2*dk3 + dk4);
+    dTmpStateNext = dTmpStateNext + ( dIntegrTimeStep/6 )*(dk1 + 2*dk2 + 2*dk3 + dk4);
 
     % Update integrator current absolute time
-    dIntegrAbsTime = dIntegrAbsTime + dIntegTimeStep;
+    dIntegrAbsTime = dIntegrAbsTime + dIntegrTimeStep;
 
 end
 
