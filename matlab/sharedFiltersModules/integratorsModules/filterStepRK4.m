@@ -76,7 +76,7 @@ end
 bSTEP_ADDED = false;
 if not(abs(dDeltaTime) == dIntegTimeStep)
 
-    ui16IntegrStepsNum = uint16( floor(abs(dDeltaTime)/dIntegTimeStep) );
+    ui16IntegrStepsNum = uint16( floor(abs(dDeltaTime) / dIntegTimeStep) );
 
     % Add 1 step if i_dDeltaTime not multiple of i_dIntegTimeStep
     dresidualTime = abs(dDeltaTime) - double(ui16IntegrStepsNum) * dIntegTimeStep;
@@ -106,21 +106,24 @@ for idStep = 1:ui16IntegrStepsNum
 
     % Evaluate integrator stages over timestep domain
     dk1 = computeDynFcn(dIntegrAbsTime                   , dTmpStateNext                          , strDynParams, strStatesIdx);
-    dk2 = computeDynFcn(dIntegrAbsTime + dIntegTimeStep/2, dTmpStateNext + (dIntegTimeStep/2) * dk1, strDynParams, strStatesIdx);
-    dk3 = computeDynFcn(dIntegrAbsTime + dIntegTimeStep/2, dTmpStateNext + (dIntegTimeStep/2) * dk2, strDynParams, strStatesIdx);
+    dk2 = computeDynFcn(dIntegrAbsTime + 0.5*dIntegTimeStep, dTmpStateNext + (0.5*dIntegTimeStep) * dk1, strDynParams, strStatesIdx);
+    dk3 = computeDynFcn(dIntegrAbsTime + 0.5*dIntegTimeStep, dTmpStateNext + (0.5*dIntegTimeStep) * dk2, strDynParams, strStatesIdx);
     dk4 = computeDynFcn(dIntegrAbsTime + dIntegTimeStep  , dTmpStateNext +     dIntegTimeStep * dk3, strDynParams, strStatesIdx);
 
     % Update state at new integrator absolute time (initial + Nsteps*TimeStep)
-    dTmpStateNext = dTmpStateNext + (dIntegTimeStep/6)*(dk1 + 2*dk2 + 2*dk3 + dk4);
+    dTmpStateNext = dTmpStateNext + ( dIntegTimeStep/6 )*(dk1 + 2*dk2 + 2*dk3 + dk4);
 
     % Update integrator current absolute time
     dIntegrAbsTime = dIntegrAbsTime + dIntegTimeStep;
 
 end
 
+if coder.target('MATLAB') || coder.target('MEX')
+    assert( abs(( dIntegrAbsTime - ( dDeltaTime + dStateTimetag) )) <= eps('single'), 'ERROR: final state timestamp does not match target timestamp at single precision.');
+end
+
 % Assign output
 dxStateNext = dTmpStateNext;
-% o_dStateTimetag = round(integrAbsTime, 12);
 dStateTimetag = dIntegrAbsTime;
 
 end
