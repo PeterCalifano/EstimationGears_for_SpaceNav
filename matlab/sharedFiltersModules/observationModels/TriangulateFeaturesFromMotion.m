@@ -1,6 +1,6 @@
 function [dFeatPosVec_NavFrame, dFeatPosVec_Ck, dRelPos_CkFromCi_Ci, dDCM_CiFromCk, bConvergenceFlag] = ...
                             TriangulateFeaturesFromMotion(dyMeasVec, ...
-                            dMeasCovSigma, ...
+                                                          dMeasCovSigma, ...
                                                           dDCM_CiFromCk, ...
                                                           dRelPos_CkFromCi_Ci, ...
                                                           dDCM_NavFrameFromCk, ...
@@ -11,6 +11,7 @@ function [dFeatPosVec_NavFrame, dFeatPosVec_Ck, dRelPos_CkFromCi_Ci, dDCM_CiFrom
                                                           ui32NumOfFeatures, ...
                                                           ui32MaxIter,...
                                                           dDeltaResNormRelTol, ...
+                                                          dAbsResVecNorm2Thr, ...
                                                           ui32MaxNumOfPoses, ...
                                                           ui32MaxNumOfFeatures) %#codegen
 arguments
@@ -27,6 +28,7 @@ arguments
     ui32NumOfFeatures           (1,1)   uint32  {isscalar, isnumeric}
     ui32MaxIter                 (1,1)   uint32  {isscalar, isnumeric} = uint32(5);
     dDeltaResNormRelTol         (1,1)   double  {isscalar, isnumeric} = 1E-6;
+    dAbsResVecNorm2Thr          (1,1)   double  {isscalar, isnumeric} = 1E-12; 
     ui32MaxNumOfPoses           (1,1)   uint32  {isscalar, isnumeric} = ui32NumOfPoses; % TBC if not needed
     ui32MaxNumOfFeatures        (1,1)   uint32  {isscalar, isnumeric} = ui32NumOfFeatures;
 end
@@ -107,21 +109,27 @@ while dDeltaResRelNorm2 > dDeltaResNormRelTol2
     dResVecNorm2 = 0.0;
 
     % Compute Observation matrix and residual vector (linerized problem)
-    dFeatHobs = coder.nullcopy(zeros(2, 3));
+    dFeatHobs               = coder.nullcopy(zeros(2, 3));
+    dTmpRelPos_CkFromCi_Ci  = coder.nullcopy(zeros(3, 1));
+    
+    % NOTE: this counter is NEVER reset. Measurement for features are stacked one on top of the other:
+    % dyMeasVec = [dyMeasVec_Feat1, dyMeasVec_Feat2, ... , dyMeasVec_FeatN]
+    ui32IdMeas = uint32(1); % DEVNOTE: can be easily made uint16 (up to 65535 if memory bound)
 
     for ui32IdPose = 1:ui32NumOfPoses % Loop through Ci 
 
         % Reset Measurement extraction index
-        ui32IdMeas = uint32(1); % DEVNOTE: can be easily made uint16 (up to 65535 if memory bound)
-        ui32IdFeat = uint32(1);
+        % DEVNOTE: Reset to 1 for each pose. This is used to extract from guess vector and to allocate
+        % jacobians and residuals in the right position according to the number of features.
+        ui32IdFeat = uint32(1); 
 
-        dDCM_CkFromCi           = transpose( dDCM_CiFromCk(:,:, ui32IdPose) ); % TBD remove transpose!
-        dTmpRelPos_CkFromCi_Ci  = dRelPos_CkFromCi_Ci(:, ui32IdPose);
+        dDCM_CkFromCi               = transpose( dDCM_CiFromCk(:,:, ui32IdPose) ); % TBD remove transpose!
+        dTmpRelPos_CkFromCi_Ci(:)   = dRelPos_CkFromCi_Ci(:, ui32IdPose);
 
         % Compute dh/dInvDep jacobian for camera Ci
         % dDCM required in Jacobian --> dDeltaDCM_CkFromCi % DEVNOTE review this in detail, my view of the
         % problem seems different from papers?
-        dJacNormCoordsWrtIDP = [transpose(dDCM_CkFromCi(1,:)), transpose(dDCM_CkFromCi(2,:)), dTmpRelPos_CkFromCi_Ci];
+        dJacNormCoordsWrtIDP = [transpose(dDCM_CkFromCi(1,:)), transpose(dDCM_CkFromCi(2,:)), dTmpRelPos_CkFromCi_Ci]; % TODO: 
 
         for ui32FeatID = 1:ui32NumOfFeatures % Loop through features
     
@@ -199,24 +207,48 @@ while dDeltaResRelNorm2 > dDeltaResNormRelTol2
         end
     end
 
+
+    ui8IterCounter = ui8IterCounter + uint8(1);
+    
     % SOLVER LOOP COUNTER
     if ui8IterCounter >= ui32MaxIter
         disp('SOLVER STOP: MAX ITER REACHED.')
         break;
     end
 
+    % Check norm of the error, if low in absolute value, break
+    if dResVecNorm2 <= dAbsResVecNorm2Thr
+        disp('SOLVER STOP: Residual norm2 below absolute threshold.')
+        break;
+    end
+    
     % Store previous residual vector norm squared
     dResVecNorm2_prev = dResVecNorm2;
 
-    ui8IterCounter = ui8IterCounter + uint8(1);
 end
-
 
 % Output definition
 dFeatPosVec_NavFrame = zeros(3, ui32MaxNumOfFeatures);
 
+% TODO: review convergence flags definitions!
+
 % Check convergence and return output
-if ui8NonConvergingCounter == ui8IterCounter - uint8(1)
+if dResVecNorm2 <= dAbsResVecNorm2Thr
+    bConvergenceFlag = true;
+
+    % Compute output in Camera frame at tk time
+    dFeatPosVec_Ck = transformIDPtoEP(dFeatInverseDepth_Ck, ui32NumOfFeatures, ui32MaxNumOfFeatures);
+
+    % Compute landmarks positions in Navigation frame at tk time (TODO validated)
+    for ui32FeatID = 1:ui32NumOfFeatures
+        dFeatPosVec_NavFrame(1:3, ui32FeatID) =  ( dDCM_NavFrameFromCk * dFeatPosVec_Ck(1:3, ui32FeatID) ) ...
+            +  dPositionCk_NavFrame;
+    end
+
+    return % RETURN CONVERGED
+
+elseif ui8NonConvergingCounter == ui8IterCounter - uint8(1)
+
     bConvergenceFlag = false;
     return % RETURN NON CONVERGED
     

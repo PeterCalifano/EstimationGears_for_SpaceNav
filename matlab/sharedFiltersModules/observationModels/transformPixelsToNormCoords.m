@@ -37,10 +37,10 @@ end
 dyNormCoordVec = coder.nullcopy(zeros(2, ui32MaxNumMeas));
 
 % Temporary variables (reduce access to dKcam, TBC)
-dfx = dKcam(1,1);
-dfy = dKcam(2,2); 
-dCx = dKcam(3,1);
-dCy = dKcam(3,2); 
+dfx = dKcam(1, 1);
+dfy = dKcam(2, 2); 
+dCx = dKcam(1, 3);
+dCy = dKcam(2, 3); 
 
 % DEVNOTE: for loop here deemed better than writing vectorized with masks
 for idY = 1:ui32PtrToLast

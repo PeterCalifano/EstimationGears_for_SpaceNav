@@ -1,4 +1,4 @@
-function [dPosVec_Ci, dNormalizedCoords_Ci] = normalizedProjectIDP(dDCM_CkfromCi, ...
+function [dPointPosVec_Ci, dNormalizedCoords_Ci] = normalizedProjectIDP(dDCM_CkfromCi, ...
                                                         dDeltaPos_CkfromCi_Ci, ...
                                                         dPosInvDepParams_Ck) % %#codegen
 arguments
@@ -44,11 +44,12 @@ end
 % dRho   = 1/i_dPosVec(3);        --> dInvDepParams(3)
 
 % Inverse depth model: predict position of feature in Ci pose frame as function of IDP in Ck
-dPosVec_Ci = ( transpose(dDCM_CkfromCi) * [dPosInvDepParams_Ck(1:2); 1.0]) - dPosInvDepParams_Ck(3) * dDeltaPos_CkfromCi_Ci ; % TBC
+% TODO: division here can be avoided!
+dPointPosVec_Ci = ( transpose(dDCM_CkfromCi) * (1/dPosInvDepParams_Ck(3)) * [dPosInvDepParams_Ck(1:2); 1.0] ) + dDeltaPos_CkfromCi_Ci ; % TBC
 
-% Compute pixel coordinates
+% Compute normalized coordinates [x/z; y/z];
 % dNormalizedCoords_Ck = 1/dPosVec_Ck(3) * [dPosVec_Ck(1); dPosVec_Ck(2)];
 dNormalizedCoords_Ci = coder.nullcopy(zeros(2,1));
-dNormalizedCoords_Ci(:) = dPosVec_Ci(1:2);
+dNormalizedCoords_Ci(:) = dPointPosVec_Ci(1:2)./dPointPosVec_Ci(3); 
 
 end
