@@ -114,7 +114,8 @@ while dDeltaResRelNorm2 > dDeltaResNormRelTol2
     
     % NOTE: this counter is NEVER reset. Measurement for features are stacked one on top of the other:
     % dyMeasVec = [dyMeasVec_Feat1, dyMeasVec_Feat2, ... , dyMeasVec_FeatN]
-    ui32IdMeas = uint32(1); % DEVNOTE: can be easily made uint16 (up to 65535 if memory bound)
+    ui32IdMeas      = uint32(1); % DEVNOTE: can be easily made uint16 (up to 65535 if memory bound)
+    ui32FeatPrevID  = uint32(0);
 
     for ui32IdPose = 1:ui32NumOfPoses % Loop through Ci 
 
@@ -129,12 +130,37 @@ while dDeltaResRelNorm2 > dDeltaResNormRelTol2
         % Compute dh/dInvDep jacobian for camera Ci
         % dDCM required in Jacobian --> dDeltaDCM_CkFromCi % DEVNOTE review this in detail, my view of the
         % problem seems different from papers?
-        dJacNormCoordsWrtIDP = [transpose(dDCM_CkFromCi(1,:)), transpose(dDCM_CkFromCi(2,:)), dTmpRelPos_CkFromCi_Ci]; % TODO: 
-
+        % dJacNormCoordsWrtIDP = [transpose(dDCM_CkFromCi(1,:)), transpose(dDCM_CkFromCi(2,:)), dTmpRelPos_CkFromCi_Ci]; 
+        % DEVNOTE: this jacobian seems completely wrong now? No idea where I took it.
+        
         for ui32FeatID = 1:ui32NumOfFeatures % Loop through features
     
-            % ACHTUNG: TO REWORK to handle multiple features
             ui32TmpFeatIDs = ui32IdFeat : ui32IdFeat + uint32(2);
+
+            if ui32FeatID ~= ui32FeatPrevID
+                bNewFeature = true;
+            end
+
+            % TODO for optimization: "invert" the loop --> features first in outer loop, inner loop on poses
+            if bNewFeature == true
+
+                % Compute inverse of rho = 3rd component once (reduced number of divisions)
+                dTmpAlpha   = dFeatInverseDepth_Ck(ui32TmpFeatIDs(1), 1);
+                dTmpBeta    = dFeatInverseDepth_Ck(ui32TmpFeatIDs(2), 1);
+                dTmpInvRho  = 1./dFeatInverseDepth_Ck(ui32TmpFeatIDs(3), 1);
+                dTmpInvRho2 = dTmpInvRho * dTmpInvRho;
+
+                % Set to false to avoid recomputation unless a new feature has to be processed
+                bNewFeature     = false;
+                ui32FeatPrevID  = ui32FeatID;
+
+                dTmpJacMatrix = transpose( [dTmpInvRho,                    0,                         0;
+                                           0,                 dTmpInvRho,                        0;
+                                           -dTmpAlpha * dTmpInvRho2, -dTmpBeta * dTmpInvRho2, - dTmpInvRho2] );
+
+            end
+
+            dJacNormCoordsWrtIDP = dDCM_CiFromCk(:,:, ui32IdPose) * dTmpJacMatrix;
 
             % Compute ith predicted measurement [2x1]
             % [dFeatPosPred_Ci, dFeatProjPred_UVi] =  pinholeProjectIDP(dDCM_CkFromCid, ...
