@@ -1,12 +1,12 @@
 function [dRelPos_CkFromCi_Ci, dDCM_CiFromCk, ...
-    dPositionCk_NavFrame, dDCM_NavFrameFromCk] = ComputeCamRelPoses(dDCM_NavFrameFromC, ...
+    dPositionCk_NavFrame, dDCM_NavFrameFromCk] = ComputeCamRelPoses(dDCM_NavFrameFromCi, ...
                                                                     dPositionCam_NavFrame, ...
                                                                     ui32EstimationTimeID, ...
                                                                     ui32NumOfPoses, ...
                                                                     ui32MaxNumOfPoses)%#codegen
-arguments
+arguments (Input)
     % DEVNOTE: comment validation args for speed
-    dDCM_NavFrameFromC          (3,3,:) double  {ismatrix, isnumeric}   % Actual size: (3, 3, ui32NumOfPoses)
+    dDCM_NavFrameFromCi         (3,3,:) double  {ismatrix, isnumeric}   % Actual size: (3, 3, ui32NumOfPoses)
     dPositionCam_NavFrame       (3,:)   double  {ismatrix, isnumeric}   % Actual size: (3, ui32NumOfPoses)
     ui32EstimationTimeID        (1,1)   double  {isscalar, isnumeric}
     ui32NumOfPoses              (1,:)   uint32  {isscalar, isnumeric}
@@ -42,8 +42,6 @@ end
 % [-]
 % -------------------------------------------------------------------------------------------------------------
 %% Future upgrades
-% 1) Replace WLS with Givens Rotations for improved efficiency TBC
-% 2) Modify code for static memory allocation
 % 3) Evaluate whether the function may be modified to enable only a subset (not continuous) set of poses to
 % be evaluated. I was thinking something like, boolean mask of size ui32MaxNumOfPoses, storing those into
 % the first entries of the buffer. The caller must known how to use those (e.g. allocating where needed).
@@ -60,15 +58,15 @@ dDCM_CiFromCk       =  zeros(3, 3, ui32MaxNumOfPoses) ;
 
 %% Computation of Ci camera poses from Ck camera anchor pose
 
-% Get anchor pose
+% Get anchor pose Ck
 dPositionCk_NavFrame = dPositionCam_NavFrame(1:3, ui32EstimationTimeID);
-dDCM_NavFrameFromCk  = dDCM_NavFrameFromC(:, :, ui32EstimationTimeID);
+dDCM_NavFrameFromCk  = dDCM_NavFrameFromCi(:, :, ui32EstimationTimeID);
 
 % Compute poses relative to anchor pose
 for ui32IdPose = 1:ui32NumOfPoses
 
     % Compute position of Ck from Ci in Ci camera frame
-    dDCM_CiFromNavFrame = transpose( dDCM_NavFrameFromC(:,:, ui32IdPose) );
+    dDCM_CiFromNavFrame = transpose( dDCM_NavFrameFromCi(:,:, ui32IdPose) );
     dRelPos_CkFromCi_Ci(:, ui32IdPose) = dDCM_CiFromNavFrame * (dPositionCk_NavFrame - dPositionCam_NavFrame(1:3, ui32IdPose) );
 
     % Compute attitudes of Ck wrt Ci camera frames (DCM from Ck to Ci)
