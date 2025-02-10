@@ -16,6 +16,7 @@ classdef testTriangulateFeaturesFromMotion < matlab.unittest.TestCase
         dRefAttitudes_TBfromIN   = eye(3); % Assume fixed
         dMeasKeypoints_uv
         dMeasCovSigma
+        dMeasCovSigma_GT
 
         objCameraIntrinsics
         ui32MaxIter = 2;            % ACHTUNG, parameter to swipe
@@ -26,15 +27,18 @@ classdef testTriangulateFeaturesFromMotion < matlab.unittest.TestCase
     properties (ClassSetupParameter)
         dHalfSideSize = {185.0, 0.5*185.0, 2*185.0}; % Parameterized test
         dSigmaKpt = {0, 0.05};
-        ui32RngSeed = {0};
+        ui32RngSeed = {0, 1};
     end
 
     methods (TestClassSetup)
         % Shared setup for the entire test class
         function [testCase] = setup(testCase, dHalfSideSize, dSigmaKpt, ui32RngSeed)
             rng(ui32RngSeed);
-            fprintf("Setting up test class...\n");
-            
+            fprintf("\n\nSetting up test class...\n");
+            fprintf("\tdHalfSideSize: %f\n", dHalfSideSize);
+            fprintf("\tdSigmaKpt: %f\n", dSigmaKpt);
+            fprintf("\tui32RngSeed: %d\n", ui32RngSeed);
+
             % Create camera intrinsics object
             testCase.objCameraIntrinsics = cameraIntrinsics(testCase.dFocalLength, testCase.dPrincipalPoint_UV, testCase.ui32ImageSize);
             testCase.dKcam = testCase.objCameraIntrinsics.K;
@@ -80,6 +84,8 @@ classdef testTriangulateFeaturesFromMotion < matlab.unittest.TestCase
                 testCase.dMeasCovSigma = 0.1;
             end
 
+            testCase.dMeasCovSigma_GT = dSigmaKpt;
+
             for idP = 1:ui32NumOfPoses
                 kptAlloc = 1;
 
@@ -106,11 +112,9 @@ classdef testTriangulateFeaturesFromMotion < matlab.unittest.TestCase
     
     methods(TestMethodSetup)
         % Setup for each test
-        function setupTest(testCase, dHalfSideSize)
-            fprintf("Setting up test with dHalfSideSize: %f\n", dHalfSideSize);
-
+        function setupTest(testCase)
             % Set test parameters
-            testCase.ui32MaxIter = 2; % ACHTUNG, parameter to swipe
+            testCase.ui32MaxIter = 5; % ACHTUNG, parameter to swipe
             testCase.dDeltaResNormRelTol = 1e-3; % Residual tolerance to stop optimization
 
         end
@@ -142,22 +146,29 @@ classdef testTriangulateFeaturesFromMotion < matlab.unittest.TestCase
             ui32NumOfFeatures = size(testCase.dLandmarkPosGT_TB, 2);
             ui32NumOfPoses = length(testCase.dTimegridID);
             ui32NumOfEstFeat = uint32(1);
+            
+            dAbsResVecNorm2Thr = 1E-12;
 
             % Get and pre-compute camera poses
             % Nav. frame is TARGET BODY here.
-            dDCM_NavFrameFromC      =   testCase.dRefAttitudes_TBfromCAM; % TODO verify attitude, seems incorrect
+            dDCM_NavFrameFromCi      =   testCase.dRefAttitudes_TBfromCAM; 
             dPositionCam_NavFrame   =   testCase.dPosRefStates_TB';
 
-                ui32EstimationTimeID = 1; % Use 1st pose as anchor
+            ui32EstimationTimeID = 1; % Use 1st pose as anchor
 
-            for idF = 0:ui32NumOfFeatures-1
+            dSigmaInitialGuessErr = 100.0; % Sigma or the error for the feature initial 
+            
+
+            for idF = 0:ui32NumOfFeatures-1 % TODO: update test to store all features!
+
                 ui32kptExtractIdxs = (1:2) + idF*2;
 
                 % Get feature IDP guess in camera "anchor frame" 
                 dFeatInverseDepthGuess_Ck = zeros(3, 1);
-                dFeatInverseDepthGuess_Ck(:) = transformEPtoIDP( ( dDCM_NavFrameFromC(:,:,ui32EstimationTimeID)' * ...
-                                                                 ( [testCase.dLandmarkPosGT_TB(:, idF+1) ] - dPositionCam_NavFrame(ui32EstimationTimeID, 1:3)' ) ) + ...
-                                                                 2 * randn(3,1)  ...
+                % DEVNOTE 1: bug fixed here, dPositionCam_NavFrame indices were inverted!
+                dFeatInverseDepthGuess_Ck(:) = transformEPtoIDP( ( dDCM_NavFrameFromCi(:,:,ui32EstimationTimeID)' * ...
+                                                                 ( [testCase.dLandmarkPosGT_TB(:, idF+1) ] - dPositionCam_NavFrame(1:3, ui32EstimationTimeID) ) ) ...
+                                                                 + dSigmaInitialGuessErr * randn(3,1)  ...
                                                                 ) ; % Use GT landmark in Ck + gaussian noise as initial value
 
                 ui32MeasAllocPtr = 1;
@@ -171,7 +182,7 @@ classdef testTriangulateFeaturesFromMotion < matlab.unittest.TestCase
 
                 % Compute camera poses relative to anchor
                 [dRelPos_CkFromCi_Ci, dDCM_CiFromCk, dPositionCk_NavFrame, dDCM_NavFrameFromCk] = ComputeCamRelPoses(...
-                                                            dDCM_NavFrameFromC, ...
+                                                            dDCM_NavFrameFromCi, ...
                                                             dPositionCam_NavFrame, ...
                                                             ui32EstimationTimeID, ...
                                                             ui32NumOfPoses, ...
@@ -184,10 +195,10 @@ classdef testTriangulateFeaturesFromMotion < matlab.unittest.TestCase
 
                 [dyNormCoordVec] = transformPixelsToNormCoords(dyPixMeasVec, testCase.dKcam, ui32PtrToLast, ui32MaxNumMeas);
                 
-                % Reshape
+                % Reshape to 2xN array (and squeeze
                 dyNormCoordVec = reshape(dyNormCoordVec(:, 1:ui32PtrToLast), 2*ui32PtrToLast, 1);
 
-                % Call function
+                % Call function % TODO: check outputs of function?!
                 [dFeatPosVec_NavFrame, dFeatPosVec_Ck, dRelPos_CkFromCi_Ci, dDCM_CiFromCk] = ...
                     TriangulateFeaturesFromMotion(dyNormCoordVec, ...
                                                   testCase.dMeasCovSigma, ...
@@ -198,16 +209,18 @@ classdef testTriangulateFeaturesFromMotion < matlab.unittest.TestCase
                                                   dFeatInverseDepthGuess_Ck, ...
                                                   testCase.dPrincipalPoint_UV, ...
                                                   ui32NumOfPoses,...
-                                                  1, ...
+                                                  ui32NumOfEstFeat, ...
                                                   testCase.ui32MaxIter,...
                                                   testCase.dDeltaResNormRelTol, ...
+                                                  dAbsResVecNorm2Thr, ...
                                                   ui32NumOfPoses + 1, ...
                                                   ui32NumOfFeatures + 1); %#ok<ASGLU> % + 1 is to test static-sized feature
 
-
+                break; % Just one feature
             end
 
-            % testCase.assertEqual(testCase.dxRefStates_TB, testCase.dxRefStates_TB)
+            dAbsTol = double( max( eps('single'), 4 * testCase.dMeasCovSigma_GT ) );
+            testCase.assertEqual(dFeatPosVec_NavFrame(:, 1), testCase.dLandmarkPosGT_TB(:, idF+1), "AbsTol", dAbsTol );
 
         end
 
