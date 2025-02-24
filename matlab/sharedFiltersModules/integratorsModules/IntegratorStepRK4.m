@@ -3,39 +3,39 @@ function [dxStateNext, dStateTimetag] = IntegratorStepRK4(dxState, ...
     dDeltaTime, ...
     dIntegrTimeStep, ...
     strDynParams, ...
-    strStatesIdx) %#codegen
+    strFilterConstConfig) %#codegen
 arguments
-    dxState         (:, 1) double {isnumeric, isvector}
-    dStateTimetag   (1, 1) double {isnumeric, isscalar}
-    dDeltaTime      (1, 1) double {isnumeric, isscalar}
-    dIntegrTimeStep  (1, 1) double {isnumeric, isscalar} 
-    strDynParams    (1, 1) {isstruct}
-    strStatesIdx    (1, 1) {isstruct}
+    dxState                 (:, 1) double {isnumeric, isvector}
+    dStateTimetag           (1, 1) double {isnumeric, isscalar}
+    dDeltaTime              (1, 1) double {isnumeric, isscalar}
+    dIntegrTimeStep         (1, 1) double {isnumeric, isscalar} 
+    strDynParams            (1, 1) {isstruct}
+    strFilterConstConfig    (1, 1) {isstruct}
 end
 %% PROTOTYPE
-% [dxStateNext, dStateTimetag] = filterStepRK4(dxState, ...
-%     dStateTimetag, ...
-%     dDeltaTime, ...
-%     dIntegTimeStep, ...
-%     strDynParams, ...
-%     strStatesIdx) %#codegen
+% [dxStateNext, dStateTimetag] = IntegratorStepRK4(dxState, ...
+%                                                  dStateTimetag, ...
+%                                                  dDeltaTime, ...
+%                                                  dIntegrTimeStep, ...
+%                                                  strDynParams, ...
+%                                                  strFilterConstConfig) %#codegen
 % -------------------------------------------------------------------------------------------------------------
 %% DESCRIPTION
 % What the function does
 %
-% ACHTUNG: the integrator function strictly depends on "filterDynRHS" with standard interface:
-% o_dxdt = computeDynFcn(i_dCurrentTime, i_dxState, i_strDynParams, i_strStatesIdx).
+% ACHTUNG: the integrator function strictly depends on "computeDynFcn" with standard interface:
+%       computeDynFcn(dCurrentTime, dxState, strDynParams, strFilterConstConfig).
 % The structure maps to the dynamic parameters of the dynamics model function and must be properly matched.
 % filterStepRK4() is agnostic with respect to the output returned by the RHS, provided that it is of the
 % correct size.
 % -------------------------------------------------------------------------------------------------------------
 %% INPUT
-% dxState         (:, 1) double {isnumeric, isvector}
-% dStateTimetag   (1, 1) double {isnumeric, isscalar}
-% dDeltaTime      (1, 1) double {isnumeric, isscalar}
-% dIntegTimeStep  (1, 1) double {isnumeric, isscalar} 
-% strDynParams    (1, 1) {isstruct}
-% strStatesIdx    (1, 1) {isstruct}
+% dxState               (:, 1) double {isnumeric, isvector}
+% dStateTimetag         (1, 1) double {isnumeric, isscalar}
+% dDeltaTime            (1, 1) double {isnumeric, isscalar}
+% dIntegTimeStep        (1, 1) double {isnumeric, isscalar} 
+% strDynParams          (1, 1) {isstruct}
+% strFilterConstConfig  (1, 1) {isstruct}
 % -------------------------------------------------------------------------------------------------------------
 %% OUTPUT
 % dxStateNext
@@ -47,6 +47,8 @@ end
 % 13-02-2024        Pietro Califano         Prototype for filter implementation v1.0: standard interface for
 %                                           RHS call; multistep management; forward/back propagation.
 % 30-03-2024        Pietro Califano         New interface function computeDynFcn. Use of struct() as inputs.
+% 24-02-2025        Pietro Califano         Compatibility breaking change: state index struct replaced by
+%                                           filter const configuration struct
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % [-]
@@ -105,10 +107,10 @@ for idStep = 1:ui16IntegrStepsNum
     end
 
     % Evaluate integrator stages over timestep domain
-    dk1 = computeDynFcn(dIntegrAbsTime                   , dTmpStateNext                          , strDynParams, strStatesIdx);
-    dk2 = computeDynFcn(dIntegrAbsTime + 0.5*dIntegrTimeStep, dTmpStateNext + (0.5*dIntegrTimeStep) * dk1, strDynParams, strStatesIdx);
-    dk3 = computeDynFcn(dIntegrAbsTime + 0.5*dIntegrTimeStep, dTmpStateNext + (0.5*dIntegrTimeStep) * dk2, strDynParams, strStatesIdx);
-    dk4 = computeDynFcn(dIntegrAbsTime + dIntegrTimeStep  , dTmpStateNext +     dIntegrTimeStep * dk3, strDynParams, strStatesIdx);
+    dk1 = computeDynFcn(dIntegrAbsTime                   , dTmpStateNext                          , strDynParams, strFilterConstConfig);
+    dk2 = computeDynFcn(dIntegrAbsTime + 0.5*dIntegrTimeStep, dTmpStateNext + (0.5*dIntegrTimeStep) * dk1, strDynParams, strFilterConstConfig);
+    dk3 = computeDynFcn(dIntegrAbsTime + 0.5*dIntegrTimeStep, dTmpStateNext + (0.5*dIntegrTimeStep) * dk2, strDynParams, strFilterConstConfig);
+    dk4 = computeDynFcn(dIntegrAbsTime + dIntegrTimeStep  , dTmpStateNext +     dIntegrTimeStep * dk3, strDynParams, strFilterConstConfig);
 
     % Update state at new integrator absolute time (initial + Nsteps*TimeStep)
     dTmpStateNext = dTmpStateNext + ( dIntegrTimeStep/6 )*(dk1 + 2*dk2 + 2*dk3 + dk4);
