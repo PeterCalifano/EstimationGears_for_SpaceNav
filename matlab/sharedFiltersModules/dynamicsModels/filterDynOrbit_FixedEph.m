@@ -1,19 +1,18 @@
-function dDxDt = filterDynOrbit_FixedEph(dStateTimetag, ...
+function dDrvDt = filterDynOrbit_FixedEph(dStateTimetag, ...
                                 dxState, ...
                                 strDynParams, ...
-                                strStatesIdx) %#codegen
+                                strFilterConstConfig) %#codegen
 arguments
-    dStateTimetag (1, 1) double
-    dxState       (:, 1) double
-    strDynParams  {isstruct}
-    strStatesIdx  {isstruct}
-    % strFilterConstConfig
+    dStateTimetag         (1, 1) double
+    dxState               (:, 1) double
+    strDynParams          {isstruct}
+    strFilterConstConfig  {isstruct}
 end
 %% PROTOTYPE
-% dxdt = computeDynFcn(dStateTimetag,...
-%                        dxState,...
-%                        strDynParams,...
-%                        strStatesIdx)
+% dDrvDt = filterDynOrbit_FixedEph(dStateTimetag, ...
+%                                 dxState, ...
+%                                 strDynParams, ...
+%                                 strFilterConstConfig) %#codegen
 % -------------------------------------------------------------------------------------------------------------
 %% DESCRIPTION
 % What the function does
@@ -28,13 +27,11 @@ end
 % dxdt
 % -------------------------------------------------------------------------------------------------------------
 %% CHANGELOG
-% 17-08-2024        Pietro Califano         Version adapted from FUTURE EKF to use general purpose evalRHS_DynOrbit
+% 24-02-2025    Pietro Califano     Implement version taking from legact filterDynOrbit and
+%                                   for compatibility with evalRHS_InertialDynOrbit
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
-% evalAttQuatChbvPolyWithCoeffs()
-% evalChbvPolyWithCoeffs()
-% evalRHS_DynOrbit()
-% evalRHS_DynFOGM()
+% evalRHS_InertialDynOrbit()
 % -------------------------------------------------------------------------------------------------------------
 %% Future upgrades
 % TODO make more general purpose
@@ -43,67 +40,47 @@ end
 %% Function code
 
 % Get configuration flags to configure dynamics 
-% TODO
+% TODO if any
+dDrvDt = zeros(6, 1);
 
-
-% TODO modify how this variable is used
-ui8NumOf3rdBodies = strFilterConstConfig.ui8NumOf3rdBodies; 
-% MUST come from filter const configuration. OTHERWISE: size of dBodyEphemerides, which will be FIXED.
-
-% Variables definition
-dDxDt = zeros(size(dxState, 1), 1);
-
-% Check for 3rd bodies % TODO: rework
-if not(isfield(strDynParams, 'strBody3rdData'))
-    ui8NumOf3rdBodies = uint8(0);
-else
-    ui8NumOf3rdBodies = uint8(length(strDynParams.strBody3rdData)); % TODO --> remove for static sizing
-end
-
-% Input checks and variables allocation
-
-% Get state indices as array
-% ui16StatesIdx = [strStatesIdx.ui8posVelIdx(1), strStatesIdx.ui8posVelIdx(end);
-%                 strStatesIdx.ui8unmodelAccIdx(1), strStatesIdx.ui8unmodelAccIdx(end);
-%                 strStatesIdx.ui8AImeasBiasIdx(1), strStatesIdx.ui8AImeasBiasIdx(end);
-%                 strStatesIdx.ui8CRAmeasBiasIdx(1), strStatesIdx.ui8CRAmeasBiasIdx(end)];
-
-% TODO: rework usage of ui16StatesIdx, which effectively is statically determined!
-ui16StatesIdx = [strStatesIdx.ui8posVelIdx(1), strStatesIdx.ui8posVelIdx(end)];
-
-
-% dDCMmainAtt_INfromTF(1:3, 1:3) = Quat2DCM(dTmpQuat, true);
+% Get ephemerides from dynamic params struct
+dBodyEphemerides = strDynParams.dBodyEphemerides;
 dDCMmainAtt_INfromTF = zeros(3,3);
 
-% Compute SRP coefficient (TODO: rework to allow bias estimation)
+if isfield(strDynParams, "dDCMmainAtt_INfromTF")
+    dDCMmainAtt_INfromTF(:,:) = strDynParams.dDCMmainAtt_INfromTF;
+end
+
+% Compute SRP coefficient 
 dBiasCoeffSRP = 0.0;
-% If bEstimatedCoeffSRP
-% dBiasCoeffSRP = dxState( );
-% end
+if isfield(strFilterConstConfig.strStatesIdx, "ui8CoeffSRPidx")
+    dBiasCoeffSRP(:) = dxState( strFilterConstConfig.strStatesIdx.ui8CoeffSRPidx);
+end
 
 dCoeffSRP = (strDynParams.strSRPdata.dP_SRP * strDynParams.strSCdata.dReflCoeff * ...
              strDynParams.strSCdata.dA_SRP)/strDynParams.strSCdata.dSCmass; % Move to compute outside, since this
 
 dCoeffSRP = dCoeffSRP + dBiasCoeffSRP;
 
+% Get residual acceleration if any
+dResidualAccel = zeros(3,1);
+
+if isfield(strFilterConstConfig.strStatesIdx, "ui8ResidualAccelIdx")
+    dResidualAccel(:) = dxState( strFilterConstConfig.strStatesIdx.ui8ResidualAccelIdx);
+end
+
 %% Evaluate RHS
-% ACHTUNG: Sun must be first in ephemerides and GM data
-% TODO make an "embeddable" version of evalRHS_DynOrbit --> no isempty checks
-dDxDt(strStatesIdx.ui8posVelIdx) = evalRHS_DynOrbit(dxState, ...
-                                                       dDCMmainAtt_INfromTF, ...
-                                                       strDynParams.strMainData.dGM, ...
-                                                       strDynParams.strMainData.dRefRadius, ...
-                                                       dCoeffSRP, ...
-                                                       d3rdBodiesGM, ...
-                                                       dBodyEphemerides, ...
-                                                       strDynParams.strMainData.dSHcoeff, ...
-                                                       ui16StatesIdx);
-
-% TODO: add dynamics 
-
-% dxdt(ui16StatesIdx(2,:)) = evalRHS_DynFOGM(dxState, ...
-%     dTimeConst, ...
-%     ui16StatesIdx(2, :));
+dDrvDt(strFilterConstConfig.ui8posVelIdx) = evalRHS_InertialDynOrbit(dxState, ...
+                                                                     dDCMmainAtt_INfromTF, ...
+                                                                     strDynParams.strMainData.dGM, ...
+                                                                     strDynParams.strMainData.dRefRadius, ...
+                                                                     dCoeffSRP, ...
+                                                                     d3rdBodiesGM, ...
+                                                                     dBodyEphemerides, ...
+                                                                     strDynParams.strMainData.dSHcoeff, ...
+                                                                     strDynParams.strMainData.ui16MaxSHdegree, ...
+                                                                     ui16StatesIdx, ...
+                                                                     dResidualAccel);
 
 
 end

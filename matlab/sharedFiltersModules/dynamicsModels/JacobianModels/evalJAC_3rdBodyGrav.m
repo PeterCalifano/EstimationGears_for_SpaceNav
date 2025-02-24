@@ -1,29 +1,30 @@
-function [outputArg1,outputArg2] = evalJAC_3rdBodyGrav(inputArg1,inputArg2)
+function [drv3rdBodyGravityJac] = evalJAC_3rdBodyGrav(dxState, ...
+                                                      strDynParams, ...
+                                                      strFilterConstConfig) %#codegen
+arguments
+    dxState
+    strDynParams
+    strFilterConstConfig
+end
 %% PROTOTYPE
+% [drv3rdBodyGravityJac] = evalJAC_3rdBodyGrav(d3rdBodiesGM, ...
+%                                              dBodyEphemeris, ...
+%                                              ui8NumOfBodies, ...
+%                                              strFilterConstConfig) %#codegen
 % -------------------------------------------------------------------------------------------------------------
 %% DESCRIPTION
 % What the function does
 % -------------------------------------------------------------------------------------------------------------
 %% INPUT
-% in1 [dim] description
-% Name1                     []
-% Name2                     []
-% Name3                     []
-% Name4                     []
-% Name5                     []
-% Name6                     []
+% dxState
+% strDynParams
+% strFilterConstConfig
 % -------------------------------------------------------------------------------------------------------------
 %% OUTPUT
-% out1 [dim] description
-% Name1                     []
-% Name2                     []
-% Name3                     []
-% Name4                     []
-% Name5                     []
-% Name6                     []
+% drv3rdBodyGravityJac
 % -------------------------------------------------------------------------------------------------------------
 %% CHANGELOG
-% -04-2024       Pietro Califano         Modifications
+% 24-02-2025       Pietro Califano      First version implemented from legacy code.
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % [-]
@@ -32,7 +33,31 @@ function [outputArg1,outputArg2] = evalJAC_3rdBodyGrav(inputArg1,inputArg2)
 % [-]
 % -------------------------------------------------------------------------------------------------------------
 %% Function code
+drv3rdBodyGravityJac = zeros(6,6);
+ui8PosVelIdx = strFilterConstConfig.strStatesIdx.ui8posVelIdx;
+dSCposition_IN = dxState(ui8PosVelIdx(1:3));
 
+ui32NumOf3rdBodies = length(strDynParams.strBody3rdData);
 
+if ui32NumOf3rdBodies > 0
+
+    % Third body perturbation Jacobian wrt position vector
+    dAllocPtr = 1;
+    for idB = 1:ui32NumOf3rdBodies
+
+        d3rdBodiesGM = strDynParams.strBody3rdData(idB).dGM;
+        dBodyPosToSC = dSCposition_IN - dBodyEphemeris(dAllocPtr : dAllocPtr + 2);
+
+        dNormBodyPosToSC = norm(dBodyPosToSC);
+        dNormBodyPosToSC3 = dNormBodyPosToSC * dNormBodyPosToSC * dNormBodyPosToSC;
+
+        % Compute and sum jacobian
+        drv3rdBodyGravityJac(ui8PosVelIdx(4:6), ui8PosVelIdx(4:6)) = drv3rdBodyGravityJac(ui8PosVelIdx(4:6), ui8PosVelIdx(4:6)) ...
+            + d3rdBodiesGM(idB) * ( (1/dNormBodyPosToSC3) * eye(3) ...
+            - ( 3/(dNormBodyPosToSC3*dNormBodyPosToSC*dNormBodyPosToSC) ) * dBodyPosToSC * transpose(dBodyPosToSC) );
+        
+        % Update pointer
+        dAllocPtr = dAllocPtr + 3;
+    end
 
 end

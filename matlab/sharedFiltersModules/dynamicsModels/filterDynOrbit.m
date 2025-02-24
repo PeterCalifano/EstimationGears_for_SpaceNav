@@ -1,12 +1,12 @@
-function dxdt = filterDynOrbit(dStateTimetag, ...
+function dDrvDt = filterDynOrbit(dStateTimetag, ...
                                 dxState, ...
                                 strDynParams, ...
-                                strStatesIdx) %#codegen
+                                strFilterConstConfig) %#codegen
 arguments
     dStateTimetag (1, 1) double
     dxState       (:, 1) double
     strDynParams  {isstruct}
-    strStatesIdx  {isstruct}
+    strFilterConstConfig  {isstruct}
 end
 %% PROTOTYPE
 % dxdt = computeDynFcn(dStateTimetag,...
@@ -40,16 +40,14 @@ end
 % TODO convert to use static sized arrays
 % -------------------------------------------------------------------------------------------------------------
 %% Function code
-
-% TODO modify how this variable is used
-ui8NumOf3rdBodies = strDynParams.ui8NumOf3rdBodies;
+% ui16StateSize = strFilterConstConfig.ui16StateSize;
 
 % Variables definition
-dxdt = zeros(size(dxState, 1), 1);
+dDrvDt = zeros(6, 1);
 
 % Check for 3rd bodies
 if not(isfield(strDynParams, 'strBody3rdData'))
-    ui8NumOf3rdBodies = uint8(0);
+    ui8NumOf3rdBodies = strDynParams.ui8NumOf3rdBodies;
 else
     ui8NumOf3rdBodies = uint8(length(strDynParams.strBody3rdData)); % TODO --> remove for static sizing
 end
@@ -74,8 +72,7 @@ end
 %                 strStatesIdx.ui8AImeasBiasIdx(1), strStatesIdx.ui8AImeasBiasIdx(end);
 %                 strStatesIdx.ui8CRAmeasBiasIdx(1), strStatesIdx.ui8CRAmeasBiasIdx(end)];
 
-% TODO: rework usage of ui16StatesIdx, which effectively is statically determined!
-ui16StatesIdx = [strStatesIdx.ui8posVelIdx(1), strStatesIdx.ui8posVelIdx(end)];
+ui16StatesIdx = [strFilterConstConfig.strStatesIdx.ui8posVelIdx(1), strFilterConstConfig.strStatesIdx.ui8posVelIdx(end)];
 
 % Compute attitude of Main at current time instant (NOT NEEDED IN FILTER)
 dDCMmainAtt_INfromTF  = coder.nullcopy(zeros(3, 3));
@@ -93,11 +90,11 @@ dDCMmainAtt_INfromTF(1:3, 1:3) = Quat2DCM(dTmpQuat, true);
 dBodyEphemerides = coder.nullcopy(zeros(3*ui8NumOf3rdBodies, 1));
 d3rdBodiesGM = coder.nullcopy(zeros(ui8NumOf3rdBodies, 1));
 
-ptrAlloc = 1;
+dPtrAlloc = 1;
 
 for idB = 1:ui8NumOf3rdBodies
 
-    dBodyEphemerides(ptrAlloc:ptrAlloc+2) = evalChbvPolyWithCoeffs(strDynParams.strBody3rdData(idB).strOrbitData.ui32PolyDeg, ...
+    dBodyEphemerides(dPtrAlloc:dPtrAlloc+2) = evalChbvPolyWithCoeffs(strDynParams.strBody3rdData(idB).strOrbitData.ui32PolyDeg, ...
                                                                  3, evalPoint,...
                                                                  strDynParams.strBody3rdData(idB).strOrbitData.dChbvPolycoeffs, ...
                                                                  strDynParams.strBody3rdData(idB).strOrbitData.dTimeLowBound, ...
@@ -105,24 +102,40 @@ for idB = 1:ui8NumOf3rdBodies
     
     d3rdBodiesGM(idB) = strDynParams.strBody3rdData(idB).dGM;
 
-    ptrAlloc = ptrAlloc + 3;
+    dPtrAlloc = dPtrAlloc + 3;
 end
 
 % Compute SRP coefficient
+dBiasCoeffSRP = 0.0;
+if isfield(strFilterConstConfig.strStatesIdx, "ui8CoeffSRPidx")
+    dBiasCoeffSRP(:) = dxState( strFilterConstConfig.strStatesIdx.ui8CoeffSRPidx);
+end
+
 dCoeffSRP = (strDynParams.strSRPdata.dP_SRP * strDynParams.strSCdata.dReflCoeff * ...
              strDynParams.strSCdata.dA_SRP)/strDynParams.strSCdata.dSCmass; % Move to compute outside, since this
 
+dCoeffSRP = dCoeffSRP + dBiasCoeffSRP;
+
+% Get residual acceleration if any
+dResidualAccel = zeros(3,1);
+
+if isfield(strFilterConstConfig.strStatesIdx, "ui8ResidualAccelIdx")
+    dResidualAccel(:) = dxState( strFilterConstConfig.strStatesIdx.ui8ResidualAccelIdx);
+end
+
 %% Evaluate RHS
 % ACHTUNG: Sun must be first in ephemerides and GM data
-dxdt(strStatesIdx.ui8posVelIdx) = evalRHS_DynOrbit(dxState, ...
-                                                       dDCMmainAtt_INfromTF, ...
-                                                       strDynParams.strMainData.dGM, ...
-                                                       strDynParams.strMainData.dRefRadius, ...
-                                                       dCoeffSRP, ...
-                                                       d3rdBodiesGM, ...
-                                                       dBodyEphemerides, ...
-                                                       strDynParams.strMainData.dSHcoeff, ...
-                                                       ui16StatesIdx);
+dDrvDt(strFilterConstConfig.ui8posVelIdx) = evalRHS_InertialDynOrbit(dxState, ...
+                                                                      dDCMmainAtt_INfromTF, ...
+                                                                      strDynParams.strMainData.dGM, ...
+                                                                      strDynParams.strMainData.dRefRadius, ...
+                                                                      dCoeffSRP, ...
+                                                                      d3rdBodiesGM, ...
+                                                                      dBodyEphemerides, ...
+                                                                      strDynParams.strMainData.dSHcoeff, ...
+                                                                      strDynParams.strMainData.ui16MaxSHdegree, ...
+                                                                      ui16StatesIdx, ...
+                                                                      dResidualAccel);
 
 % dxdt(ui16StatesIdx(2,:)) = evalRHS_DynFOGM(dxState, ...
 %     dTimeConst, ...
