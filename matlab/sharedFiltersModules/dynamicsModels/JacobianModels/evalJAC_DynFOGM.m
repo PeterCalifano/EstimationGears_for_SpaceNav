@@ -1,21 +1,22 @@
-function [o_dDynFOGMatrix] = evalJAC_DynFOGM(~, i_dTimeConst, i_ui16StatesIdx) %#codegen
+function [dFirstOrderGMdynMatrix] = evalJAC_DynFOGM(~, dTimeConst, ui16StatesIdx) %#codegen
 %% PROTOTYPE
+% [dDynFOGMatrix] = evalJAC_DynFOGM(~, dTimeConst, ui16StatesIdx) %#codegen
 % -------------------------------------------------------------------------------------------------------------
 %% DESCRIPTION
 % What the function does
 % ACHTUNG: the continuous-time STM of a FOGM process has an analytical solution. Prefer using it instead of
 % computing the discrete-time STM if applicable.
 % REFERENCE:
-% [1] Tapley 
-% [2] Carpenter 2018
+% [1] Tapley, Statistical Orbit Determination, 2004
+% [2] Carpenter, NASA Navigation Filter Best Practices 2018
 % -------------------------------------------------------------------------------------------------------------
 %% INPUT
-% i_dxState
-% i_dTimeConst
-% i_ui16StatesIdx
+% dxState
+% dTimeConst
+% ui16StatesIdx
 % -------------------------------------------------------------------------------------------------------------
 %% OUTPUT
-% o_dDynFOGMatrix
+% dDynFOGMatrix
 % -------------------------------------------------------------------------------------------------------------
 %% CHANGELOG
 % 09-04-2024       Pietro Califano         First version. Validated.
@@ -28,15 +29,18 @@ function [o_dDynFOGMatrix] = evalJAC_DynFOGM(~, i_dTimeConst, i_ui16StatesIdx) %
 % -------------------------------------------------------------------------------------------------------------
 %% Function code
 
-assert( length(i_dTimeConst) == length(i_ui16StatesIdx), ...
-    "ERROR: mismatch of input size: statesID and time constants")
+if coder.target("MATLAB") || coder.target("MEX")
+    assert( length(dTimeConst) == length(ui16StatesIdx), ...
+        "ERROR: mismatch of input size: statesID and time constants")
+end
 
 % Output initialization
-o_dDynFOGMatrix = zeros(length(i_ui16StatesIdx));
+dFirstOrderGMdynMatrix = zeros(length(ui16StatesIdx), length(ui16StatesIdx)); 
+% TODO verify this allows static-sizing if ui16StatesIdx is constant
 
 % Assign jacobian 
-for idS = 1:length(i_ui16StatesIdx)
-    o_dDynFOGMatrix(idS, idS) = - 1.0/i_dTimeConst(idS);
+for idS = 1:length(ui16StatesIdx)
+    dFirstOrderGMdynMatrix(idS, idS) = - 1.0/dTimeConst(idS);
 end
 
 end
