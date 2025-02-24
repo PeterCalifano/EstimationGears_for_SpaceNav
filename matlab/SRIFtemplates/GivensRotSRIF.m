@@ -4,15 +4,23 @@ function [dxPost, dSRInfoMatPost, dInfoVecPost, dErrorVec, dSqrtPxPost, dJcost] 
                                                                                                 dHobsMatrix, ...
                                                                                                 bNPRIOR_INFO, ...
                                                                                                 bRUN_WHITENING, ...
-                                                                                                dMeasCovSR) %#codegen
+                                                                                                dMeasCovSR, ...
+                                                                                                ui32StateSize, ...
+                                                                                                ui32MeasSize, ...
+                                                                                                ui32MaxStateSize, ...
+                                                                                                ui32MaxMeasSize) %#codegen
 arguments
-    dxPrior
-    dSRInfoMatPrior
-    dYobs
-    dHobsMatrix
-    bNPRIOR_INFO
-    bRUN_WHITENING
-    dMeasCovSR
+    dxPrior             (:,1) double {isvector}
+    dSRInfoMatPrior     (:,:) double {ismatrix, is}
+    dYobs               double
+    dHobsMatrix         double
+    bNPRIOR_INFO        (1,1) logical {isscalar, islogical} 
+    bRUN_WHITENING      (1,1) logical {isscalar, islogical} 
+    dMeasCovSR          double
+    ui32StateSize       uint32  = size(dxPrior, 1); 
+    ui32MeasSize        uint32  = size(dYobs, 1);
+    ui32MaxStateSize    uint32  = ui32StateSize;
+    ui32MaxMeasSize     uint32  = ui32MeasSize;
 end
 %% PROTOTYPE
 % [dxPost, dSRInfoMatPost, dInfoVecPost, dErrorVec, dSqrtPxPost, dJcost] = GivensRotSRIF(dxPrior, ...
@@ -33,7 +41,7 @@ end
 % NOTE: The function requires PRE-WHITENED inputs if bRUN_WHITENING is
 % false. Else, it is executed before Givens rotations.
 % REFERENCES:
-% 1) Statistical Orbit Determination, chapter 5, Tapley 2004
+% 1) Statistical Orbit Determination, chapter 5, Tapley 2004, page 307
 %    Note: Tapley uselessly initializes matrices for temporary scalar
 %    variables. This is NOT done here.
 % 2) Example application 1: Square-Root Extended Information Filter for
@@ -67,6 +75,7 @@ end
 %                                   chapter 5.6.6 (with prior info). Added
 %                                   pre-whitening functionality.
 % 05-12-2023    Pietro Califano     Added SR Covariance as output.
+% 24-02-2025    Pietro Califano     Update using new convention and static-sized operations
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % [-]
@@ -77,98 +86,113 @@ end
 
 %% Function code
 
+% TODO modify to use indexing for operations!
+
 % INPUT INTERFACE
 % Get sizes of arrays and checks
-Nx = size(dxPrior, 1);
-Ny = size(dYobs, 1);
+% ui32StateSize = uint32(size(dxPrior, 1)); % TODO modify this
+% ui32MeasSize = uint32(size(dYobs, 1));
 
-assert(Nx == size(dSRInfoMatPrior, 1) && Nx == size(dSRInfoMatPrior, 2), 'Mean estimate and Covariance sizes do not match!');
-assert(Nx == size(dHobsMatrix, 2) && Ny == size(dHobsMatrix, 1), 'State, residual vectors, Observation matrix sizes are not consistent!')
-assert( size(dMeasCovSR,2) == size(dYobs, 1) );
+if coder.target("MATLAB") || coder.target("MEX")
+    assert(ui32MaxStateSize >= size(dSRInfoMatPrior, 1) && ui32MaxStateSize >= size(dSRInfoMatPrior, 2), 'Mean estimate and Covariance beyond maximum size!');
+    assert(ui32MaxStateSize >= size(dHobsMatrix, 2) && ui32MaxMeasSize >= size(dHobsMatrix, 1), 'State, residual vectors, Observation matrix sizes are not consistent!')
+    assert( size(dMeasCovSR,2) == size(dYobs, 1) );
+ 
+end
 
 % Initialize arrays
 dJcost = 0.0;
 
-if bRUN_WHITENING
-    % Measurements
-    dYobs = dMeasCovSR\dYobs;
-    dHobsMatrix = dMeasCovSR\dHobsMatrix;
+
+if bRUN_WHITENING == true
+    % Measurements whitening
+    dYobs(1:ui32MeasSize) = dMeasCovSR(1:ui32MeasSize, 1:ui32MeasSize) \ dYobs(1:ui32MeasSize);
+    dHobsMatrix(1:ui32MeasSize, 1:ui32StateSize) = dMeasCovSR(1:ui32MeasSize,  1:ui32MeasSize) \ dHobsMatrix (1:ui32MeasSize, 1:ui32StateSize);
 end
 
 %% INITIALIZATION ROUTINE
 if bNPRIOR_INFO == true
     % Initialize without prior information
-    InfoD = eps * eye(Nx);
-    InfoU = eye(Nx);
-    InfoVec = zeros(Nx, 1);
+    dInfoD = eps * eye(ui32StateSize, ui32StateSize);
+    dInfoU = eye(ui32StateSize, ui32StateSize);
+    dInfoVec = zeros(ui32StateSize, 1);
 else
     % Compute Uprior, Dprior and InfoVecPrior using prior information
-    InfoD = zeros(Nx);
-    invD = zeros(Nx);
-    for idn = 1:Nx
-        InfoD(idn, idn) = dSRInfoMatPrior(idn, idn) * dSRInfoMatPrior(idn, idn); % dii = Rii^2
-        invD(idn, idn) = 1/sqrt(InfoD(idn, idn));
+    dInfoD = zeros(ui32StateSize, ui32StateSize);
+    dInvD = zeros(ui32StateSize, ui32StateSize);
+
+    for ui32Idn = 1:ui32StateSize
+        dInfoD(ui32Idn, ui32Idn) = dSRInfoMatPrior(ui32Idn, ui32Idn) * dSRInfoMatPrior(ui32Idn, ui32Idn); % dii = Rii^2
+        dInvD(ui32Idn, ui32Idn) = 1/sqrt(dInfoD(ui32Idn, ui32Idn));
     end
-    InfoU = invD * dSRInfoMatPrior; % D^(-1/2)*R;
-    InfoVec = InfoU * dxPrior; % U*x
+    dInfoU = dInvD * dSRInfoMatPrior; % D^(-1/2)*R;
+    dInfoVec = dInfoU * dxPrior; % U*x
 end
 
 % Initialize output
-dErrorVec = zeros(Ny, 1);
+dErrorVec = zeros(ui32MeasSize, 1);
 
 % SQUARE ROOT FREE GIVENS ROTATIONS ALGORITHM
 % Nested loops
-for idk = 1:1:Ny
-    deltaTmp = 1.0;
-    for idi = 1:1:Nx
-        if dHobsMatrix(idk, idi) == 0
+for ui32Idk = 1:1:ui32MeasSize
+
+    dDeltaTmp = 1.0;
+
+    for ui32Idi = 1:1:ui32StateSize
+        if dHobsMatrix(ui32Idk, ui32Idi) == 0
             continue; % No operation required
         end
-        % Entry of Dpost diagonal
-        DnewEntry = InfoD(idi, idi) + deltaTmp * dHobsMatrix(idk, idi) * dHobsMatrix(idk, idi);
-        % Compute Sbar (Check if it forms the Square Root Covariance) S(idi, idk)
-        SbarTmp = deltaTmp * dHobsMatrix(idk, idi) / DnewEntry;
-        % Compute temporary residual
-        yNewTmp = dYobs(idk) - InfoVec(idi) * dHobsMatrix(idk, idi);
-        % Add Information in Information vector
-        InfoVec(idi) = InfoVec(idi) + yNewTmp * SbarTmp;
-        % Replace entries in dYobs, deltaTmp and Dpost
-        dYobs(idk) = yNewTmp;
-        deltaTmp = deltaTmp * InfoD(idi, idi)/DnewEntry;
-        InfoD(idi, idi) = DnewEntry;
 
-        for idj = idi+1:1:Nx
+        % Entry of Dpost diagonal
+        dDnewEntry = dInfoD(ui32Idi, ui32Idi) + dDeltaTmp * dHobsMatrix(ui32Idk, ui32Idi) * dHobsMatrix(ui32Idk, ui32Idi);
+        
+        % Compute Sbar (Check if it forms the Square Root Covariance) S(idi, idk)
+        dSbarTmp = dDeltaTmp * dHobsMatrix(ui32Idk, ui32Idi) / dDnewEntry;
+        
+        % Compute temporary residual
+        dyNewTmp = dYobs(ui32Idk) - dInfoVec(ui32Idi) * dHobsMatrix(ui32Idk, ui32Idi);
+        
+        % Add Information in Information vector
+        dInfoVec(ui32Idi) = dInfoVec(ui32Idi) + dyNewTmp * dSbarTmp;
+        
+        % Replace entries in dYobs, deltaTmp and Dpost
+        dYobs(ui32Idk) = dyNewTmp;
+        dDeltaTmp = dDeltaTmp * dInfoD(ui32Idi, ui32Idi)/dDnewEntry;
+        dInfoD(ui32Idi, ui32Idi) = dDnewEntry;
+
+        for ui32Idj = ui32Idi+1:1:ui32StateSize
             % Hobsnew may be a scalar instead of matrix. It seems that it
             % only serves as temporary storage
-            HobsNewTmp = dHobsMatrix(idk, idj) - InfoU(idi, idj) * dHobsMatrix(idk, idi);
+            HobsNewTmp = dHobsMatrix(ui32Idk, ui32Idj) - dInfoU(ui32Idi, ui32Idj) * dHobsMatrix(ui32Idk, ui32Idi);
             % Update entry of U matrix
-            InfoU(idi, idj) = InfoU(idi, idj) + HobsNewTmp * SbarTmp; % SbarTmp is likely S(idk, idj) TBC
+            dInfoU(ui32Idi, ui32Idj) = dInfoU(ui32Idi, ui32Idj) + HobsNewTmp * dSbarTmp; % SbarTmp is likely S(idk, idj) TBC
             % Update entry of Observation matrix
-            dHobsMatrix(idk, idj) = HobsNewTmp;
+            dHobsMatrix(ui32Idk, ui32Idj) = HobsNewTmp;
 
         end % info matrix columns j innermost loop
     end % state vector i inner loop
-    dErrorVec(idk) = sqrt(deltaTmp) * dYobs(idk);
+
+    dErrorVec(ui32Idk) = sqrt(dDeltaTmp) * dYobs(ui32Idk);
 end % residuals k outer loop
 
 % STATE VECTOR BACKSUBSTITUTION
-dxPost = InfoU\InfoVec;
+dxPost = dInfoU\dInfoVec;
 
 % OUTPUT INTERFACE
-dSRInfoMatPost = sqrt(InfoD) * InfoU;
+dSRInfoMatPost = sqrt(dInfoD) * dInfoU;
 dInfoVecPost = dSRInfoMatPost * dxPost;
 
 if nargout > 4
     if nargout > 5
         % Cost function value
-        for idk = 1:Ny
-            dJcost = dJcost + dErrorVec(idk) * dErrorVec(idk);
+        for ui32Idk = 1:ui32MeasSize
+            dJcost = dJcost + dErrorVec(ui32Idk) * dErrorVec(ui32Idk);
         end
     end
     % Compute Square Root covariance matrix
-    dSqrtPxPost = eye(Nx)/(dSRInfoMatPost);
+    dSqrtPxPost = eye(ui32StateSize)/(dSRInfoMatPost);
 else
-    dSqrtPxPost = zeros(Nx);
+    dSqrtPxPost = zeros(ui32StateSize);
 end
 
 end
