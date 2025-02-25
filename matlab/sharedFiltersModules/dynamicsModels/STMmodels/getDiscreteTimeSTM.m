@@ -1,26 +1,30 @@
-function [o_dflowSTM] = getDiscreteTimeSTM(i_dDynMatrix, i_dDynMatrixNext, i_dDeltaTstep)%#codegen
+function [dflowSTM] = getDiscreteTimeSTM(dDynMatrix, ...
+                                         dDynMatrixNext, ...
+                                         dDeltaTstep, ...
+                                         ui16StateSize)%#codegen
 arguments(Input)
-i_dDynMatrix        (:, :) double {isnumeric}
-i_dDynMatrixNext    (:, :) double {isnumeric}
-i_dDeltaTstep       (1, 1) double {isnumeric}
+    dDynMatrix        (:, :) double {isnumeric}
+    dDynMatrixNext    (:, :) double {isnumeric}
+    dDeltaTstep       (1, 1) double {isnumeric}
+    ui16StateSize     (1,1) uint16 = size(dDynMatrix, 1)
 end
 arguments(Output)
-o_dflowSTM          (:, :) double {isnumeric}
+    dflowSTM          (:, :) double {isnumeric}
 end
 %% PROTOTYPE
-% [o_dflowSTM] = getDiscreteTimeSTM(i_dDynMatrix, i_dDynMatrixNext, i_dDeltaTstep)
+% [dflowSTM] = getDiscreteTimeSTM(dDynMatrix, dDynMatrixNext, dDeltaTstep)
 % -------------------------------------------------------------------------------------------------------------
 %% DESCRIPTION
 % Function computing the discrete time approximation of the STM by means of truncated Taylor expansion,
 % given the Dynamics Jacobian at current and next time step (required for 2nd order approximation).
 % -------------------------------------------------------------------------------------------------------------
 %% INPUT
-% i_dDynMatrix
-% i_dDynMatrixNext
-% i_dDeltaTstep
+% dDynMatrix
+% dDynMatrixNext
+% dDeltaTstep
 % -------------------------------------------------------------------------------------------------------------
 %% OUTPUT
-% o_dflowSTM
+% dflowSTM
 % -------------------------------------------------------------------------------------------------------------
 %% CHANGELOG
 % 29-03-2024        Pietro Califano         Previous code converted to function.
@@ -32,27 +36,32 @@ end
 % [-]
 % -------------------------------------------------------------------------------------------------------------
 %% Function code
-Nx = size(i_dDynMatrix, 1);
-assert(all(size(i_dDynMatrix) == size(i_dDynMatrixNext), 'all'), 'ERROR: i_dDynMatrix and i_dDynMatrixNext sizes are not matched!');
-
-o_dflowSTM = coder.nullcopy(zeros(Nx, Nx));
+assert(all(size(dDynMatrix) == size(dDynMatrixNext), 'all'), 'ERROR: dDynMatrix and dDynMatrixNext sizes are not matched!');
+dflowSTM = coder.nullcopy(zeros(ui16StateSize, ui16StateSize));
 
 % Compute discrete time STM approximation with truncated Taylor expansion
-if abs(i_dDeltaTstep) <= 0.1
+if abs(dDeltaTstep) <= 0.1
+
     % 1st order Taylor Expansion of the STM (Method A)
-    o_dflowSTM(1:Nx, 1:Nx) = eye(Nx) + i_dDynMatrix * i_dDeltaTstep;
+    dflowSTM(1:ui16StateSize, 1:ui16StateSize) = eye(ui16StateSize) + dDynMatrix * dDeltaTstep;
 
-elseif (abs(i_dDeltaTstep) > 0.1 && abs(i_dDeltaTstep) <= 1) || all(i_dDynMatrixNext == 0, "all")
+    return
+elseif (abs(dDeltaTstep) > 0.1 && abs(dDeltaTstep) <= 2) || all(dDynMatrixNext == 0, "all")
+
     % 2nd order Taylor Expansion of the STM ignoring Adot (Method B)
-    o_dflowSTM(1:Nx, 1:Nx) = eye(Nx) + i_dDynMatrix * i_dDeltaTstep + ...
-        sign(i_dDeltaTstep) .* 0.5 * (i_dDynMatrix * i_dDynMatrix) * i_dDeltaTstep^2;
+    dflowSTM(1:ui16StateSize, 1:ui16StateSize) = eye(ui16StateSize) + dDynMatrix * dDeltaTstep + ...
+        sign(dDeltaTstep) .* 0.5 * (dDynMatrix * dDynMatrix) * dDeltaTstep^2;
 
-elseif abs(i_dDeltaTstep) > 1
-    % 2nd order Taylor Expansion of the STM "middle-point" (Method H) --> TO VERIFY
-    o_dflowSTM(1:Nx, 1:Nx) = eye(Nx) + (i_dDynMatrix + i_dDynMatrixNext)* i_dDeltaTstep + ...
-        sign(i_dDeltaTstep) .* 0.5 * (i_dDynMatrix * i_dDynMatrixNext) * i_dDeltaTstep^2;
-else
-    assert(1, 'If statement for STM computation returned invalid output.')
+    return
+elseif abs(dDeltaTstep) > 2
+
+    % 2nd order Taylor Expansion of the STM "middle-point" (Method H)
+    dflowSTM(1:ui16StateSize, 1:ui16StateSize) = eye(ui16StateSize) + (dDynMatrix + dDynMatrixNext) * dDeltaTstep + ...
+        sign(dDeltaTstep) .* 0.5 * (dDynMatrix * dDynMatrixNext) * dDeltaTstep^2;
+
+    return
 end
+
+assert(1, 'If statement for STM computation returned invalid output.')
 
 end

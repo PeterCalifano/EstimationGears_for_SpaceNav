@@ -66,6 +66,8 @@ drvSRPwithBiasJac(ui8PosVelIdx(4:6), 1:3) = - ( dCoeffSRP + dBiasCoeff ) * ( (1 
 
 %% Compute jacobian wrt SRP bias coefficient
 if strFilterConstConfig.bEnableBiasSRP
+    % DEVNOTE not sure if need to be disabled because in principle the stochastic process affecting the C_SRP
+    % coefficient does not enter the deterministic part of the dynamics (hence in A).
     dJacCoeffSRP = - (dCoeffSRP + 1.0) * dSunPositionFromSC_IN/dNormSunPositionFromSC_IN;
     drvSRPwithBiasJac(4:6, 4) = dJacCoeffSRP; % [6x1]
 end

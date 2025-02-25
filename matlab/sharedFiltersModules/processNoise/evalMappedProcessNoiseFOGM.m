@@ -1,19 +1,37 @@
-function [dProcessNoiseCovFOGM] = evalProcessNoiseFOGM(dDeltaTstep, dSigma2WN, dTimeConst, ...
-        dDefaultDeltaTstep, dDefaultProcessQcov) %#codegen
+function [dProcessNoiseCovFOGM] = evalMappedProcessNoiseFOGM(dDeltaTstep, ...
+                                                             dSigma2WN, ...
+                                                             dTimeConst, ...
+                                                             dDefaultDeltaTstep, ...
+                                                             dDefaultProcessQcov) %#codegen
+arguments
+    dDeltaTstep
+    dSigma2WN
+    dTimeConst
+    dDefaultDeltaTstep
+    dDefaultProcessQcov
+end
 %% PROTOTYPE
+% [dProcessNoiseCovFOGM] = evalProcessNoiseFOGM(dDeltaTstep, ...
+%                                               dSigma2WN, ...
+%                                               dTimeConst, ...
+%                                               dDefaultDeltaTstep, ...
+%                                               dDefaultProcessQcov) %#codegen
 % -------------------------------------------------------------------------------------------------------------
 %% DESCRIPTION
-% What the function does
+% Function computing the mapped input noise covariance associated to a FOGM process assuming constant input
+% PSD matrix Q over a dDeltaTstep time step. Note that this analytical form is exact for the FOGM covariance
+% propagation. In general, you may want to use it to assemble the overall Q matrix if analytical expressions
+% are availble for the other terms, in place of integrating/approximating it.
 % -------------------------------------------------------------------------------------------------------------
 %% INPUT
-% i_dDeltaTstep
-% i_dSigma2WN
-% i_dTimeConst
-% i_dDefaultDeltaTstep
-% i_dDefaultProcessQcov
+% dDeltaTstep
+% dSigma2WN
+% dTimeConst
+% dDefaultDeltaTstep
+% dDefaultProcessQcov
 % -------------------------------------------------------------------------------------------------------------
 %% OUTPUT
-% o_dProcessNoiseCovFOGM
+% dProcessNoiseCovFOGM
 % -------------------------------------------------------------------------------------------------------------
 %% CHANGELOG
 % 14-04-2024        Pietro Califano         First version coded.

@@ -82,6 +82,8 @@ dDynMatrix_PosVel(ui8PosVelIdx, ui8PosVelIdx) = dDynMatrix_PosVel(ui8PosVelIdx, 
 % dDynMatrix_PosVel(ui8PosVelIdx, ui8attBiasDeltaIdx) 
 
 %% Jacobian wrt residual acceleration (if any)
+% DEVNOTE TBC if need to bedisabled because in principle the stochastic process affecting the dynamics does not enter the
+% deterministic portion of it, but the stochastic input (hence in G, instead of STM).
 dDynMatrix_PosVel(ui8PosVelIdx(4:6), ui8ResidualAccelIdx) = dDynMatrix_PosVel(ui8PosVelIdx(4:6), ui8ResidualAccelIdx) + eye(3);
 
 %% Jacobian wrt SRP + bias
@@ -93,9 +95,6 @@ dDynMatrix_PosVel(ui8PosVelIdx, [ui8PosVelIdx(4:6), ui8CoeffSRPidx]) = dDynMatri
                                                                             + drvSRPwithBiasJac;
 
 %% Jacobian wrt 3rd bodies
-% TODO
-
-
 [drv3rdBodyGravityJac] = evalJAC_3rdBodyGrav(dxState, ...
                                              strDynParams, ...
                                              strFilterConstConfig);
