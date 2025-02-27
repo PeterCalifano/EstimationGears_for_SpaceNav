@@ -181,11 +181,11 @@ while dDeltaResRelNorm2 > dDeltaResNormRelTol2
             % Hobs = dzdh * dh/dInvDep; (Ref.[1] notation, normalized coordinates)
             % dDCM required in Jacobian --> dDeltaDCM_CiFromCk(:, ui32IdPose);
 
-            dFeatHobs(1,:) = [ 1/dPredictFeatPos_Ci(3), 0, - dPredictFeatPos_Ci(1) / dPredictFeatPos_Ci(3) ^ 2];
-            
-            % TODO: verify that dDCM_CkFromCid is the correct matrix here
-            dFeatHobs(2,:) = [0, 1/dPredictFeatPos_Ci(3), -dPredictFeatPos_Ci(2)/dPredictFeatPos_Ci(3)^2];
-                                              
+            % DEVNOTE replaced by more efficient implementation below (only 1 division instead of 4
+            % dFeatHobs(1,:) = [ 1/dPredictFeatPos_Ci(3), 0, - dPredictFeatPos_Ci(1) / dPredictFeatPos_Ci(3) ^ 2];
+            % dFeatHobs(2,:) = [0, 1/dPredictFeatPos_Ci(3), -dPredictFeatPos_Ci(2)/dPredictFeatPos_Ci(3)^2];
+            [dFeatHobs] = evalJAC_NormProject_FeatPos(dPredictFeatPos_Ci);
+
             % Chain jacobian of jth feature for ith camera (Ci)
             dFeatHobs = dFeatHobs * dJacNormCoordsWrtIDP;
 
