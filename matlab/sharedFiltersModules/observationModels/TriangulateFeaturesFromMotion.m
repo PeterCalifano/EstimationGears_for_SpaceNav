@@ -182,8 +182,6 @@ while dDeltaResRelNorm2 > dDeltaResNormRelTol2
             % dDCM required in Jacobian --> dDeltaDCM_CiFromCk(:, ui32IdPose);
 
             dFeatHobs(1,:) = [ 1/dPredictFeatPos_Ci(3), 0, - dPredictFeatPos_Ci(1) / dPredictFeatPos_Ci(3) ^ 2];
-            
-            % TODO: verify that dDCM_CkFromCid is the correct matrix here
             dFeatHobs(2,:) = [0, 1/dPredictFeatPos_Ci(3), -dPredictFeatPos_Ci(2)/dPredictFeatPos_Ci(3)^2];
                                               
             % Chain jacobian of jth feature for ith camera (Ci)
