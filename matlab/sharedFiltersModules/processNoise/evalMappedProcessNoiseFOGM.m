@@ -61,8 +61,8 @@ if ( nargin > 4 && abs(dDeltaTstep - dDefaultDeltaTstep) <= 2*eps )
 else
     
     dProcessNoiseCovFOGM = zeros(ui8numOfStates);
-    dProcessNoiseCovFOGM( 1:ui8numOfStates, 1:ui8numOfStates ) = diag( (dSigma2WN .* dTimeConst/2.0) .*...
-        ( ones(ui8numOfStates,1) - exp(- 2.0 * (dDeltaTstep./dTimeConst)) ) );
+    dProcessNoiseCovFOGM( 1:ui8numOfStates, 1:ui8numOfStates ) = diag( (dSigma2WN .* 0.5 .* dTimeConst) .*...
+        ( ones(ui8numOfStates, 1) - exp(- 2.0 * (dDeltaTstep./dTimeConst)) ) );
 end
 
 end
