@@ -1,9 +1,13 @@
 function [dDynMatrix_PosVel] = evalJAC_InertialPosVelDyn(dxState, ...
+                                                        dStateTimetag, ...
                                                         strDynParams, ...
+                                                        strFilterMutabConfig, ...
                                                         strFilterConstConfig)
 arguments
     dxState
+    dStateTimetag
     strDynParams
+    strFilterMutabConfig
     strFilterConstConfig
 end
 %% PROTOTYPE
@@ -59,11 +63,10 @@ dDynMatrix_PosVel(ui8PosVelIdx(1:3), ui8PosVelIdx(4:6)) = eye(3);
 %% Jacobian of main body accelerations (position-velocity only)
 dBodyPosition_IN = zeros(3,1); % DEVNOTE: assumption of estimation frame attached to body CoM!
 
-if strFilterConstConfig.bEnableNonSphericalGravity % DEVNOTE: this is intended NOT to change at runtime
+if strFilterMutabConfig.bEnableNonSphericalGravity % DEVNOTE: this is intended NOT to change at runtime
     dDCMmainAtt_INfromTF = eye(3); % TODO!
 else
     dDCMmainAtt_INfromTF = zeros(3,3);
-
 end
 
 [drvMainBodyGravityJac] = evalJAC_InertialMainBodyGrav(dxState, ...
@@ -89,9 +92,12 @@ dDynMatrix_PosVel(ui8PosVelIdx(4:6), ui8ResidualAccelIdx) = dDynMatrix_PosVel(ui
 %% Jacobian wrt SRP + bias
 [drvSRPwithBiasJac] = evalJAC_SRPwithBias(dxState, ...
                                           strDynParams, ...
+                                          strFilterMutabConfig, ...
                                           strFilterConstConfig);
 
-dDynMatrix_PosVel(ui8PosVelIdx, [ui8PosVelIdx(4:6), ui8CoeffSRPidx]) = dDynMatrix_PosVel(ui8PosVelIdx, [ui8PosVelIdx(4:6), ui8CoeffSRPidx]) ...
+% DEVNOTE: derivative of velocity wrt delta C SRP has order of unit vector, but seems quite large with
+% respect to other contributions?
+dDynMatrix_PosVel(ui8PosVelIdx, [ui8PosVelIdx(4:6); ui8CoeffSRPidx]) = dDynMatrix_PosVel(ui8PosVelIdx, [ui8PosVelIdx(4:6); ui8CoeffSRPidx]) ...
                                                                             + drvSRPwithBiasJac;
 
 %% Jacobian wrt 3rd bodies

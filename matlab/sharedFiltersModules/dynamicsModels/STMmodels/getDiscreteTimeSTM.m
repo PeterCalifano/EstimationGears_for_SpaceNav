@@ -36,7 +36,9 @@ end
 % [-]
 % -------------------------------------------------------------------------------------------------------------
 %% Function code
-assert(all(size(dDynMatrix) == size(dDynMatrixNext), 'all'), 'ERROR: dDynMatrix and dDynMatrixNext sizes are not matched!');
+if coder.target('MATLAB') || coder.target('MEX')
+    assert(all(size(dDynMatrix) == size(dDynMatrixNext), 'all'), 'ERROR: dDynMatrix and dDynMatrixNext sizes are not matched!');
+end
 dflowSTM = coder.nullcopy(zeros(ui16StateSize, ui16StateSize));
 
 % Compute discrete time STM approximation with truncated Taylor expansion

@@ -1,9 +1,11 @@
 function [drvSRPwithBiasJac] = evalJAC_SRPwithBias(dxState, ...
                                                    strDynParams, ...
+                                                   strFilterMutabConfig, ...
                                                    strFilterConstConfig) %#codegen
 arguments
     dxState
     strDynParams
+    strFilterMutabConfig
     strFilterConstConfig
 end
 %% PROTOTYPE
@@ -41,7 +43,7 @@ ui8CoeffSRPidx      = strFilterConstConfig.strStatesIdx.ui8CoeffSRPidx;
 % ui8ResidualAccelIdx = strFilterConstConfig.strStatesIdx.ui8ResidualAccelIdx;
 % ui8LidarMeasBiasIdx = strFilterConstConfig.strStatesIdx.ui8LidarMeasBiasIdx;
 
-if strFilterConstConfig.bEnableBiasSRP
+if strFilterMutabConfig.bEnableBiasSRP
     % DEVNOTE: in principle this branching should force the coder to generate two different copies if needed
     % but only one will be instantiated as long as strFilterConstConfig.bEnableBiasSRP is hardcoded.
     drvSRPwithBiasJac = zeros(6, 4);
@@ -52,9 +54,10 @@ else
 end
 
 %% Compute jacobian wrt SRP acceleration
-dSunPositionFromSC_IN = strDynParams.dBodyEphemeris(1:3) - dxState(ui8PosVelIdx(1:3));
+dSunPositionFromSC_IN = strDynParams.dBodyEphemerides(1:3) - dxState(ui8PosVelIdx(1:3));
 dNormSunPositionFromSC_IN = norm( dSunPositionFromSC_IN );
 
+% DEVNOTE this coefficient is recomputed here, instead of re-using calculation from propagateDyn
 dCoeffSRP = (strDynParams.strSRPdata.dP_SRP * strDynParams.strSCdata.dReflCoeff * ...
              strDynParams.strSCdata.dA_SRP)/strDynParams.strSCdata.dSCmass; % Move to compute outside, since this
 
@@ -65,7 +68,7 @@ drvSRPwithBiasJac(ui8PosVelIdx(4:6), 1:3) = - ( dCoeffSRP + dBiasCoeff ) * ( (1 
 
 
 %% Compute jacobian wrt SRP bias coefficient
-if strFilterConstConfig.bEnableBiasSRP
+if strFilterMutabConfig.bEnableBiasSRP
     % DEVNOTE not sure if need to be disabled because in principle the stochastic process affecting the C_SRP
     % coefficient does not enter the deterministic part of the dynamics (hence in A).
     dJacCoeffSRP = - (dCoeffSRP + 1.0) * dSunPositionFromSC_IN/dNormSunPositionFromSC_IN;

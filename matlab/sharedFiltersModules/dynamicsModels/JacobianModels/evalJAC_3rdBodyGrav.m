@@ -46,7 +46,7 @@ if ui32NumOf3rdBodies > 0
     for idB = 1:ui32NumOf3rdBodies
 
         d3rdBodiesGM = strDynParams.strBody3rdData(idB).dGM;
-        dBodyPosToSC = dSCposition_IN - dBodyEphemeris(dAllocPtr : dAllocPtr + 2);
+        dBodyPosToSC = dSCposition_IN - strDynParams.dBodyEphemerides(dAllocPtr : dAllocPtr + 2);
 
         dNormBodyPosToSC = norm(dBodyPosToSC);
         dNormBodyPosToSC3 = dNormBodyPosToSC * dNormBodyPosToSC * dNormBodyPosToSC;
@@ -55,6 +55,9 @@ if ui32NumOf3rdBodies > 0
         drv3rdBodyGravityJac(ui8PosVelIdx(4:6), ui8PosVelIdx(4:6)) = drv3rdBodyGravityJac(ui8PosVelIdx(4:6), ui8PosVelIdx(4:6)) ...
             + d3rdBodiesGM(idB) * ( (1/dNormBodyPosToSC3) * eye(3) ...
             - ( 3/(dNormBodyPosToSC3*dNormBodyPosToSC*dNormBodyPosToSC) ) * dBodyPosToSC * transpose(dBodyPosToSC) );
+        
+        % DEVNOTE: zero-out contributions below machine precision
+        drv3rdBodyGravityJac( abs(drv3rdBodyGravityJac) < eps ) = 0.0;
         
         % Update pointer
         dAllocPtr = dAllocPtr + 3;
