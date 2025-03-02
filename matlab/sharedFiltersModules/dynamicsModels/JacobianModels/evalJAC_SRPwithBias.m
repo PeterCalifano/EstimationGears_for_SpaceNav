@@ -43,13 +43,13 @@ ui8CoeffSRPidx      = strFilterConstConfig.strStatesIdx.ui8CoeffSRPidx;
 % ui8ResidualAccelIdx = strFilterConstConfig.strStatesIdx.ui8ResidualAccelIdx;
 % ui8LidarMeasBiasIdx = strFilterConstConfig.strStatesIdx.ui8LidarMeasBiasIdx;
 
+drvSRPwithBiasJac = zeros(6, 4);
+
 if strFilterMutabConfig.bEnableBiasSRP
     % DEVNOTE: in principle this branching should force the coder to generate two different copies if needed
     % but only one will be instantiated as long as strFilterConstConfig.bEnableBiasSRP is hardcoded.
-    drvSRPwithBiasJac = zeros(6, 4);
     dBiasCoeff = dxState(ui8CoeffSRPidx);
 else
-    drvSRPwithBiasJac = zeros(6, 3);
     dBiasCoeff = 0.0;
 end
 

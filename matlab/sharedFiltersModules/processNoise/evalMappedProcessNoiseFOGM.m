@@ -4,11 +4,11 @@ function [dProcessNoiseCovFOGM] = evalMappedProcessNoiseFOGM(dDeltaTstep, ...
                                                              dDefaultDeltaTstep, ...
                                                              dDefaultProcessQcov) %#codegen
 arguments
-    dDeltaTstep
-    dSigma2WN
-    dTimeConst
-    dDefaultDeltaTstep
-    dDefaultProcessQcov
+    dDeltaTstep         (1, 1) {isscalar}
+    dSigma2WN           (:, 1) {isvector}
+    dTimeConst          (:, 1) {isvector}
+    dDefaultDeltaTstep  (1, 1) {isscalar}
+    dDefaultProcessQcov = zeros(length(dSigma2WN)) 
 end
 %% PROTOTYPE
 % [dProcessNoiseCovFOGM] = evalProcessNoiseFOGM(dDeltaTstep, ...
