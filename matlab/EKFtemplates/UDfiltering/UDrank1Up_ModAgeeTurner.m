@@ -1,13 +1,13 @@
-function [o_dUnew, o_dDnew, o_dKcol] = UDrank1Up_ModAgeeTurner(i_dU, i_dD, i_dMeasCovElem, i_dHrow) %#codegen
+function [dUnew, dDnew, dKcol] = UDrank1Up_ModAgeeTurner(dU, dD, dMeasCovElem, dHrow) %#codegen
 %% PROTOTYPE
-% [o_dUnew, o_dDnew, o_dKcol] = UDrank1Up_ModAgeeTurner(i_dU, i_dD, i_dRelem, i_dHrow)
+% [dUnew, dDnew, dKcol] = UDrank1Up_ModAgeeTurner(dU, dD, dRelem, dHrow)
 % -------------------------------------------------------------------------------------------------------------
 %% DESCRIPTION
 % Modified Agee Turner algorithm performing the Rank 1 Update of the U-D
 % factors of the P covariance matrix (decomposed as UDU^T). The function
 % outputs the new UD factors after processing the ith scala residual (R
-% must be diagonal) with corresponding R entry given by i_dRelem and
-% observation matrix row i_dHrow. The column vector of the Kalman gain 
+% must be diagonal) with corresponding R entry given by dRelem and
+% observation matrix row dHrow. The column vector of the Kalman gain 
 % corresponding to the ith residual is also computed.
 % REFERENCE:
 % 1) A summary on the UD Kalman Filter, Ramos, 2022
@@ -23,15 +23,15 @@ function [o_dUnew, o_dDnew, o_dKcol] = UDrank1Up_ModAgeeTurner(i_dU, i_dD, i_dMe
 %    version supported by MATLAB coder if needed.
 % -------------------------------------------------------------------------------------------------------------
 %% INPUT
-% i_dU:           [Nx, Nx]   Upper triangular U factor of covariance P
-% i_dD:           [Nx, Nx]   Diagonal D factor of covariance P
-% i_dMeasCovElem: [1]        Scalar ith entry of Measurement covariance R (diag)
-% i_dHrow:        [1, Nx]    Observation matrix H ith row
+% dU:           [Nx, Nx]   Upper triangular U factor of covariance P
+% dD:           [Nx, Nx]   Diagonal D factor of covariance P
+% dMeasCovElem: [1]        Scalar ith entry of Measurement covariance R (diag)
+% dHrow:        [1, Nx]    Observation matrix H ith row
 % -------------------------------------------------------------------------------------------------------------
 %% OUTPUT
-% o_dUnew:        [Nx, Nx]    Updated upper triangular U factor with ith entry
-% o_dDnew:        [Nx, Nx]    Updated diagonal D factor with ith entry
-% o_dKcol:        [Nx, 1]     Kalman gain column of the ith residual scalar entry
+% dUnew:        [Nx, Nx]    Updated upper triangular U factor with ith entry
+% dDnew:        [Nx, Nx]    Updated diagonal D factor with ith entry
+% dKcol:        [Nx, 1]     Kalman gain column of the ith residual scalar entry
 % -------------------------------------------------------------------------------------------------------------
 %% CHANGELOG
 % 27-10-2023    Pietro Califano     First prototype coded
@@ -47,36 +47,36 @@ function [o_dUnew, o_dDnew, o_dKcol] = UDrank1Up_ModAgeeTurner(i_dU, i_dD, i_dMe
 % -------------------------------------------------------------------------------------------------------------
 %% Function code
 % Initialize output
-DdiagNew = diag(i_dD);
+DdiagNew = diag(dD);
 % Get size of factors
 Nx = length(DdiagNew);
-o_dKcol = zeros(Nx, 1);
+dKcol = zeros(Nx, 1);
 % Initialize output 
-o_dDnew = i_dD;
-o_dUnew = i_dU;
+dDnew = dD;
+dUnew = dU;
 
 % Assert for positive definite Covariance matrix
 assert(all(DdiagNew > 0), 'Input D factor corresponds to a NON POSITIVE matrix (negative entries on diagonal)!')
 
 % Compute vector w
-w = i_dU' * i_dHrow';
+w = dU' * dHrow';
 
 % Compute vector v of rank 1 update
-v = i_dD' * w;
+v = dD' * w;
 
 % Initialize K 1st column
 dK = zeros(Nx, Nx);
-% dK(:, 1) = i_dD(:, 1)*w(1);
+% dK(:, 1) = dD(:, 1)*w(1);
 dK(1, 1) = v(1);
 
 % Initialize alpha 1st element
 dAlpha = zeros(Nx, 1);
 dLambda = zeros(Nx, 1);
 
-dAlpha(1) = i_dMeasCovElem + v(1) * w(1);
+dAlpha(1) = dMeasCovElem + v(1) * w(1);
 
 % Initialize d1 element
-DdiagNew(1) = i_dMeasCovElem * DdiagNew(1)/dAlpha(1);
+DdiagNew(1) = dMeasCovElem * DdiagNew(1)/dAlpha(1);
 
 % Update columns of factors and Kalman gain
 for idj = 2:Nx
@@ -91,21 +91,21 @@ for idj = 2:Nx
     dLambda(idj) = -w(idj)/dAlpha(idj-1);
 
     % Update jth column of U factor
-    o_dUnew(:, idj) = i_dU(:, idj) + dLambda(idj) * dK(:, idj-1);
+    dUnew(:, idj) = dU(:, idj) + dLambda(idj) * dK(:, idj-1);
 
     % Update jth column of K matrix
-    dK(:, idj) = dK(:, idj-1) + v(idj) * i_dU(:, idj);
+    dK(:, idj) = dK(:, idj-1) + v(idj) * dU(:, idj);
 
 end
 
 % Allocate updated D factor
 for id = 1:Nx
-    o_dDnew(id, id) = DdiagNew(id);
+    dDnew(id, id) = DdiagNew(id);
 end
 
 % Compute K gain vector correspondent to ith residual (scalar)
-% Alpha = w'*v + Ri, since w' = dHrow'i_dU and v = D*i_dU'*dHrow' as per definition
-o_dKcol(1:Nx, 1) = dK(:, Nx)/dAlpha(Nx);
+% Alpha = w'*v + Ri, since w' = dHrow'dU and v = D*dU'*dHrow' as per definition
+dKcol(1:Nx, 1) = dK(:, Nx)/dAlpha(Nx);
 
 end
 
