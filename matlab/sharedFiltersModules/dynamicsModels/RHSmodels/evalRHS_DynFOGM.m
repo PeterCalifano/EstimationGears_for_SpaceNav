@@ -27,8 +27,10 @@ assert( all( size(dTimeConst) == size(dStateFOGM), 'all' ) || size(dTimeConst,1)
     'Dimension mismatch between time constants vector and indexed state vector');
 
 dStateFOGMdot = coder.nullcopy(zeros(size(dStateFOGM)));
+
+bNonZeroTimeConst = dTimeConst( dTimeConst > 0);
 % First Order Gauss Markov deterministic dynamics
-dStateFOGMdot(:) = - ( 1./dTimeConst ) .* dStateFOGM;
+dStateFOGMdot(bNonZeroTimeConst) = - ( 1./dTimeConst(bNonZeroTimeConst) ) .* dStateFOGM(bNonZeroTimeConst);
 
 end
 

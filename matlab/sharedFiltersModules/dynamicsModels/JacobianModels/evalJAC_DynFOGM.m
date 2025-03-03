@@ -40,7 +40,9 @@ dFirstOrderGMdynMatrix = zeros(length(ui16StatesIdx), length(ui16StatesIdx));
 
 % Assign jacobian 
 for idS = 1:length(ui16StatesIdx)
-    dFirstOrderGMdynMatrix(idS, idS) = - 1.0/dTimeConst(idS);
+    if dTimeConst(idS) > 0
+        dFirstOrderGMdynMatrix(idS, idS) = - 1.0/dTimeConst(idS);
+    end
 end
 
 end
