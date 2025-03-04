@@ -28,7 +28,7 @@ assert( all( size(dTimeConst) == size(dStateFOGM), 'all' ) || size(dTimeConst,1)
 
 dStateFOGMdot = coder.nullcopy(zeros(size(dStateFOGM)));
 
-bNonZeroTimeConst = dTimeConst( dTimeConst > 0);
+bNonZeroTimeConst = dTimeConst > 0;
 % First Order Gauss Markov deterministic dynamics
 dStateFOGMdot(bNonZeroTimeConst) = - ( 1./dTimeConst(bNonZeroTimeConst) ) .* dStateFOGM(bNonZeroTimeConst);
 
