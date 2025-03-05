@@ -3,6 +3,7 @@ function [dxStateNext, dStateTimetag] = IntegratorStepRK4(dxState, ...
     dDeltaTime, ...
     dIntegrTimeStep, ...
     strDynParams, ...
+    strFilterMutabConfig, ...
     strFilterConstConfig) %#codegen
 arguments
     dxState                 (:, 1) double {isnumeric, isvector}
@@ -10,6 +11,7 @@ arguments
     dDeltaTime              (1, 1) double {isnumeric, isscalar}
     dIntegrTimeStep         (1, 1) double {isnumeric, isscalar} 
     strDynParams            (1, 1) {isstruct}
+    strFilterMutabConfig    (1, 1) {isstruct}
     strFilterConstConfig    (1, 1) {isstruct}
 end
 %% PROTOTYPE
@@ -107,10 +109,10 @@ for idStep = 1:ui16IntegrStepsNum
     end
 
     % Evaluate integrator stages over timestep domain
-    dk1 = computeDynFcn(dIntegrAbsTime                   , dTmpStateNext                          , strDynParams, strFilterConstConfig);
-    dk2 = computeDynFcn(dIntegrAbsTime + 0.5*dIntegrTimeStep, dTmpStateNext + (0.5*dIntegrTimeStep) * dk1, strDynParams, strFilterConstConfig);
-    dk3 = computeDynFcn(dIntegrAbsTime + 0.5*dIntegrTimeStep, dTmpStateNext + (0.5*dIntegrTimeStep) * dk2, strDynParams, strFilterConstConfig);
-    dk4 = computeDynFcn(dIntegrAbsTime + dIntegrTimeStep  , dTmpStateNext +     dIntegrTimeStep * dk3, strDynParams, strFilterConstConfig);
+    dk1 = computeDynFcn(dIntegrAbsTime                   , dTmpStateNext                          , strDynParams, strFilterMutabConfig, strFilterConstConfig);
+    dk2 = computeDynFcn(dIntegrAbsTime + 0.5*dIntegrTimeStep, dTmpStateNext + (0.5*dIntegrTimeStep) * dk1, strDynParams, strFilterMutabConfig, strFilterConstConfig);
+    dk3 = computeDynFcn(dIntegrAbsTime + 0.5*dIntegrTimeStep, dTmpStateNext + (0.5*dIntegrTimeStep) * dk2, strDynParams, strFilterMutabConfig, strFilterConstConfig);
+    dk4 = computeDynFcn(dIntegrAbsTime + dIntegrTimeStep  , dTmpStateNext +     dIntegrTimeStep * dk3, strDynParams, strFilterMutabConfig, strFilterConstConfig);
 
     % Update state at new integrator absolute time (initial + Nsteps*TimeStep)
     dTmpStateNext = dTmpStateNext + ( dIntegrTimeStep/6 )*(dk1 + 2*dk2 + 2*dk3 + dk4);
