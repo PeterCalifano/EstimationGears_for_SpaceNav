@@ -97,7 +97,7 @@ dDynMatrix_PosVel(ui8PosVelIdx(4:6), ui8ResidualAccelIdx) = dDynMatrix_PosVel(ui
 
 % DEVNOTE: derivative of velocity wrt delta C SRP has order of unit vector, but seems quite large with
 % respect to other contributions?
-dDynMatrix_PosVel(ui8PosVelIdx, [ui8PosVelIdx(4:6); ui8CoeffSRPidx]) = dDynMatrix_PosVel(ui8PosVelIdx, [ui8PosVelIdx(4:6); ui8CoeffSRPidx]) ...
+dDynMatrix_PosVel(ui8PosVelIdx, [ui8PosVelIdx(1:3); ui8CoeffSRPidx]) = dDynMatrix_PosVel(ui8PosVelIdx, [ui8PosVelIdx(1:3); ui8CoeffSRPidx]) ...
                                                                             + drvSRPwithBiasJac;
 
 %% Jacobian wrt 3rd bodies
