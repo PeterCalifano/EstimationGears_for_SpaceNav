@@ -191,6 +191,11 @@ while dDeltaResRelNorm2 > dDeltaResNormRelTol2
 
             % Accumulate LAMBDA Information matrix and Nmatrix residuals projection vector
             % NOTE: NO measurement noise covariance
+
+            if coder.target("MATLAB") || coder.target('MEX')
+                assert(not(any(dyMeasVec( ui32IdMeas:ui32IdMeas + uint32(1) , 1) == 0)), 'ERROR: measurement is zero!')
+            end
+
             dFeatureProjResVec = dyMeasVec( ui32IdMeas:ui32IdMeas + uint32(1) , 1) - dPredictFeatProj_Ci;
             
             % Accumulate LAMBDA matrix (A^T * W * A)
@@ -239,12 +244,14 @@ while dDeltaResRelNorm2 > dDeltaResNormRelTol2
     % SOLVER LOOP COUNTER
     if ui8IterCounter >= ui32MaxIter
         disp('SOLVER STOP: MAX ITER REACHED.')
+        bConvergenceFlag        = false;
         break;
     end
 
     % Check norm of the error, if low in absolute value, break
     if dResVecNorm2 <= dAbsResVecNorm2Thr
         disp('SOLVER STOP: Residual norm2 below absolute threshold.')
+        bConvergenceFlag        = true;
         break;
     end
     

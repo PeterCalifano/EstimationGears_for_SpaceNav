@@ -55,13 +55,13 @@ end
 % Check validity of timetags
 
 if dStateTimetag <= strDynParams.strMainData.strAttData.dTimeLowBound
-    evalPoint = strDynParams.strMainData.strAttData.dTimeLowBound;
+    dEvalPoint = strDynParams.strMainData.strAttData.dTimeLowBound;
 
 elseif dStateTimetag >= strDynParams.strMainData.strAttData.dTimeUpBound
-    evalPoint = strDynParams.strMainData.strAttData.dTimeUpBound;
+    dEvalPoint = strDynParams.strMainData.strAttData.dTimeUpBound;
 
 else
-    evalPoint = dStateTimetag;
+    dEvalPoint = dStateTimetag;
 end
 
 % Input checks and variables allocation
@@ -77,7 +77,7 @@ ui16StatesIdx = [strFilterConstConfig.strStatesIdx.ui8posVelIdx(1), strFilterCon
 % Compute attitude of Main at current time instant (NOT NEEDED IN FILTER)
 dDCMmainAtt_INfromTF  = coder.nullcopy(zeros(3, 3));
 
-dTmpQuat = evalAttQuatChbvPolyWithCoeffs(strDynParams.strMainData.strAttData.ui32PolyDeg, 4, evalPoint,...
+dTmpQuat = evalAttQuatChbvPolyWithCoeffs(strDynParams.strMainData.strAttData.ui32PolyDeg, 4, dEvalPoint,...
                                         strDynParams.strMainData.strAttData.dChbvPolycoeffs, ...
                                         strDynParams.strMainData.strAttData.dsignSwitchIntervals, ...
                                         strDynParams.strMainData.strAttData.dTimeLowBound, ...
@@ -95,7 +95,7 @@ dPtrAlloc = 1;
 for idB = 1:ui8NumOf3rdBodies
 
     dBodyEphemerides(dPtrAlloc:dPtrAlloc+2) = evalChbvPolyWithCoeffs(strDynParams.strBody3rdData(idB).strOrbitData.ui32PolyDeg, ...
-                                                                 3, evalPoint,...
+                                                                 3, dEvalPoint,...
                                                                  strDynParams.strBody3rdData(idB).strOrbitData.dChbvPolycoeffs, ...
                                                                  strDynParams.strBody3rdData(idB).strOrbitData.dTimeLowBound, ...
                                                                  strDynParams.strBody3rdData(idB).strOrbitData.dTimeUpBound);

@@ -1,6 +1,8 @@
-function [dFirstOrderGMdynMatrix] = evalJAC_DynFOGM(~, dTimeConst, ui16StatesIdx) %#codegen
+function [dFirstOrderGMdynMatrix] = evalJAC_DynBetaFOGM(~, ...
+                                                        dBetaTimeConst, ...
+                                                        ui16StatesIdx) %#codegen
 %% PROTOTYPE
-% [dDynFOGMatrix] = evalJAC_DynFOGM(~, dTimeConst, ui16StatesIdx) %#codegen
+% [dDynFOGMatrix] = evalJAC_DynFOGM(~, dBetaTimeConst, ui16StatesIdx) %#codegen
 % -------------------------------------------------------------------------------------------------------------
 %% DESCRIPTION
 % What the function does
@@ -30,7 +32,7 @@ function [dFirstOrderGMdynMatrix] = evalJAC_DynFOGM(~, dTimeConst, ui16StatesIdx
 %% Function code
 
 if coder.target("MATLAB") || coder.target("MEX")
-    assert( length(dTimeConst) == length(ui16StatesIdx), ...
+    assert( length(dBetaTimeConst) == length(ui16StatesIdx), ...
         "ERROR: mismatch of input size: statesID and time constants")
 end
 
@@ -40,8 +42,8 @@ dFirstOrderGMdynMatrix = zeros(length(ui16StatesIdx), length(ui16StatesIdx));
 
 % Assign jacobian 
 for idS = 1:length(ui16StatesIdx)
-    if dTimeConst(idS) > 0
-        dFirstOrderGMdynMatrix(idS, idS) = - 1.0/dTimeConst(idS);
+    if dBetaTimeConst(idS) > 0
+        dFirstOrderGMdynMatrix(idS, idS) = - dBetaTimeConst(idS);
     end
 end
 

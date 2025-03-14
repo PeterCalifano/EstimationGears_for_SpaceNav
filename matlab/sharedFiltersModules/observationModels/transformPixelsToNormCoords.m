@@ -1,9 +1,9 @@
-function [dyNormCoordVec] = transformPixelsToNormCoords(dyPixMeasVec, dKcam, ui32PtrToLast, ui32MaxNumMeas) %#codegen
+function [dyNormCoordVec] = transformPixelsToNormCoords(dyPixMeasVec, dKcam, ui32PtrToLast, ui32MaxNumOfKptsMeas) %#codegen
 arguments
-    dyPixMeasVec   (2,:) double
-    dKcam          (3,3) double 
-    ui32PtrToLast  (1,1) uint32 = size(dyPixMeasVec, 2);
-    ui32MaxNumMeas (1,1) uint32 = size(dyPixMeasVec, 2);
+    dyPixMeasVec            (2,:) double
+    dKcam                   (3,3) double 
+    ui32PtrToLast           (1,1) uint32 = size(dyPixMeasVec, 2);
+    ui32MaxNumOfKptsMeas    (1,1) uint32 = size(dyPixMeasVec, 2);
 end
 %% PROTOTYPE
 % [dyNormCoordVec] = transformPixelsToNormCoords(dyPixMeasVec, dKcam, ui32PtrToLast, ui32MaxSize) %#codegen
@@ -34,7 +34,7 @@ end
 % -------------------------------------------------------------------------------------------------------------
 
 % Define output array
-dyNormCoordVec = coder.nullcopy(zeros(2, ui32MaxNumMeas));
+dyNormCoordVec = coder.nullcopy(zeros(2, ui32MaxNumOfKptsMeas));
 
 % Temporary variables (reduce access to dKcam, TBC)
 dfx = dKcam(1, 1);
