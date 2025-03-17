@@ -2,12 +2,14 @@ function [dProcessNoiseCovFOGM] = evalMappedProcessNoiseFOGM(dDeltaTstep, ...
                                                              dSigma2WN, ...
                                                              dTimeConst, ...
                                                              dDefaultDeltaTstep, ...
+                                                             bBetaVariant,...
                                                              dDefaultProcessQcov) %#codegen
 arguments
     dDeltaTstep         (1, 1) {isscalar}
     dSigma2WN           (:, 1) {isvector}
     dTimeConst          (:, 1) {isvector}
     dDefaultDeltaTstep  (1, 1) {isscalar}
+    bBetaVariant        (1, 1) {islogical, isscalar} = false
     dDefaultProcessQcov = zeros(length(dSigma2WN)) 
 end
 %% PROTOTYPE
@@ -54,13 +56,17 @@ if nargin > 4
 end
 
 % First Order Gauss Markov auto-covariance matrix [NxN]
-if ( nargin > 4 && abs(dDeltaTstep - dDefaultDeltaTstep) <= 2*eps )
+if ( any(dDefaultProcessQcov> 0, 'all') && abs(dDeltaTstep - dDefaultDeltaTstep) <= 2*eps )
 
     dProcessNoiseCovFOGM = dDefaultProcessQcov;
 
 else
     
     dProcessNoiseCovFOGM = zeros(ui8numOfStates);
+    if bBetaVariant
+        dTimeConst = 1./dTimeConst;
+    end
+
     dProcessNoiseCovFOGM( 1:ui8numOfStates, 1:ui8numOfStates ) = diag( (dSigma2WN .* 0.5 .* dTimeConst) .*...
         ( ones(ui8numOfStates, 1) - exp(- 2.0 * (dDeltaTstep./dTimeConst)) ) );
 end

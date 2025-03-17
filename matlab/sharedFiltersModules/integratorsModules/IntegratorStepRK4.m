@@ -127,7 +127,7 @@ if coder.target('MATLAB') || coder.target('MEX')
 end
 
 % Assign output
-dxStateNext = dTmpStateNext;
-dStateTimetag = dIntegrAbsTime;
+dxStateNext     = dTmpStateNext;
+dStateTimetag   = dIntegrAbsTime;
 
 end

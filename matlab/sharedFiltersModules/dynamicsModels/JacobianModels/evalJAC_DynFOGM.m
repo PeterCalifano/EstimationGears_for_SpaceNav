@@ -1,4 +1,13 @@
-function [dFirstOrderGMdynMatrix] = evalJAC_DynFOGM(~, dTimeConst, ui16StatesIdx) %#codegen
+function [dFirstOrderGMdynMatrix] = evalJAC_DynFOGM(dxState, ...
+                                                    dTimeConst, ...
+                                                    ui16StatesIdx, ...
+                                                    bBetaVariant) %#codegen
+arguments
+    dxState         (:,1) double {isvectpr, isnumeric}
+    dTimeConst      (:,1) double {isvector, isnumeric}
+    ui16StatesIdx   (1,:) uint16 {isvector, isnumeric}
+    bBetaVariant    (1,1) logical {islogical, isscalar} = false
+end
 %% PROTOTYPE
 % [dDynFOGMatrix] = evalJAC_DynFOGM(~, dTimeConst, ui16StatesIdx) %#codegen
 % -------------------------------------------------------------------------------------------------------------
@@ -11,15 +20,17 @@ function [dFirstOrderGMdynMatrix] = evalJAC_DynFOGM(~, dTimeConst, ui16StatesIdx
 % [2] Carpenter, NASA Navigation Filter Best Practices 2018
 % -------------------------------------------------------------------------------------------------------------
 %% INPUT
-% dxState
-% dTimeConst
-% ui16StatesIdx
+% dxState         (:,1) double {isvectpr, isnumeric}
+% dTimeConst      (:,1) double {isvector, isnumeric}
+% ui16StatesIdx   (1,:) uint16 {isvector, isnumeric}
+bBetaVariant    (1,1) logical {islogical, isscalar} = false
 % -------------------------------------------------------------------------------------------------------------
 %% OUTPUT
 % dDynFOGMatrix
 % -------------------------------------------------------------------------------------------------------------
 %% CHANGELOG
-% 09-04-2024       Pietro Califano         First version. Validated.
+% 09-04-2024        Pietro Califano         First version. Validated.
+% 17-03-2025        Pietro Califano         Upgrade to support beta variant.
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % [-]
@@ -40,8 +51,13 @@ dFirstOrderGMdynMatrix = zeros(length(ui16StatesIdx), length(ui16StatesIdx));
 
 % Assign jacobian 
 for idS = 1:length(ui16StatesIdx)
-    if dTimeConst(idS) > 0
-        dFirstOrderGMdynMatrix(idS, idS) = - 1.0/dTimeConst(idS);
+
+    if bBetaVariant
+        dFirstOrderGMdynMatrix(idS, idS) = - dTimeConst(idS);
+    else
+        if dTimeConst(idS) > 0
+            dFirstOrderGMdynMatrix(idS, idS) = - 1.0/dTimeConst(idS);
+        end
     end
 end
 

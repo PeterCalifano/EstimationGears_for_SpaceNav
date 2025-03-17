@@ -1,12 +1,14 @@
 function dDrvDt = filterDynOrbit(dStateTimetag, ...
                                 dxState, ...
                                 strDynParams, ...
+                                strFilterMutabConfig, ...
                                 strFilterConstConfig) %#codegen
 arguments
-    dStateTimetag (1, 1) double
-    dxState       (:, 1) double
-    strDynParams  {isstruct}
-    strFilterConstConfig  {isstruct}
+    dStateTimetag           (1, 1) double
+    dxState                 (:, 1) double
+    strDynParams            {isstruct}
+    strFilterMutabConfig    {isstruct}
+    strFilterConstConfig    {isstruct}
 end
 %% PROTOTYPE
 % dxdt = computeDynFcn(dStateTimetag,...
@@ -107,7 +109,10 @@ end
 
 % Compute SRP coefficient
 dBiasCoeffSRP = 0.0;
-if isfield(strFilterConstConfig.strStatesIdx, "ui8CoeffSRPidx")
+
+if isfield(strFilterConstConfig.strStatesIdx, "ui8CoeffSRPidx") && ...
+        all(strFilterMutabConfig.bConsiderStatesMode(strFilterConstConfig.strStatesIdx.ui8CoeffSRPidx) == false)
+
     dBiasCoeffSRP(:) = dxState( strFilterConstConfig.strStatesIdx.ui8CoeffSRPidx);
 end
 
@@ -119,8 +124,9 @@ dCoeffSRP = dCoeffSRP + dBiasCoeffSRP;
 % Get residual acceleration if any
 dResidualAccel = zeros(3,1);
 
-if isfield(strFilterConstConfig.strStatesIdx, "ui8ResidualAccelIdx")
-    dResidualAccel(:) = dxState( strFilterConstConfig.strStatesIdx.ui8ResidualAccelIdx);
+if isfield(strFilterConstConfig.strStatesIdx, "ui8ResidualAccelIdx") && ...
+        all(strFilterMutabConfig.bConsiderStatesMode(strFilterConstConfig.strStatesIdx.ui8ResidualAccelIdx) == false)
+    dResidualAccel(:) = dxState( strFilterConstConfig.strStatesIdx.ui8ResidualAccelIdx );
 end
 
 %% Evaluate RHS
