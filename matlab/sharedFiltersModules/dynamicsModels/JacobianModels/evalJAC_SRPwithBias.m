@@ -45,7 +45,7 @@ ui8CoeffSRPidx      = strFilterConstConfig.strStatesIdx.ui8CoeffSRPidx;
 
 drvSRPwithBiasJac = zeros(6, 4);
 
-if strFilterMutabConfig.bEnableBiasSRP
+if strFilterMutabConfig.bEnableBiasSRP && not(strFilterConstConfig.bOrbitStateOnly)
     % DEVNOTE: in principle this branching should force the coder to generate two different copies if needed
     % but only one will be instantiated as long as strFilterConstConfig.bEnableBiasSRP is hardcoded.
     dBiasCoeff = dxState(ui8CoeffSRPidx);
@@ -68,7 +68,7 @@ drvSRPwithBiasJac(ui8PosVelIdx(4:6), 1:3) = - ( dCoeffSRP + dBiasCoeff ) * ( (1 
 
 
 %% Compute jacobian wrt SRP bias coefficient
-if strFilterMutabConfig.bEnableBiasSRP
+if strFilterMutabConfig.bEnableBiasSRP && not(strFilterConstConfig.bOrbitStateOnly)
     % DEVNOTE not sure if need to be disabled because in principle the stochastic process affecting the C_SRP
     % coefficient does not enter the deterministic part of the dynamics (hence in A).
     dJacCoeffSRP = - (dCoeffSRP + 1.0) * dSunPositionFromSC_IN/dNormSunPositionFromSC_IN;

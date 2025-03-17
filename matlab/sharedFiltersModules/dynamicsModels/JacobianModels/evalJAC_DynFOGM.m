@@ -3,7 +3,7 @@ function [dFirstOrderGMdynMatrix] = evalJAC_DynFOGM(dxState, ...
                                                     ui16StatesIdx, ...
                                                     bBetaVariant) %#codegen
 arguments
-    dxState         (:,1) double {isvectpr, isnumeric}
+    dxState         (:,1) double {isvector, isnumeric}
     dTimeConst      (:,1) double {isvector, isnumeric}
     ui16StatesIdx   (1,:) uint16 {isvector, isnumeric}
     bBetaVariant    (1,1) logical {islogical, isscalar} = false

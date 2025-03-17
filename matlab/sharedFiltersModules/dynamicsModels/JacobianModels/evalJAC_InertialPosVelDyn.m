@@ -87,7 +87,9 @@ dDynMatrix_PosVel(ui8PosVelIdx, ui8PosVelIdx) = dDynMatrix_PosVel(ui8PosVelIdx, 
 %% Jacobian wrt residual acceleration (if any)
 % DEVNOTE TBC if need to bedisabled because in principle the stochastic process affecting the dynamics does not enter the
 % deterministic portion of it, but the stochastic input (hence in G, instead of STM).
-dDynMatrix_PosVel(ui8PosVelIdx(4:6), ui8ResidualAccelIdx) = dDynMatrix_PosVel(ui8PosVelIdx(4:6), ui8ResidualAccelIdx) + eye(3);
+if not(strFilterConstConfig.bOrbitStateOnly)
+    dDynMatrix_PosVel(ui8PosVelIdx(4:6), ui8ResidualAccelIdx) = dDynMatrix_PosVel(ui8PosVelIdx(4:6), ui8ResidualAccelIdx) + eye(3);
+end
 
 %% Jacobian wrt SRP + bias
 [drvSRPwithBiasJac] = evalJAC_SRPwithBias(dxState, ...
