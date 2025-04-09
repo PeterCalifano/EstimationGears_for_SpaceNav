@@ -232,8 +232,8 @@ while dDeltaResRelNorm2 > dDeltaResNormRelTol2
     if ui8IterCounter > 0
         % Compute relative square residual change
         dDeltaResRelNorm2 = abs(dResVecNorm2 - dResVecNorm2_prev) ./ dResVecNorm2_prev;
-        if dResVecNorm2 > dResVecNorm2_prev
-            warning('Detected increase in residual norm. Solver is not converging!')
+        if dResVecNorm2 - dResVecNorm2_prev > 1e-8
+            warning('Detected increase in residual norm (%4.4g). Stopping non-linear optimization.', dResVecNorm2-dResVecNorm2_prev)
             ui8NonConvergingCounter = ui8NonConvergingCounter + uint8(1);
         end
     end
