@@ -30,6 +30,7 @@ end
 % -------------------------------------------------------------------------------------------------------------
 %% CHANGELOG
 % 17-08-2024        Pietro Califano         Version adapted from FUTURE EKF to use general purpose evalRHS_DynOrbit
+% 17-03-2024        Pietro Califano         Updated version for use in MSKCF
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % evalAttQuatChbvPolyWithCoeffs()
