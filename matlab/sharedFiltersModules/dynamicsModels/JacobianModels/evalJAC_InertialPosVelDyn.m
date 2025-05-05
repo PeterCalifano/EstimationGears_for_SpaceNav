@@ -80,6 +80,12 @@ end
 dDynMatrix_PosVel(ui8PosVelIdx, ui8PosVelIdx) = dDynMatrix_PosVel(ui8PosVelIdx, ui8PosVelIdx) ...
                                                                 + drvMainBodyGravityJac;
 
+
+% If no other state is estimated, return here
+if strFilterConstConfig.bOrbitStateOnly
+    return
+end
+
 %% Jacobian wrt main body attitude bias
 % NOTE: influences SH if any
 % dDynMatrix_PosVel(ui8PosVelIdx, ui8attBiasDeltaIdx) 
@@ -87,9 +93,8 @@ dDynMatrix_PosVel(ui8PosVelIdx, ui8PosVelIdx) = dDynMatrix_PosVel(ui8PosVelIdx, 
 %% Jacobian wrt residual acceleration (if any)
 % DEVNOTE TBC if need to bedisabled because in principle the stochastic process affecting the dynamics does not enter the
 % deterministic portion of it, but the stochastic input (hence in G, instead of STM).
-if not(strFilterConstConfig.bOrbitStateOnly)
-    dDynMatrix_PosVel(ui8PosVelIdx(4:6), ui8ResidualAccelIdx) = dDynMatrix_PosVel(ui8PosVelIdx(4:6), ui8ResidualAccelIdx) + eye(3);
-end
+dDynMatrix_PosVel(ui8PosVelIdx(4:6), ui8ResidualAccelIdx) = dDynMatrix_PosVel(ui8PosVelIdx(4:6), ui8ResidualAccelIdx) + eye(3);
+
 
 %% Jacobian wrt SRP + bias
 [drvSRPwithBiasJac] = evalJAC_SRPwithBias(dxState, ...
@@ -110,4 +115,20 @@ dDynMatrix_PosVel(ui8PosVelIdx, [ui8PosVelIdx(1:3); ui8CoeffSRPidx]) = dDynMatri
 dDynMatrix_PosVel(ui8PosVelIdx, ui8PosVelIdx) = dDynMatrix_PosVel(ui8PosVelIdx, ui8PosVelIdx) ...
                                                                 + drv3rdBodyGravityJac;
 
+
+%% Jacobian wrt gravity parameter
+if strFilterConstConfig.bEstimateGravParam
+
+    ui8LogGravParamIdx = strFilterConstConfig.strStatesIdx.ui8LogGravParamIdx;
+    
+    dVelJacWrtLogGravParam = - dxState(ui8PosVelIdx(1:3))./(norm( dxState(ui8PosVelIdx(1:3)) ))^3 ...
+                                  * dxState(ui8LogGravParamIdx);
+
+    dDynMatrix_PosVel(ui8PosVelIdx(4:6), ui8LogGravParamIdx) = dVelJacWrtLogGravParam; 
+
 end
+
+end
+
+
+
