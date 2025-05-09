@@ -26,13 +26,7 @@ end
 % Name6                     []
 % -------------------------------------------------------------------------------------------------------------
 %% OUTPUT
-% out1 [dim] description
-% Name1                     []
-% Name2                     []
-% Name3                     []
-% Name4                     []
-% Name5                     []
-% Name6                     []
+% dDynMatrix_PosVel
 % -------------------------------------------------------------------------------------------------------------
 %% CHANGELOG
 % 24-02-2025       Pietro Califano      First version implemented from legacy code.

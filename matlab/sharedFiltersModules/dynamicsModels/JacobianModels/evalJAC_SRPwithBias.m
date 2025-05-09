@@ -16,6 +16,7 @@ end
 %% DESCRIPTION
 % Function computing the jacobian of velocity RHS wrt SRP cannonbal acceleration, with optional SRP
 % coefficient bias. Sun position is assumed as first entry in strDynParams.dBodyEphemeris.
+% ACHTUNG: this function currently assumes all inputs are in meters for computation of SRP coefficient.
 % -------------------------------------------------------------------------------------------------------------
 %% INPUT
 % dxState
@@ -26,7 +27,8 @@ end
 % drvSRPwithBiasJac
 % -------------------------------------------------------------------------------------------------------------
 %% CHANGELOG
-% 24-02-2025       Pietro Califano      First version implemented from evalJAC_DynLEO
+% 24-02-2025    Pietro Califano     First version implemented from evalJAC_DynLEO
+% 07-05-2025    Pietro Califano     Modify jacobian to include dependence of P_SRP from position
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % [-]
@@ -58,20 +60,31 @@ dSunPositionFromSC_IN = strDynParams.dBodyEphemerides(1:3) - dxState(ui8PosVelId
 dNormSunPositionFromSC_IN = norm( dSunPositionFromSC_IN );
 
 % DEVNOTE this coefficient is recomputed here, instead of re-using calculation from propagateDyn
-dCoeffSRP = (strDynParams.strSRPdata.dP_SRP * strDynParams.strSCdata.dReflCoeff * ...
+% TODO modify to recompute P_SRP depending on the spacecraft position
+
+dDistFromSunAU = dNormSunPositionFromSC_IN / (149597870.7*1E3); % DEVNOTE Assuming meters!
+dP_SRP0 = 1367/299792458 * ( 1 / dDistFromSunAU^2 ); % [N/m^2]
+
+dCoeffSRP = (dP_SRP0 * strDynParams.strSCdata.dReflCoeff * ...
              strDynParams.strSCdata.dA_SRP)/strDynParams.strSCdata.dSCmass; % Move to compute outside, since this
 
 % Compute Jacobian of position and velocity
-drvSRPwithBiasJac(ui8PosVelIdx(4:6), 1:3) = - ( dCoeffSRP + dBiasCoeff ) * ( (1 / dNormSunPositionFromSC_IN) * eye(3)  ...
-                                                                             - (1 /( dNormSunPositionFromSC_IN^3 )) ...
-                                                                                 * (dSunPositionFromSC_IN * dSunPositionFromSC_IN') ) ; % [6x3]
+% drvSRPwithBiasJac(ui8PosVelIdx(4:6), 1:3) = - ( dCoeffSRP + dBiasCoeff ) * ( (1 / dNormSunPositionFromSC_IN) * eye(3)  ...
+%                                                                              - (1 /( dNormSunPositionFromSC_IN^3 )) ...
+%                                                                                  * (dSunPositionFromSC_IN * dSunPositionFromSC_IN') ) ; % [6x3]
 
+dInvNormSunPositionFromSC = 1/dNormSunPositionFromSC_IN;
+dInvNormSunPositionFromSC3 = dInvNormSunPositionFromSC^3;
+dInvNormSunPositionFromSC5 = dInvNormSunPositionFromSC^5;
+
+drvSRPwithBiasJac(ui8PosVelIdx(4:6), 1:3) = - ( dCoeffSRP + dBiasCoeff ) * ( dInvNormSunPositionFromSC3 * eye(3)  ...
+                                                  - 3*dInvNormSunPositionFromSC5 * (dSunPositionFromSC_IN * transpose(dSunPositionFromSC_IN)) ) ; % [3x3]
 
 %% Compute jacobian wrt SRP bias coefficient
 if strFilterMutabConfig.bEnableBiasSRP && not(strFilterConstConfig.bOrbitStateOnly)
     % DEVNOTE not sure if need to be disabled because in principle the stochastic process affecting the C_SRP
     % coefficient does not enter the deterministic part of the dynamics (hence in A).
-    dJacCoeffSRP = - (dCoeffSRP + 1.0) * dSunPositionFromSC_IN/dNormSunPositionFromSC_IN;
+    dJacCoeffSRP = - (dCoeffSRP + 1.0) * dInvNormSunPositionFromSC * dSunPositionFromSC_IN;
     drvSRPwithBiasJac(4:6, 4) = dJacCoeffSRP; % [6x1]
 end
 
