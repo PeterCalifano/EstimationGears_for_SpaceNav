@@ -113,12 +113,14 @@ dDynMatrix_PosVel(ui8PosVelIdx, ui8PosVelIdx) = dDynMatrix_PosVel(ui8PosVelIdx, 
 %% Jacobian wrt gravity parameter
 if strFilterConstConfig.bEstimateGravParam
 
-    ui8LogGravParamIdx = strFilterConstConfig.strStatesIdx.ui8LogGravParamIdx;
-    
-    dVelJacWrtLogGravParam = - dxState(ui8PosVelIdx(1:3))./(norm( dxState(ui8PosVelIdx(1:3)) ))^3 ...
-                                  * dxState(ui8LogGravParamIdx);
+    ui8GravParamIdx = strFilterConstConfig.strStatesIdx.ui8GravParamIdx;
 
-    dDynMatrix_PosVel(ui8PosVelIdx(4:6), ui8LogGravParamIdx) = dVelJacWrtLogGravParam; 
+    % NOTE: Using log10(GravParam) instead of linear gravigation parameter
+    % dVelJacWrtGravParam = - dxState(ui8PosVelIdx(1:3))./(norm( dxState(ui8PosVelIdx(1:3)) ))^3 ...
+    %                               * dxState(ui8GravParamIdx);
+
+    dVelJacWrtGravParam = - dxState(ui8PosVelIdx(1:3))./(norm( dxState(ui8PosVelIdx(1:3)) ))^3;
+    dDynMatrix_PosVel(ui8PosVelIdx(4:6), ui8GravParamIdx) = dVelJacWrtGravParam; 
 
 end
 
