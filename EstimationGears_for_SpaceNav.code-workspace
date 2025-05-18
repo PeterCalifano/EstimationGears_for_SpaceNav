@@ -5,6 +5,9 @@
 		},
 		{
 			"path": "../SimulationGears_for_SpaceNav"
+		},
+		{
+			"path": "../SLAM-repos/MSCKF_for_SpaceNav"
 		}
 	],
 	"settings": {}
