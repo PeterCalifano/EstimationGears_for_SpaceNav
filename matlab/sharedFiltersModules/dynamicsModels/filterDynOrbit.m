@@ -45,18 +45,27 @@ end
 %% Function code
 % ui16StateSize = strFilterConstConfig.ui16StateSize;
 
-% Variables definition
-dDrvDt = zeros(6, 1);
-
 % Check for 3rd bodies
-if not(isfield(strDynParams, 'strBody3rdData'))
-    ui8NumOf3rdBodies = strDynParams.ui8NumOf3rdBodies;
+if coder.target('MATLAB') || coder.target('MEX')
+    if not(isfield(strDynParams, 'strBody3rdData'))
+        ui8NumOf3rdBodies = strDynParams.ui8NumOf3rdBodies;
+    else
+        ui8NumOf3rdBodies = coder.const(uint8(length(strDynParams.strBody3rdData)));
+    end
 else
-    ui8NumOf3rdBodies = uint8(length(strDynParams.strBody3rdData)); % TODO --> remove for static sizing
+    ui8NumOf3rdBodies = coder.const(uint8(length(strDynParams.strBody3rdData)));
 end
 
-% Check validity of timetags
+% Variables definition
+dDrvDt = zeros(6, 1);
+dBodyEphemerides = coder.nullcopy(zeros(3*ui8NumOf3rdBodies, 1));
+d3rdBodiesGM = coder.nullcopy(zeros(ui8NumOf3rdBodies, 1));
+dDCMmainAtt_INfromTF  = zeros(3, 3);
+dResidualAccel = zeros(3,1);
 
+ui16StatesIdx = uint16([strFilterConstConfig.strStatesIdx.ui8posVelIdx(1), strFilterConstConfig.strStatesIdx.ui8posVelIdx(end)]);
+
+% Check validity of timetags
 if dStateTimetag <= strDynParams.strMainData.strAttData.dTimeLowBound
     dEvalPoint = strDynParams.strMainData.strAttData.dTimeLowBound;
 
@@ -75,11 +84,8 @@ end
 %                 strStatesIdx.ui8AImeasBiasIdx(1), strStatesIdx.ui8AImeasBiasIdx(end);
 %                 strStatesIdx.ui8CRAmeasBiasIdx(1), strStatesIdx.ui8CRAmeasBiasIdx(end)];
 
-ui16StatesIdx = [strFilterConstConfig.strStatesIdx.ui8posVelIdx(1), strFilterConstConfig.strStatesIdx.ui8posVelIdx(end)];
 
 % Compute attitude of Main at current time instant (NOT NEEDED IN FILTER)
-dDCMmainAtt_INfromTF  = coder.nullcopy(zeros(3, 3));
-
 dTmpQuat = evalAttQuatChbvPolyWithCoeffs(strDynParams.strMainData.strAttData.ui32PolyDeg, 4, dEvalPoint,...
                                         strDynParams.strMainData.strAttData.dChbvPolycoeffs, ...
                                         strDynParams.strMainData.strAttData.dsignSwitchIntervals, ...
@@ -90,14 +96,11 @@ dDCMmainAtt_INfromTF(1:3, 1:3) = Quat2DCM(dTmpQuat, true);
 
 
 % Evaluate position Ephemerides of 3rd bodies
-dBodyEphemerides = coder.nullcopy(zeros(3*ui8NumOf3rdBodies, 1));
-d3rdBodiesGM = coder.nullcopy(zeros(ui8NumOf3rdBodies, 1));
-
-dPtrAlloc = 1;
+ui16PtrAlloc = uint16(1);
 
 for idB = 1:ui8NumOf3rdBodies
 
-    dBodyEphemerides(dPtrAlloc:dPtrAlloc+2) = evalChbvPolyWithCoeffs(strDynParams.strBody3rdData(idB).strOrbitData.ui32PolyDeg, ...
+    dBodyEphemerides(ui16PtrAlloc:ui16PtrAlloc+2) = evalChbvPolyWithCoeffs(strDynParams.strBody3rdData(idB).strOrbitData.ui32PolyDeg, ...
                                                                  3, dEvalPoint,...
                                                                  strDynParams.strBody3rdData(idB).strOrbitData.dChbvPolycoeffs, ...
                                                                  strDynParams.strBody3rdData(idB).strOrbitData.dTimeLowBound, ...
@@ -105,7 +108,7 @@ for idB = 1:ui8NumOf3rdBodies
     
     d3rdBodiesGM(idB) = strDynParams.strBody3rdData(idB).dGM;
 
-    dPtrAlloc = dPtrAlloc + 3;
+    ui16PtrAlloc = ui16PtrAlloc + 3;
 end
 
 % Compute SRP coefficient
@@ -123,7 +126,6 @@ dCoeffSRP = (strDynParams.strSRPdata.dP_SRP * strDynParams.strSCdata.dReflCoeff 
 dCoeffSRP = dCoeffSRP + dBiasCoeffSRP;
 
 % Get residual acceleration if any
-dResidualAccel = zeros(3,1);
 
 if isfield(strFilterConstConfig.strStatesIdx, "ui8ResidualAccelIdx") && ...
         all(strFilterMutabConfig.bConsiderStatesMode(strFilterConstConfig.strStatesIdx.ui8ResidualAccelIdx) == false)
@@ -139,8 +141,8 @@ dDrvDt(:) = evalRHS_InertialDynOrbit(dxState, ...
                                   dCoeffSRP, ...
                                   d3rdBodiesGM, ...
                                   dBodyEphemerides, ...
-                                  strDynParams.strMainData.dSHcoeff, ...
-                                  strDynParams.strMainData.ui16MaxSHdegree, ...
+                                  [], ...        % strDynParams.strMainData.dSHcoeff
+                                  uint32(0), ... % strDynParams.strMainData.ui16MaxSHdegree
                                   ui16StatesIdx, ...
                                   dResidualAccel);
 
