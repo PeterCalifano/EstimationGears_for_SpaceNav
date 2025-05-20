@@ -97,6 +97,7 @@ dDeltaResNormRelTol2 = dDeltaResNormRelTol*dDeltaResNormRelTol;
 
 % Initialize relative residual norm delta
 dDeltaResRelNorm2 = 1E2; 
+dResVecNorm2_prev = 1E4;
 
 while dDeltaResRelNorm2 > dDeltaResNormRelTol2
    
@@ -233,7 +234,9 @@ while dDeltaResRelNorm2 > dDeltaResNormRelTol2
         % Compute relative square residual change
         dDeltaResRelNorm2 = abs(dResVecNorm2 - dResVecNorm2_prev) ./ dResVecNorm2_prev;
         if dResVecNorm2 - dResVecNorm2_prev > 1e-8
-            warning('Detected increase in residual norm (%4.4g). Stopping non-linear optimization.', dResVecNorm2-dResVecNorm2_prev)
+            if coder.target("MATLAB") || coder.target("MEX")
+                warning('Detected increase in residual norm (%4.4g). Stopping non-linear optimization.', dResVecNorm2-dResVecNorm2_prev)
+            end
             ui8NonConvergingCounter = ui8NonConvergingCounter + uint8(1);
         end
     end
@@ -243,14 +246,18 @@ while dDeltaResRelNorm2 > dDeltaResNormRelTol2
     
     % SOLVER LOOP COUNTER
     if ui8IterCounter >= ui32MaxIter
-        disp('SOLVER STOP: MAX ITER REACHED.')
+        if coder.target("MATLAB") || coder.target("MEX")
+            disp('SOLVER STOP: MAX ITER REACHED.')
+        end
         bConvergenceFlag        = false;
         break;
     end
 
     % Check norm of the error, if low in absolute value, break
     if dResVecNorm2 <= dAbsResVecNorm2Thr
-        disp('SOLVER STOP: Residual norm2 below absolute threshold.')
+        if coder.target("MATLAB") || coder.target("MEX")
+            disp('SOLVER STOP: Residual norm2 below absolute threshold.')
+        end
         bConvergenceFlag        = true;
         break;
     end
