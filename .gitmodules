@@ -6,3 +6,7 @@
 	path = lib/MathCore_for_SpaceNav
 	url = git@github.com:PeterCalifano/MathCore_for_SpaceNav.git
 	branch = dev_main
+[submodule "lib/SimulationGears_for_SpaceNav"]
+	path = lib/SimulationGears_for_SpaceNav
+	url = git@github.com:PeterCalifano/SimulationGears_for_SpaceNav.git
+	branch = dev_main
