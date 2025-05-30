@@ -127,7 +127,7 @@ if strFilterConstConfig.bEstimateGravParam
 
     % NOTE: Using log10(GravParam) instead of linear gravigation parameter: 
     % dxRHS/dlogMu = dxRHS/dMu * dMu/dlogMu = dxRHS/dMu * 1 / (dLogMu/dMu) = dxRHS/dMu * Mu
-    dVelJacWrtGravParam = - dxState(ui8PosVelIdx(1:3))./(norm( dxState(ui8PosVelIdx(1:3)) ))^3 * dxState(ui8GravParamIdx);
+    dVelJacWrtGravParam = - ( strDynParams.strMainData.dGM ) * dxState(ui8PosVelIdx(1:3))./(norm( dxState(ui8PosVelIdx(1:3)) ))^3;
 
     % dVelJacWrtGravParam = - dxState(ui8PosVelIdx(1:3))./(norm( dxState(ui8PosVelIdx(1:3)) ))^3;
 
