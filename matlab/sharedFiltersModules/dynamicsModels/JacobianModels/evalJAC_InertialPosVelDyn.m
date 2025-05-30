@@ -2,34 +2,44 @@ function [dDynMatrix_PosVel] = evalJAC_InertialPosVelDyn(dxState, ...
                                                         dStateTimetag, ...
                                                         strDynParams, ...
                                                         strFilterMutabConfig, ...
-                                                        strFilterConstConfig)
-arguments
-    dxState
-    dStateTimetag
-    strDynParams
-    strFilterMutabConfig
-    strFilterConstConfig
+                                                        strFilterConstConfig)%#codegen
+arguments (Input)
+    dxState             (:,1) {isvector, isnumeric}
+    dStateTimetag       (:,1) {isvector, isnumeric}
+    strDynParams          {isstruct}
+    strFilterMutabConfig  {isstruct}
+    strFilterConstConfig  {isstruct}
+end
+arguments (Output)
+    dDynMatrix_PosVel (:,:) {ismatrix, isnumeric}
 end
 %% PROTOTYPE
-% [] = evalJAC_InertialPosVelDyn() %#codegen
+% [dDynMatrix_PosVel] = evalJAC_InertialPosVelDyn(dxState, ...
+%                                                 dStateTimetag, ...
+%                                                 strDynParams, ...
+%                                                 strFilterMutabConfig, ...
+%                                                 strFilterConstConfig)%#codegen
 % -------------------------------------------------------------------------------------------------------------
 %% DESCRIPTION
-% Function computing the 
+% Function computing the Jacobian of the orbital state with the following (optional) perturbations:
+% 1. Main gravity + optional spherical harmonics model
+% 2. Solar radiation pressure as cannon ball model + optional bias on coefficient
+% 3. 3rd body perturbation of Sun (enabled in pair with SRP) + N other bodies
+% Optional gravitational parameter estimation is implemented and added based on configuration (constexpr)
 % -------------------------------------------------------------------------------------------------------------
 %% INPUT
-% in1 [dim] description
-% Name1                     []
-% Name2                     []
-% Name3                     []
-% Name4                     []
-% Name5                     []
-% Name6                     []
+% dxState             (:,1) {isvector, isnumeric}
+% dStateTimetag       (:,1) {isvector, isnumeric}
+% strDynParams          {isstruct}
+% strFilterMutabConfig  {isstruct}
+% strFilterConstConfig  {isstruct}
 % -------------------------------------------------------------------------------------------------------------
 %% OUTPUT
 % dDynMatrix_PosVel
 % -------------------------------------------------------------------------------------------------------------
 %% CHANGELOG
-% 24-02-2025       Pietro Califano      First version implemented from legacy code.
+% 24-02-2025    Pietro Califano     First version implemented from legacy code.
+% 30-05-2025    Pietro Califano     Review, gravity param. design change (to log space), documentation    
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % [-]
@@ -115,11 +125,13 @@ if strFilterConstConfig.bEstimateGravParam
 
     ui8GravParamIdx = strFilterConstConfig.strStatesIdx.ui8GravParamIdx;
 
-    % NOTE: Using log10(GravParam) instead of linear gravigation parameter
-    % dVelJacWrtGravParam = - dxState(ui8PosVelIdx(1:3))./(norm( dxState(ui8PosVelIdx(1:3)) ))^3 ...
-    %                               * dxState(ui8GravParamIdx);
+    % NOTE: Using log10(GravParam) instead of linear gravigation parameter: 
+    % dxRHS/dlogMu = dxRHS/dMu * dMu/dlogMu = dxRHS/dMu * 1 / (dLogMu/dMu) = dxRHS/dMu * Mu
+    dVelJacWrtGravParam = - dxState(ui8PosVelIdx(1:3))./(norm( dxState(ui8PosVelIdx(1:3)) ))^3 * dxState(ui8GravParamIdx);
 
-    dVelJacWrtGravParam = - dxState(ui8PosVelIdx(1:3))./(norm( dxState(ui8PosVelIdx(1:3)) ))^3;
+    % dVelJacWrtGravParam = - dxState(ui8PosVelIdx(1:3))./(norm( dxState(ui8PosVelIdx(1:3)) ))^3;
+
+    % Allocate Jacobian vector
     dDynMatrix_PosVel(ui8PosVelIdx(4:6), ui8GravParamIdx) = dVelJacWrtGravParam; 
 
 end
