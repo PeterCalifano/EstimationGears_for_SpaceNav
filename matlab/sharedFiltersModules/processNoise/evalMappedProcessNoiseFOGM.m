@@ -36,7 +36,9 @@ end
 % dProcessNoiseCovFOGM
 % -------------------------------------------------------------------------------------------------------------
 %% CHANGELOG
-% 14-04-2024        Pietro Califano         First version coded.
+% 14-04-2024    Pietro Califano     First version coded.
+% 22-06-2025    Pietro Califano     Implement modifications for static size compatibility; improve
+%                                   robustness to zero time constant input (prevents nan).
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % [-]
@@ -61,14 +63,20 @@ if ( any(dDefaultProcessQcov> 0, 'all') && abs(dDeltaTstep - dDefaultDeltaTstep)
     dProcessNoiseCovFOGM = dDefaultProcessQcov;
 
 else
-    
-    dProcessNoiseCovFOGM = zeros(ui8numOfStates);
-    if bBetaVariant
-        dTimeConst = 1./dTimeConst;
-    end
 
-    dProcessNoiseCovFOGM( 1:ui8numOfStates, 1:ui8numOfStates ) = diag( (dSigma2WN .* 0.5 .* dTimeConst) .*...
-        ( ones(ui8numOfStates, 1) - exp(- 2.0 * (dDeltaTstep./dTimeConst)) ) );
+    dProcessNoiseCovFOGM = zeros(ui8numOfStates);
+
+    for idT = 1:length(dTimeConst)
+        if dTimeConst(idT) >= 1E-22
+
+            if bBetaVariant
+                dTimeConst = 1./dTimeConst;
+            end
+
+            dProcessNoiseCovFOGM( idT, idT ) = (dSigma2WN(idT) .* 0.5 .* dTimeConst(idT)).*...
+                ( 1.0 - exp(- 2.0 * (dDeltaTstep./dTimeConst(idT))) ) ;
+        end
+    end
 end
 
 end
