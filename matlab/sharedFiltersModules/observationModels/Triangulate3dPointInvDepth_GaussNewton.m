@@ -1,5 +1,5 @@
 function [dFeatPosVec_NavFrame, dFeatPosVec_Ck, dRelPos_CkFromCi_Ci, dDCM_CiFromCk, bConvergenceFlag, dPredictFeatProj_Ci] = ...
-                            TriangulateFeaturesFromMotion(dyMeasVec, ...
+                            Triangulate3dPointInvDepth_GaussNewton(dyMeasVec, ...
                                                           dMeasCovSigma, ...
                                                           dDCM_CiFromCk, ...
                                                           dRelPos_CkFromCi_Ci, ...
@@ -55,8 +55,9 @@ end
 %% CHANGELOG
 % 14-12-2023    Pietro Califano     First prototype coded.
 % 29-12-2023    Pietro Califano     Major reworking. Validation needed.
-% 03-01-2024    Pietro Califano     Update of function to new coding rules; upgrade to support estimation 
+% 03-01-2025    Pietro Califano     Update of function to new coding rules; upgrade to support estimation 
 %                                   of multiple features together.
+% 02-07-2025    Pietro Califano     Review of implementation, minor improvements and fixes
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % pinholeProjectIDP()
@@ -74,6 +75,11 @@ end
 
 ui32SOLVED_FOR_SIZE = uint32(3 * ui32NumOfFeatures); % Depends on number of features. 1 feature <-> 3 params.
 ui32SOLVED_FOR_MAX_SIZE = uint32(3 * ui32MaxNumOfFeatures); % Depends on number of features. 1 feature <-> 3 params.
+
+% Output initialization
+dFeatPosVec_Ck          = zeros(3, ui32MaxNumOfFeatures);
+dFeatPosVec_NavFrame    = zeros(3, ui32MaxNumOfFeatures);
+dPredictFeatProj_Ci     = zeros(3,1);
 
 % Input validation checks
 % assert(ui32NumOfPoses <= size(dDCM_NavFrameFromC, 3));
@@ -266,9 +272,6 @@ while dDeltaResRelNorm2 > dDeltaResNormRelTol2
     dResVecNorm2_prev = dResVecNorm2;
 
 end
-
-% Output definition
-dFeatPosVec_NavFrame = zeros(3, ui32MaxNumOfFeatures);
 
 % TODO: review convergence flags definitions!
 
