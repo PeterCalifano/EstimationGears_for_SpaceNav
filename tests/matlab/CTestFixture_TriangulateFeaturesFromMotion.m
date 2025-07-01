@@ -82,14 +82,19 @@ classdef CTestFixture_TriangulateFeaturesFromMotion < matlab.unittest.fixtures.F
             fixture.dMeasKeypoints_uv = zeros(2*ui32Npts, ui32Nposes);
 
             for iPose = 1:ui32Nposes
-                ptr = 1;
+                ui32AllocPtr = 1;
                 for iPt = 1:ui32Npts
-                    camPos = fixture.dPosRefStates_TB(iPose,1:3)';
-                    pt    = fixture.dLandmarkPosGT_TB(:,iPt);
-                    proj  = fixture.dKcam * fixture.dRefAttitudes_TBfromCAM(:,:,iPose)' * [eye(3), -camPos] * [pt;1];
-                    uv    = proj(1:2)/proj(3);
-                    fixture.dMeasKeypoints_uv(ptr:ptr+1,iPose) = uv + fixture.dSigmaKpt*randn(2,1);
-                    ptr = ptr+2;
+                    
+                    % Project point to image plane
+                    dCamPos_TB = fixture.dPosRefStates_TB(iPose,1:3)';
+                    dPoint_TB  = fixture.dLandmarkPosGT_TB(:,iPt);
+                    dProjPoint  = fixture.dKcam * fixture.dRefAttitudes_TBfromCAM(:,:,iPose)' * [eye(3), -dCamPos_TB] * [dPoint_TB;1];
+                    dMeasPointuv    = dProjPoint(1:2)/dProjPoint(3);
+                    
+                    % Store noisy pixel measurements
+                    fixture.dMeasKeypoints_uv(ui32AllocPtr:ui32AllocPtr+1,iPose) = dMeasPointuv + fixture.dSigmaKpt*randn(2,1);
+                    
+                    ui32AllocPtr = ui32AllocPtr+2;
                 end
             end
         end
