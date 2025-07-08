@@ -128,7 +128,6 @@ dCoeffSRP = (strDynParams.strSRPdata.dP_SRP * strDynParams.strSCdata.dReflCoeff 
 dCoeffSRP = dCoeffSRP + dBiasCoeffSRP;
 
 % Get residual acceleration if any
-
 if isfield(strFilterConstConfig.strStatesIdx, "ui8ResidualAccelIdx") && ...
         all(strFilterMutabConfig.bConsiderStatesMode(strFilterConstConfig.strStatesIdx.ui8ResidualAccelIdx) == false)
     dResidualAccel(:) = dxState( strFilterConstConfig.strStatesIdx.ui8ResidualAccelIdx );
