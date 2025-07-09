@@ -4,48 +4,49 @@ function dDrvDt = filterDynLEO(dStateTimetag, ...
                                 strFilterMutabConfig, ...
                                 strFilterConstConfig) %#codegen
 arguments
-    dStateTimetag           (1, 1) double
+    dStateTimetag           (:, 1) double
     dxState                 (:, 1) double
     strDynParams            {isstruct}
     strFilterMutabConfig    {isstruct}
     strFilterConstConfig    {isstruct}
 end
-%% PROTOTYPE
-% dxdt = filterDynLEO(dStateTimetag, dxState, dDynParams, ui16StatesIdx, dEPHcoeffs)
+%% SIGNATURE
+% dDrvDt = filterDynLEO(dStateTimetag, ...
+%                       dxState, ...
+%                       strDynParams, ...
+%                       strFilterMutabConfig, ...
+%                       strFilterConstConfig)
 % -------------------------------------------------------------------------------------------------------------
 %% DESCRIPTION
 % Orbital dynamics ODE model specialized for Low Earth Orbits. 
-% Predefined cceleration models considered by this function:
+% Predefined acceleration models considered by this function:
 % 1) Cannonball-like Drag (Exponential atm. model)
-% 2) Cannonball SRP model --> REMOVED
+% 2) Cannonball SRP model 
 % 3) Gravitational models: Earth (Main, J2), Moon
-
 % REFERENCES
 % -------------------------------------------------------------------------------------------------------------
 %% INPUT
-% dStateTimetag
-% dxState
-% strDynParams
-% strStatesIdx
+% dStateTimetag           (:, 1) double
+% dxState                 (:, 1) double
+% strDynParams            {isstruct}
+% strFilterMutabConfig    {isstruct}
+% strFilterConstConfig    {isstruct}
 % -------------------------------------------------------------------------------------------------------------
 %% OUTPUT
-% dxdt
+% dDrvDt
 % -------------------------------------------------------------------------------------------------------------
 %% CHANGELOG
 % 13-02-2024        Pietro Califano         First prototype pseudocode and accelerations models.
 % 22-02-2024        Pietro Califano         Moved code to evalRHS function.
 % 08-05-2024        Pietro Califano         Fix of incorrect frame in computing SH acceleration. Added
 %                                           attitude ephemerides as evaluation of Chbv polynomials.
-% 07-05-2025        Pietro Califano         [MAJOR] Reworking for new filter standard architectures.
+% 09-07-2025        Pietro Califano         [MAJOR] Reworking for new filter standard architectures.
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % evalAttQuatChbvPolyWithCoeffs()
 % evalChbvPolyWithCoeffs()
 % evalRHS_DynLEO()
 % evalRHS_DynFOGM()
-% -------------------------------------------------------------------------------------------------------------
-%% Future upgrades
-% [-]
 % -------------------------------------------------------------------------------------------------------------
 %% Function code
 % ui16StateSize = strFilterConstConfig.ui16StateSize;
@@ -176,6 +177,7 @@ dDrvDt(strStatesIdx.ui8posVelIdx) = evalRHS_DynLEO(dxState, ...
                                                 dMassSC, ...
                                                 d3rdBodiesGM, ...
                                                 dCoeffSRP, ...
+                                                dResidualAccel, ...
                                                 ui16StatesIdx);
 
 end
