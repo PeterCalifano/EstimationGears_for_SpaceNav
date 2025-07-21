@@ -10,21 +10,16 @@ function [dDynMatrix] = evalJAC_DynLEO(dxState_IN, ...
                                         dBodyEphemeris, ...
                                         dDCMmainAtt_INfromTF, ...
                                         dBodyGM, ...
-                                        ui16StatesIdx) %#codegen
+                                        strFilterConstConfig) %#codegen
 arguments
-    dxState_IN
-    dEarthGM
-    dCoeffJ2
-    dRearth
-    fDragCoeff
-    fDragCrossArea
-    dAtmCoeffsData
-    dSCmass
-    dEarthSpinRate
-    dBodyEphemeris
-    dDCMmainAtt_INfromTF
-    dBodyGM
-    ui16StatesIdx
+    dxState_IN           (:,1) double {isvector,isnumeric}
+    dStateTimetag        (:,1) double {isscalar, isnumeric}
+    dAtmCoeffsData        
+    dBodyEphemeris        (:,1) double {isvector, isnumeric}
+    dDCMmainAtt_INfromTF  (3,3) double {isnumeric, ismatrix}
+    strDynParams            (1,1) {isstruct}
+    strFilterMutabConfig    (1,1) {isstruct}
+    strFilterConstConfig    (1,1) {isstruct}
 end
 %% PROTOTYPE
 % [dDynMatrix] = evalJAC_DynLEO(dxState_IN, ...
@@ -106,15 +101,32 @@ dPosNorm3 = dPosNorm*dPosNorm*dPosNorm;
 dPosNorm5 = dPosNorm3*dPosNorm*dPosNorm;
 dPosNorm7 = dPosNorm5*dPosNorm*dPosNorm;
 dPosNorm9 = dPosNorm7*dPosNorm*dPosNorm;
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
+
+% TODO replace with general purpose implementation
 % Jacobian wrt velocity vector
 dDynMatrix(ui8PosVelIdx(1:3), ui8PosVelIdx(4:6)) = eye(3);
 
 %% Central body acceleration Jacobian wrt position vector
 dDynMatrix(ui8PosVelIdx(4:6), ui8PosVelIdx(1:3)) = 3 * dEarthGM / dPosNorm5 * ( dxState_IN(ui8PosVelIdx(1:3))*transpose(dxState_IN(ui8PosVelIdx(1:3))) )...
                         - dEarthGM / dPosNorm3 * eye(3) ;
+% Moon Third body perturbation Jacobian wrt position vector
+dPosMoonToSC = dxState_IN(ui8PosVelIdx(1:3)) - dBodyEphemeris(1:3);
 
+dNormdPosMoonToSC = norm(dPosMoonToSC);
+dNormdPosMoonToSC3 = dNormdPosMoonToSC * dNormdPosMoonToSC * dNormdPosMoonToSC;
 
+dDynMatrix(ui8PosVelIdx(4:6), ui8PosVelIdx(4:6)) = dDynMatrix(ui8PosVelIdx(4:6), ui8PosVelIdx(4:6)) + dBodyGM(1) * ( 1/dNormdPosMoonToSC3 * eye(3) ...
+    - ( 3/(dNormdPosMoonToSC3*dNormdPosMoonToSC*dNormdPosMoonToSC) ) * dPosMoonToSC * transpose(dPosMoonToSC) );
+
+% SRP perturbation Jacobian wrt position vector (TBC)
+[dDynMatrix_PosVel] = evalJAC_InertialPosVelDyn(dxState, ...
+                                                dStateTimetag, ...
+                                                strDynParams, ...
+                                                strFilterMutabConfig, ...
+                                                strFilterConstConfig);
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % J2 Acceleration Jacobian wrt position vector
 dDynMatrix(ui8PosVelIdx(4:6), ui8PosVelIdx(1:3)) = dDynMatrix(ui8PosVelIdx(4:6), ui8PosVelIdx(1:3)) + dDCMmainAtt_INfromTF*(...
                              - 1.5 * dCoeffJ2 * dEarthGM * dRearth^2 * ( 1/dPosNorm5 * diag([1 1 3]) )...
@@ -130,7 +142,7 @@ dDynMatrix(ui8PosVelIdx(4:6), ui8PosVelIdx(1:3)) = dDynMatrix(ui8PosVelIdx(4:6),
 % dAtmCoeffsData(:, 3) % H scale altitudes [km] TO CHECK
 
 [dAtmDensity, ui8AtmExpModelEntryID] = evalAtmExpDensity(dAtmCoeffsData, dPosNorm - dRearth); % Evaluate density
-Bcoeff = (fDragCoeff * fDragCrossArea/dSCmass);
+dBcoeff = (fDragCoeff * fDragCrossArea/dSCmass);
 
 % Compute velocity relative to atmosphere
 dAtmRelVel = dxState_IN(ui8PosVelIdx(4:6)) - cross( [0; 0; dEarthSpinRate], dxState_IN(ui8PosVelIdx(1:3))) ; % relative velocity s/c-air
@@ -140,30 +152,20 @@ dNormAtmRelVel = norm(dAtmRelVel);
 densityGradPos = dAtmCoeffsData(ui8AtmExpModelEntryID, 2) * exp( -(dPosNorm-dRearth)/dAtmCoeffsData(ui8AtmExpModelEntryID, 1) )*...
     (-dxState_IN(ui8PosVelIdx(1:3))/dPosNorm ) * 1/dAtmCoeffsData(ui8AtmExpModelEntryID, 3);
 
-auxMatrix = zeros(3);
-auxMatrix(1,2) = -dEarthSpinRate;
-auxMatrix(2,1) = dEarthSpinRate;
+dAuxMatrix = zeros(3);
+dAuxMatrix(1,2) = -dEarthSpinRate;
+dAuxMatrix(2,1) = dEarthSpinRate;
 
 % Position derivative (DERIVATIVE TO VERIFY)
 dDynMatrix(ui8PosVelIdx(4:6), ui8PosVelIdx(1:3)) = dDynMatrix(ui8PosVelIdx(4:6), ui8PosVelIdx(1:3)) ...
-                        -0.5 * Bcoeff * (densityGradPos * dNormAtmRelVel * transpose(dAtmRelVel) ...
-                        + dAtmDensity * transpose( dAtmRelVel' ./dNormAtmRelVel * auxMatrix ) * transpose(dAtmRelVel) ...
-                        + dAtmDensity * dNormAtmRelVel * auxMatrix);
+                        -0.5 * dBcoeff * (densityGradPos * dNormAtmRelVel * transpose(dAtmRelVel) ...
+                        + dAtmDensity * transpose( dAtmRelVel' ./dNormAtmRelVel * dAuxMatrix ) * transpose(dAtmRelVel) ...
+                        + dAtmDensity * dNormAtmRelVel * dAuxMatrix);
 
 % Velocity derivative
-dDynMatrix(ui8PosVelIdx(4:6), ui8PosVelIdx(4:6)) = dDynMatrix(ui8PosVelIdx(4:6), ui8PosVelIdx(4:6)) - 0.5 * dAtmDensity * Bcoeff * ...
+dDynMatrix(ui8PosVelIdx(4:6), ui8PosVelIdx(4:6)) = dDynMatrix(ui8PosVelIdx(4:6), ui8PosVelIdx(4:6)) - 0.5 * dAtmDensity * dBcoeff * ...
                ( dAtmRelVel./dNormAtmRelVel * transpose(dAtmRelVel) + dNormAtmRelVel * eye(3) );% Temporary for development
 
-% Moon Third body perturbation Jacobian wrt position vector
-dPosMoonToSC = dxState_IN(ui8PosVelIdx(1:3)) - dBodyEphemeris(1:3);
-
-dNormdPosMoonToSC = norm(dPosMoonToSC);
-dNormdPosMoonToSC3 = dNormdPosMoonToSC * dNormdPosMoonToSC * dNormdPosMoonToSC;
-
-dDynMatrix(ui8PosVelIdx(4:6), ui8PosVelIdx(4:6)) = dDynMatrix(ui8PosVelIdx(4:6), ui8PosVelIdx(4:6)) + dBodyGM(1) * ( 1/dNormdPosMoonToSC3 * eye(3) ...
-    - ( 3/(dNormdPosMoonToSC3*dNormdPosMoonToSC*dNormdPosMoonToSC) ) * dPosMoonToSC * transpose(dPosMoonToSC) );
-
-% SRP perturbation Jacobian wrt position vector (TBC)
 
 
 end
