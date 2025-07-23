@@ -48,11 +48,17 @@ end
 % TODO this function should be more general purpose, but still it is somewhat tied to the entries of the
 % state vector and of the dynamics.
 % -------------------------------------------------------------------------------------------------------------
+
 %% Function code
+
+if coder.target('MATLAB')
+    if not(isfield(strDynParams, 'bIsInEclipse'))
+        strDynParams.bIsInEclipse = false; % For backward compatibility in simulation
+    end
+end
+
 ui16StateSize = strFilterConstConfig.ui16StateSize;
 dDynMatrix_PosVel = zeros(6, ui16StateSize);
-
-% TODO add implementation of SRP jacobian
 
 % Get indices for allocation
 ui8PosVelIdx        = strFilterConstConfig.strStatesIdx.ui8posVelIdx;
@@ -91,7 +97,7 @@ dDynMatrix_PosVel(ui8PosVelIdx, ui8PosVelIdx) = dDynMatrix_PosVel(ui8PosVelIdx, 
 
 
 % If no other state is estimated, return here
-if strFilterConstConfig.bOrbitStateOnly
+if coder.const(strFilterConstConfig.bOrbitStateOnly)
     return
 end
 
@@ -104,20 +110,21 @@ end
 % deterministic portion of it, but the stochastic input (hence in G, instead of STM).
 dDynMatrix_PosVel(ui8PosVelIdx(4:6), ui8ResidualAccelIdx) = dDynMatrix_PosVel(ui8PosVelIdx(4:6), ui8ResidualAccelIdx) + eye(3);
 
+if not(strDynParams.bIsInEclipse)
+    %% Jacobian wrt SRP + bias
+    [drvSRPwithBiasJac] = evalJAC_SRPwithBias(dxState, ...
+                                        strDynParams, ...
+                                        strFilterMutabConfig, ...
+                                        strFilterConstConfig);
 
-%% Jacobian wrt SRP + bias
-[drvSRPwithBiasJac] = evalJAC_SRPwithBias(dxState, ...
-                                          strDynParams, ...
-                                          strFilterMutabConfig, ...
-                                          strFilterConstConfig);
-
-% DEVNOTE: derivative of velocity wrt delta C SRP has order of unit vector, but seems quite large with
-% respect to other contributions?
-if coder.const(ui8CoeffSRPidx > 0)
-    dDynMatrix_PosVel(ui8PosVelIdx, [ui8PosVelIdx(1:3); ui8CoeffSRPidx]) = dDynMatrix_PosVel(ui8PosVelIdx, [ui8PosVelIdx(1:3); ui8CoeffSRPidx]) ...
-                                                                                + drvSRPwithBiasJac;
-else
-    dDynMatrix_PosVel(ui8PosVelIdx, ui8PosVelIdx(1:3)) = dDynMatrix_PosVel(ui8PosVelIdx, ui8PosVelIdx(1:3)) + drvSRPwithBiasJac;
+    % DEVNOTE: derivative of velocity wrt delta C SRP has order of unit vector, but seems quite large with
+    % respect to other contributions?
+    if coder.const(ui8CoeffSRPidx > 0)
+        dDynMatrix_PosVel(ui8PosVelIdx, [ui8PosVelIdx(1:3); ui8CoeffSRPidx]) = dDynMatrix_PosVel(ui8PosVelIdx, [ui8PosVelIdx(1:3); ui8CoeffSRPidx]) ...
+                                                                                                    + drvSRPwithBiasJac;
+    else
+        dDynMatrix_PosVel(ui8PosVelIdx, ui8PosVelIdx(1:3)) = dDynMatrix_PosVel(ui8PosVelIdx, ui8PosVelIdx(1:3)) + drvSRPwithBiasJac;
+    end
 end
 
 %% Jacobian wrt 3rd bodies
@@ -129,7 +136,7 @@ dDynMatrix_PosVel(ui8PosVelIdx, ui8PosVelIdx) = dDynMatrix_PosVel(ui8PosVelIdx, 
                                                                 + drv3rdBodyGravityJac;
 
 
-%% Jacobian wrt gravity parameter
+%% Jacobian wrt gravity parameter (central force only)
 if strFilterConstConfig.bEstimateGravParam
 
     ui8GravParamIdx = strFilterConstConfig.strStatesIdx.ui8GravParamIdx;
@@ -142,6 +149,8 @@ if strFilterConstConfig.bEstimateGravParam
 
     % Allocate Jacobian vector
     dDynMatrix_PosVel(ui8PosVelIdx(4:6), ui8GravParamIdx) = dVelJacWrtGravParam; 
+
+    % TODO add implementation of non-central gravity wrt gravitational parameter
 
 end
 
