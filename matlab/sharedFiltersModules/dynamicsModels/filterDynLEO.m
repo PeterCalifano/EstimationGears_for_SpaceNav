@@ -51,9 +51,10 @@ end
 %% Function code
 % ui16StateSize = strFilterConstConfig.ui16StateSize;
 ui32PolyMaxDeg = 20; 
+strStatesIdx = strFilterConstConfig.strStatesIdx;
 
 % DEVNOTE
-if coder.target('MATLAB')
+if coder.target('MATLAB') || coder.target('MEX')
     assert(dStateTimetag >= 0, 'ERROR: input time instant is negative.') % TODO: this assert should become an error thrown to the caller in release
 end
 
@@ -79,17 +80,11 @@ dAtmCoeffsData = zeros(length(strDynParams.strAtmExpModel.dh0), 3);
 
 % Get indices as array
 ui16StatesIdx = [strStatesIdx.ui8posVelIdx(1), strStatesIdx.ui8posVelIdx(end);
-                strStatesIdx.ui8unmodelAccIdx(1), strStatesIdx.ui8unmodelAccIdx(end);
+                strStatesIdx.ui8ResidualAccelIdx(1), strStatesIdx.ui8ResidualAccelIdx(end);
                 strStatesIdx.ui8AImeasBiasIdx(1), strStatesIdx.ui8AImeasBiasIdx(end);
                 strStatesIdx.ui8CRAmeasBiasIdx(1), strStatesIdx.ui8CRAmeasBiasIdx(end)];
 
-% Evaluate Ephemerides Chebyshev interpolant
-% strDynParams.strMoonEPHdata.dMoonEPHcoeffs;
-% strDynParams.strMoonEPHdata.ui8PolyDeg;
-% strDynParams.strMoonEPHdata.dEphTimeLowBound;
-% strDynParams.strstrMoonEPHdata.dEphTimeUpBound;
-% ui8OutputSize = 3; % Hardcoded value
-
+%% Evaluate Ephemerides Chebyshev interpolant
 % Check validity of timetags
 if dStateTimetag <= strDynParams.strMainData.strAttData.dTimeLowBound
     dEvalPoint = strDynParams.strMainData.strAttData.dTimeLowBound;
@@ -101,15 +96,14 @@ else
     dEvalPoint = dStateTimetag;
 end
 
+% Moon Position in ECI (World frame)
+% strFilterMutabConfig.dBodyEphemeris(4:6) = evalChbvPolyWithCoeffs(strDynParams.strBody3rdData(2).strOrbitData, 3, dEvalPoint,...
+%                                             strDynParams.strBody3rdData(2).strOrbitData.dChbvPolycoeffs, ...
+%                                             strDynParams.strBody3rdData(2).strOrbitData.dTimeLowBound, ...
+%                                             strDynParams.strBody3rdData(2).strOrbitData.dTimeUpBound, ...
+%                                             3*strDynParams.strBody3rdData(2).strOrbitData.ui32PolyDeg, ui32PolyMaxDeg);
 
-% Moon Position in ECI
-dBodyEphemeris = coder.nullcopy(zeros(3, 1));
-
-dBodyEphemeris(1:3) = evalChbvPolyWithCoeffs(strDynParams.strMoonEPHdata.ui32PolyDeg, 3, evalPoint,...
-    strDynParams.strMoonEPHdata.dChbvPolycoeffs, strDynParams.strMoonEPHdata.dTimeLowBound, ...
-    strDynParams.strMoonEPHdata.dTimeUpBound, 3*strDynParams.strMoonEPHdata.ui32PolyDeg, ui32PolyMaxDeg);
-
-% Compute attitude of Main at current time instant
+% Compute attitude of Earth attitude at current time instant
 dTmpQuat = evalAttQuatChbvPolyWithCoeffs(strDynParams.strMainData.strAttData.ui32PolyDeg, 4, dEvalPoint,...
                                         strDynParams.strMainData.strAttData.dChbvPolycoeffs, ...
                                         strDynParams.strMainData.strAttData.dsignSwitchIntervals, ...
@@ -148,10 +142,38 @@ if isfield(strFilterConstConfig.strStatesIdx, "ui8CoeffSRPidx") && ...
     dBiasCoeffSRP(:) = dxState( strFilterConstConfig.strStatesIdx.ui8CoeffSRPidx);
 end
 
-dCoeffSRP = (strDynParams.strSRPdata.dP_SRP * strDynParams.strSCdata.dReflCoeff * ...
-             strDynParams.strSCdata.dA_SRP)/strDynParams.strSCdata.dSCmass; % Move to compute outside, since this
+% Compute distance from the Sun 
+dMainPosition_W = zeros(3,1);
+dDistToSun = norm(dBodyEphemerides(1:3) - dMainPosition_W);
 
-dCoeffSRP = dCoeffSRP + dBiasCoeffSRP;
+% TEMPORARY: selection of scale based on magnitude
+% S0   = 1361.0;                 % W/m^2 (solar constant at 1 AU; 1361–1367 often used)
+% c    = 299792458;              % m/s
+% AU_m = 1.495978707e11;         % m
+% AU_km= 1.495978707e8;          % km
+
+if dDistToSun <= 1e10
+    % Assumes km scale
+    dAU = 1.495978707E8;
+    strDynParams.strSRPdata.dP_SRP0 = 1367 / (299792458 * 1E-3); 
+else
+    % Assumes m scale
+    dAU = 1.495978707E11;
+    strDynParams.strSRPdata.dP_SRP0 = 1367 / 299792458; % Approx. 4.54e-6 N/m^2
+end
+
+% Compute SRP value from SRP0 at 1AU
+dDistFromSunAU = dDistToSun / dAU;
+strDynParams.strSRPdata.dP_SRP = strDynParams.strSRPdata.dP_SRP0 * (1/(dDistFromSunAU)^2); % [N/m^2] or [N/km^2]
+
+if strDynParams.bIsInEclipse
+    dCoeffSRP = (strDynParams.strSRPdata.dP_SRP * strDynParams.strSCdata.dReflCoeff * ...
+        strDynParams.strSCdata.dA_SRP)/strDynParams.strSCdata.dSCmass; % Move to compute outside, since this
+
+    dCoeffSRP = dCoeffSRP + dBiasCoeffSRP;
+else
+    dCoeffSRP = 0.0;
+end
 
 % Get residual acceleration if any
 if isfield(strFilterConstConfig.strStatesIdx, "ui8ResidualAccelIdx") && ...
@@ -159,6 +181,16 @@ if isfield(strFilterConstConfig.strStatesIdx, "ui8ResidualAccelIdx") && ...
     dResidualAccel(:) = dxState( strFilterConstConfig.strStatesIdx.ui8ResidualAccelIdx );
 end
 
+%% Evaluate eclipse flag
+% DEVNOTE this code may require changed based on the reference frame. Here it assumes that the Earth (main)
+% is centred in the "world" frame (whatever it is)
+dSunPositionFromMain_W = dBodyEphemerides(1:3);
+dPositionFromMain_W = dxState(strStatesIdx.ui8posVelIdx(1:3));
+
+strDynParams.bIsInEclipse = CheckForEclipseMainSphereBody(dSunPositionFromMain_W, ...
+                                                            dPositionFromMain_W, ...
+                                                            strDynParams.strMainData.dRefRadius, ...
+                                                            dDistToSun);
 
 %% Evaluate RHS 
 % Evaluate Position and Velocity states dynamics
@@ -168,13 +200,13 @@ dDrvDt(strStatesIdx.ui8posVelIdx) = evalRHS_DynLEO(dxState, ...
                                                 dBodyEphemerides, ...
                                                 dDCMmainAtt_INfromTF, ...
                                                 dAtmCoeffsData, ...
-                                                dMainGM, ...
-                                                dCoeffJ2, ...
-                                                dRearth, ...
-                                                dDragCoeff, ...
-                                                dDragCrossArea, ...
-                                                dEarthSpinRate, ...
-                                                dMassSC, ...
+                                                strDynParams.strMainData.dGM, ...
+                                                strDynParams.strMainData.dCoeffJ2, ...
+                                                strDynParams.strMainData.dRefRadius, ...
+                                                strDynParams.strSCdata.dDragCoeff, ...
+                                                strDynParams.strSCdata.dDragCrossArea, ...
+                                                strDynParams.strMainData.dEarthSpinRate, ...
+                                                strDynParams.strSCdata.dSCmass, ...
                                                 d3rdBodiesGM, ...
                                                 dCoeffSRP, ...
                                                 dResidualAccel, ...

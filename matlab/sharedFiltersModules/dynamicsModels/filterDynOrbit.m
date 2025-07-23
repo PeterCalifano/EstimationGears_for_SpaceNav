@@ -122,6 +122,10 @@ if isfield(strFilterConstConfig.strStatesIdx, "ui8CoeffSRPidx") && ...
     dBiasCoeffSRP(:) = dxState( strFilterConstConfig.strStatesIdx.ui8CoeffSRPidx);
 end
 
+% Update SRP value from SRP0 at 1AU
+dDistFromSunAU = dDistToSun / dAU;
+strDynParams.strSRPdata.dP_SRP = strDynParams.strSRPdata.dP_SRP0 * (1/(dDistFromSunAU)^2); % [N/m^2] or [N/km^2]
+
 dCoeffSRP = (strDynParams.strSRPdata.dP_SRP * strDynParams.strSCdata.dReflCoeff * ...
              strDynParams.strSCdata.dA_SRP)/strDynParams.strSCdata.dSCmass; % Move to compute outside, since this
 
@@ -132,6 +136,17 @@ if isfield(strFilterConstConfig.strStatesIdx, "ui8ResidualAccelIdx") && ...
         all(strFilterMutabConfig.bConsiderStatesMode(strFilterConstConfig.strStatesIdx.ui8ResidualAccelIdx) == false)
     dResidualAccel(:) = dxState( strFilterConstConfig.strStatesIdx.ui8ResidualAccelIdx );
 end
+
+%% Evaluate eclipse flag
+% DEVNOTE this code may require changed based on the reference frame. Here it assumes that the Earth (main)
+% is centred in the "world" frame (whatever it is)
+dSunPositionFromMain_W = dBodyEphemerides(1:3);
+dPositionFromMain_W = dxState(strStatesIdx.ui8posVelIdx(1:3));
+
+strDynParams.bIsInEclipse = CheckForEclipseMainSphereBody(dSunPositionFromMain_W, ...
+                                                            dPositionFromMain_W, ...
+                                                            strDynParams.strMainData.dRefRadius, ...
+                                                            dDistToSun);
 
 %% Evaluate RHS
 % ACHTUNG: Sun must be first in ephemerides and GM data
