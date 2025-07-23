@@ -1,57 +1,44 @@
-function [dDynMatrix] = evalJAC_DynLEO(dxState_IN, ...
-                                        dEarthGM, ...
-                                        dCoeffJ2, ...
-                                        dRearth, ...
-                                        fDragCoeff, ...
-                                        fDragCrossArea, ...
-                                        dAtmCoeffsData, ...
-                                        dSCmass, ...
-                                        dEarthSpinRate, ...
-                                        dBodyEphemeris, ...
-                                        dDCMmainAtt_INfromTF, ...
-                                        dBodyGM, ...
-                                        strFilterConstConfig) %#codegen
+function [dDynMatrix] = evalJAC_DynLEO(dxState_IN, ...           
+                                    dStateTimetag, ...        
+                                    dAtmCoeffsData, ...       
+                                    dBodyEphemerides, ...       
+                                    dDCMmainAtt_INfromTF, ... 
+                                    strDynParams, ...         
+                                    strFilterMutabConfig, ... 
+                                    strFilterConstConfig ) %#codegen
 arguments
-    dxState_IN           (:,1) double {isvector,isnumeric}
-    dStateTimetag        (:,1) double {isscalar, isnumeric}
+    dxState_IN              (:,1) double {isvector,isnumeric}
+    dStateTimetag           (:,1) double {isscalar, isnumeric}
     dAtmCoeffsData        
-    dBodyEphemeris        (:,1) double {isvector, isnumeric}
-    dDCMmainAtt_INfromTF  (3,3) double {isnumeric, ismatrix}
+    dBodyEphemerides        (:,1) double {isvector, isnumeric}
+    dDCMmainAtt_INfromTF    (3,3) double {isnumeric, ismatrix}
     strDynParams            (1,1) {isstruct}
     strFilterMutabConfig    (1,1) {isstruct}
     strFilterConstConfig    (1,1) {isstruct}
 end
 %% PROTOTYPE
-% [dDynMatrix] = evalJAC_DynLEO(dxState_IN, ...
-%     dEarthGM, ...
-%     dCoeffJ2, ...
-%     dRearth, ...
-%     fDragCoeff, ...
-%     fDragCrossArea, ...
-%     dAtmCoeffsData, ...
-%     dSCmass, ...
-%     dEarthSpinRate, ...
-%     dBodyEphemeris, ...
-%     dBodyGM, ...
-%     ui8StatesIdx)
+% [dDynMatrix] = evalJAC_DynLEO(dxState_IN, ...           
+%                               dStateTimetag, ...        
+%                               dAtmCoeffsData, ...       
+%                               dBodyEphemerides, ...       
+%                               dDCMmainAtt_INfromTF, ... 
+%                               strDynParams, ...         
+%                               strFilterMutabConfig, ... 
+%                               strFilterConstConfig ) %#codegen
 % -------------------------------------------------------------------------------------------------------------
 %% DESCRIPTION
 % ACHTUNG: caller function is in charge of providing dxState_IN in the correct ordering as required by 
 % this function implementation: [Pos, Vel]
 % -------------------------------------------------------------------------------------------------------------
 %% INPUT
-% dxState_IN
-% dEarthGM
-% dCoeffJ2
-% dRearth
-% fDragCoeff
-% fDragCrossArea
+% dxState_IN              (:,1) double {isvector,isnumeric}
+% dStateTimetag           (:,1) double {isscalar, isnumeric}
 % dAtmCoeffsData
-% dSCmass
-% dEarthSpinRate
-% dBodyEphemeris
-% dBodyGM
-% ui8StatesIdx
+% dBodyEphemerides        (:,1) double {isvector, isnumeric}
+% dDCMmainAtt_INfromTF    (3,3) double {isnumeric, ismatrix}
+% strDynParams            (1,1) {isstruct}
+% strFilterMutabConfig    (1,1) {isstruct}
+% strFilterConstConfig    (1,1) {isstruct}
 % -------------------------------------------------------------------------------------------------------------
 %% OUTPUT
 % dDynMatrix
@@ -60,6 +47,7 @@ end
 % 10-03-2024    Pietro Califano     Function coded (1st ver.)
 % 13-03-2024    Pietro Califano     Function execution verified.
 % 02-05-2024    Pietro Califano     Incorrect J2 jacobian fixed.
+% 22-07-2025    Pietro Califano     Update of implementation with new function signature
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % evalAtmExpDensity()
@@ -71,8 +59,8 @@ end
 % TODO Modify input interface: change ui16StatesIdx to strFilterConstConfig
 % -------------------------------------------------------------------------------------------------------------
 
-ui8PosVelIdx        = uint8( ui16StatesIdx(1, 1):ui16StatesIdx(1, 2) ); % [1 to 6]
-% unmodelAccIdx  = uint8( ui16StatesIdx(2, 1):ui16StatesIdx(2, 2) ); % [7 t0 9]
+ui8PosVelIdx        = strFilterConstConfig.strStatesIdx.ui8posVelIdx; % [1 to 6]
+% ui8ResidualAccelIdx  = uint8( ui16StatesIdx(2, 1):ui16StatesIdx(2, 2) ); % [7 t0 9]
 % AImeasBiasIdx  = uint8( ui16StatesIdx(3, 1):ui16StatesIdx(3, 2) ); % [10 to 12]
 % CRAmeasBiasIdx = uint8( ui16StatesIdx(4, 1):ui16StatesIdx(4, 2) ); % [13 to 15]
 
@@ -83,10 +71,13 @@ ui8PosVelIdx        = uint8( ui16StatesIdx(1, 1):ui16StatesIdx(1, 2) ); % [1 to 
 % evalJAC_AtmExpDrag();
 % evalJAC_CannonballSRP();
 
-% Variables initialization
-dDynMatrix = zeros(6, 6);
+% Get data from input structs
+dMainBodyGM = strDynParams.strMainData.dGM;
 
-% Re-assign for readability (TEMPORARY)
+% Variables initialization
+dDynMatrix = zeros(6, strFilterConstConfig.ui16StateSize);
+
+% Assignment for readability
 % rx = dxState_IN(posVelIdx(1));
 % ry = dxState_IN(posVelIdx(2));
 % rz = dxState_IN(posVelIdx(3));
@@ -101,35 +92,41 @@ dPosNorm3 = dPosNorm*dPosNorm*dPosNorm;
 dPosNorm5 = dPosNorm3*dPosNorm*dPosNorm;
 dPosNorm7 = dPosNorm5*dPosNorm*dPosNorm;
 dPosNorm9 = dPosNorm7*dPosNorm*dPosNorm;
+
+dCoeffJ2        = strDynParams.strMainData.dCoeffJ2;
+dRearth         = strDynParams.strMainData.dRefRadius;
+fDragCoeff      = strDynParams.strSCdata.dDragCoeff;
+fDragCrossArea  = strDynParams.strSCdata.dDragCrossArea;
+dSCmass         = strDynParams.strSCdata.dSCmass;
+dEarthSpinRate = strDynParams.strMainData.dEarthSpinRate;
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 
-% TODO replace with general purpose implementation
-% Jacobian wrt velocity vector
-dDynMatrix(ui8PosVelIdx(1:3), ui8PosVelIdx(4:6)) = eye(3);
-
-%% Central body acceleration Jacobian wrt position vector
-dDynMatrix(ui8PosVelIdx(4:6), ui8PosVelIdx(1:3)) = 3 * dEarthGM / dPosNorm5 * ( dxState_IN(ui8PosVelIdx(1:3))*transpose(dxState_IN(ui8PosVelIdx(1:3))) )...
-                        - dEarthGM / dPosNorm3 * eye(3) ;
+%%% Central body acceleration Jacobian wrt position vector
+% dDynMatrix(ui8PosVelIdx(4:6), ui8PosVelIdx(1:3)) = 3 * dEarthGM / dPosNorm5 * ( dxState_IN(ui8PosVelIdx(1:3))*transpose(dxState_IN(ui8PosVelIdx(1:3))) )...
+%                         - dEarthGM / dPosNorm3 * eye(3) ;
 % Moon Third body perturbation Jacobian wrt position vector
-dPosMoonToSC = dxState_IN(ui8PosVelIdx(1:3)) - dBodyEphemeris(1:3);
+% dPosMoonToSC = dxState_IN(ui8PosVelIdx(1:3)) - dBodyEphemerides(4:6);
+% 
+% dNormdPosMoonToSC = norm(dPosMoonToSC);
+% dNormdPosMoonToSC3 = dNormdPosMoonToSC * dNormdPosMoonToSC * dNormdPosMoonToSC;
+% 
+% dDynMatrix(ui8PosVelIdx(4:6), ui8PosVelIdx(4:6)) = dDynMatrix(ui8PosVelIdx(4:6), ui8PosVelIdx(4:6)) + dMainBodyGM * ( 1/dNormdPosMoonToSC3 * eye(3) ...
+%     - ( 3/(dNormdPosMoonToSC3*dNormdPosMoonToSC*dNormdPosMoonToSC) ) * dPosMoonToSC * transpose(dPosMoonToSC) );
 
-dNormdPosMoonToSC = norm(dPosMoonToSC);
-dNormdPosMoonToSC3 = dNormdPosMoonToSC * dNormdPosMoonToSC * dNormdPosMoonToSC;
-
-dDynMatrix(ui8PosVelIdx(4:6), ui8PosVelIdx(4:6)) = dDynMatrix(ui8PosVelIdx(4:6), ui8PosVelIdx(4:6)) + dBodyGM(1) * ( 1/dNormdPosMoonToSC3 * eye(3) ...
-    - ( 3/(dNormdPosMoonToSC3*dNormdPosMoonToSC*dNormdPosMoonToSC) ) * dPosMoonToSC * transpose(dPosMoonToSC) );
-
-% SRP perturbation Jacobian wrt position vector (TBC)
-[dDynMatrix_PosVel] = evalJAC_InertialPosVelDyn(dxState, ...
+% Compute jacobian matrix wrt to common perturbations (inertial frame)
+dDynMatrix_PosVel = evalJAC_InertialPosVelDyn(dxState_IN, ...
                                                 dStateTimetag, ...
                                                 strDynParams, ...
                                                 strFilterMutabConfig, ...
                                                 strFilterConstConfig);
+
+dDynMatrix(ui8PosVelIdx, :) = dDynMatrix_PosVel;
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % J2 Acceleration Jacobian wrt position vector
 dDynMatrix(ui8PosVelIdx(4:6), ui8PosVelIdx(1:3)) = dDynMatrix(ui8PosVelIdx(4:6), ui8PosVelIdx(1:3)) + dDCMmainAtt_INfromTF*(...
-                             - 1.5 * dCoeffJ2 * dEarthGM * dRearth^2 * ( 1/dPosNorm5 * diag([1 1 3]) )...
+                             - 1.5 * dCoeffJ2 * dMainBodyGM * dRearth^2 * ( 1/dPosNorm5 * diag([1 1 3]) )...
                              - 5/dPosNorm7 * [drx_TF^2 + drz_TF^2, drx_TF*dry_TF, 3*drx_TF*drz_TF;
                              drx_TF*dry_TF, dry_TF^2+drz_TF^2, 3*dry_TF*drz_TF;
                              3*drx_TF*drz_TF, 3*dry_TF*drz_TF, 6*drz_TF^2] ...
@@ -141,10 +138,12 @@ dDynMatrix(ui8PosVelIdx(4:6), ui8PosVelIdx(1:3)) = dDynMatrix(ui8PosVelIdx(4:6),
 % dAtmCoeffsData(:, 2) % rho0 reference densities [km]
 % dAtmCoeffsData(:, 3) % H scale altitudes [km] TO CHECK
 
+
 [dAtmDensity, ui8AtmExpModelEntryID] = evalAtmExpDensity(dAtmCoeffsData, dPosNorm - dRearth); % Evaluate density
 dBcoeff = (fDragCoeff * fDragCrossArea/dSCmass);
 
 % Compute velocity relative to atmosphere
+
 dAtmRelVel = dxState_IN(ui8PosVelIdx(4:6)) - cross( [0; 0; dEarthSpinRate], dxState_IN(ui8PosVelIdx(1:3))) ; % relative velocity s/c-air
 dNormAtmRelVel = norm(dAtmRelVel);
 

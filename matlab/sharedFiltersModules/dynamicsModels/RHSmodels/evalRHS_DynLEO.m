@@ -1,4 +1,4 @@
-function [dPosVeldt, strAccelInfo] = evalRHS_DynLEO(dxState, ...
+function [dPosVeldt, strAccelInfo] = evalRHS_DynLEO(dxState_IN, ...
                                                     dBodyEphemerides, ...
                                                     dDCMmainAtt_INfromTF, ...
                                                     dAtmCoeffsData, ...
@@ -14,21 +14,21 @@ function [dPosVeldt, strAccelInfo] = evalRHS_DynLEO(dxState, ...
                                                     dResidualAccel, ...
                                                     ui16StatesIdx) %#codegen
 arguments
-    dxState                 (:,1) double
-    dBodyEphemerides        (:,1) double
-    dDCMmainAtt_INfromTF    (3,3) double
-    dAtmCoeffsData          (1,1) {isstruct}
-    dMainGM                 (1,1) double
-    dCoeffJ2                (1,1) double
-    dRearth                 (1,1) double
-    dDragCoeff              (1,1) double
-    dDragCrossArea          (1,1) double
-    dEarthSpinRate          (1,1) double
-    dMassSC                 (1,1) double
-    d3rdBodiesGM            (1,1) double
-    dCoeffSRP               (1,1) double
-    dResidualAccel          (3,1) double
-    ui16StatesIdx           (1,1) {isstruct}
+    dxState_IN              (:,1) double {isvector, isnumeric}
+    dBodyEphemerides        (:,1) double {isvector, isnumeric}
+    dDCMmainAtt_INfromTF    (3,3) double {ismatrix, isnumeric}
+    dAtmCoeffsData          (:,3) double {ismatrix, isnumeric}
+    dMainGM                 (1,1) double {isscalar}
+    dCoeffJ2                (1,1) double {isscalar}
+    dRearth                 (1,1) double {isscalar}
+    dDragCoeff              (1,1) double {isscalar} 
+    dDragCrossArea          (1,1) double {isscalar}
+    dEarthSpinRate          (1,1) double {isscalar}
+    dMassSC                 (1,1) double {isscalar}
+    d3rdBodiesGM            (:,1) double {isscalar}
+    dCoeffSRP               (1,1) double {isscalar}
+    dResidualAccel          (3,1) double {isvector, isnumeric}
+    ui16StatesIdx           (:,2) uint16 {ismatrix, isnumeric, mustBeInteger}
 end
 %% PROTOTYPE
 % [dPosVeldt, strAccelInfo] = evalRHS_DynLEO(dxState, ...
@@ -50,22 +50,31 @@ end
 %% DESCRIPTION
 % -------------------------------------------------------------------------------------------------------------
 %% INPUT
-% in1 [dim] description
-% Name1                     []
-% Name2                     []
-% Name3                     []
-% Name4                     []
-% Name5                     []
-% Name6                     []
+% dxState_IN              (:,1) double {isvector, isnumeric}
+% dBodyEphemerides        (:,1) double {isvector, isnumeric}
+% dDCMmainAtt_INfromTF    (3,3) double {ismatrix, isnumeric}
+% dAtmCoeffsData          (:,3) double {ismatrix, isnumeric}
+% dMainGM                 (1,1) double {isscalar}
+% dCoeffJ2                (1,1) double {isscalar}
+% dRearth                 (1,1) double {isscalar}
+% dDragCoeff              (1,1) double {isscalar}
+% dDragCrossArea          (1,1) double {isscalar}
+% dEarthSpinRate          (1,1) double {isscalar}
+% dMassSC                 (1,1) double {isscalar}
+% d3rdBodiesGM            (:,1) double {isscalar}
+% dCoeffSRP               (1,1) double {isscalar}
+% dResidualAccel          (3,1) double {isvector, isnumeric}
+% ui16StatesIdx           (:,2) uint16 {ismatrix, isnumeric, mustBeInteger}
 % -------------------------------------------------------------------------------------------------------------
 %% OUTPUT
-% o_dPosVeldt
+% dPosVeldt, strAccelInfo
 % -------------------------------------------------------------------------------------------------------------
 %% CHANGELOG
 % 19-02-2024        Pietro Califano         Preliminary prototype coded for evaluation and develop. iterations.
 % 22-02-2024        Pietro Califano         Added code to evaluate atmospheric density based on estimated
 %                                           state (exponential model)
 % 02-05-2024        Pietro Califano         Incorrect J2 acceleration fixed.
+% 22-07-2025        Pietro Califano         Update for integration in new filter architecture (future-nav)
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % evalAtmExpDensity()
@@ -75,17 +84,23 @@ end
 % -------------------------------------------------------------------------------------------------------------
 
 %% INPUT MANAGEMENT
-% i_ui16StatesIdx FORMAT
-% Each row contains the ID of a subset of states: [FirstID, LastID]
-% Assign state vector indexes
-ui8posVelIdx      = uint8( ui16StatesIdx(1, 1):ui16StatesIdx(1, 2) ); % [1 to 6]
-ui8unmodelAccIdx  = uint8( ui16StatesIdx(2, 1):ui16StatesIdx(2, 2) ); % [7 t0 9]
-% ui8AImeasBiasIdx  = uint8( i_ui16StatesIdx(3, 1):i_ui16StatesIdx(3, 2) ); % [10 to 12]
-% ui8CRAmeasBiasIdx = uint8( i_ui16StatesIdx(4, 1):i_ui16StatesIdx(4, 2) ); % [13 to 15]
+if coder.target('MATLAB') || coder.target('MEX')
+    if isempty(ui16StatesIdx)
+        % If empty, assume that state is (position, velocity)
+        ui16posVelIdx = uint16(1:6);
+
+    else
+        % Each row contains the ID of a subset of states: [FirstID, LastID]
+        ui16posVelIdx = ui16StatesIdx(1, 1):ui16StatesIdx(1, 2 ); % [1 to 6]
+    end
+else
+    % Each row contains the ID of a subset of states: [FirstID, LastID]
+    ui16posVelIdx = ui16StatesIdx(1, 1):ui16StatesIdx(1, 2 ); % [1 to 6]
+end
 
 % Construct local indices
 dSunPos_IN = zeros(3,1);
-ui8N3rdBodies = uint8(size(dBodyEphemerides, 2)) - 1;
+ui8N3rdBodies = uint8(size(dBodyEphemerides, 1) / 3.0) - 1;
 d3rdBodiesPos_IN = zeros(3, length(ui8N3rdBodies));
 dMainBodyPos_IN = zeros(3,1);
 
@@ -109,8 +124,8 @@ end
 
 %% Function code: Acceleration models computation
 % Allocate variables
-dAccTot = coder.nullcopy(zeros(3, 1));
-dPosVeldt = coder.nullcopy(zeros(6, 1));
+dAccTot     = coder.nullcopy(zeros(3, 1));
+dPosVeldt   = coder.nullcopy(zeros(6, 1));
 
 % Compute auxiliary variables
 dPosNorm = sqrt( dxState_IN(ui16posVelIdx(1))^2 + ...
@@ -121,20 +136,20 @@ dPosNorm2 = dPosNorm  * dPosNorm;
 dPosNorm3 = dPosNorm2 * dPosNorm;
 dPosNorm4 = dPosNorm3 * dPosNorm;
 
-% Temporary before optimization
-dx   = dxState(ui8posVelIdx(1)); 
-dy   = dxState(ui8posVelIdx(2));
-dz   = dxState(ui8posVelIdx(3));
-dv_x = dxState(ui8posVelIdx(4)); 
-dv_y = dxState(ui8posVelIdx(5));
-dv_z = dxState(ui8posVelIdx(6));
+% Assign auxiliary variables
+drx   = dxState_IN(ui16posVelIdx(1)); 
+dry   = dxState_IN(ui16posVelIdx(2));
+drz   = dxState_IN(ui16posVelIdx(3));
+dvx = dxState_IN(ui16posVelIdx(4)); 
+dvy = dxState_IN(ui16posVelIdx(5));
+dvz = dxState_IN(ui16posVelIdx(6));
 
-dxTF = dDCMmainAtt_INfromTF(:, 1)' * dxState(ui8posVelIdx(1:3));
-dyTF = dDCMmainAtt_INfromTF(:, 2)' * dxState(ui8posVelIdx(1:3));
-dzTF = dDCMmainAtt_INfromTF(:, 3)' * dxState(ui8posVelIdx(1:3));
+drx_TF = dDCMmainAtt_INfromTF(:, 1)' * dxState_IN(ui16posVelIdx(1:3));
+dry_TF = dDCMmainAtt_INfromTF(:, 2)' * dxState_IN(ui16posVelIdx(1:3));
+drz_TF = dDCMmainAtt_INfromTF(:, 3)' * dxState_IN(ui16posVelIdx(1:3));
 
-% Gravity Main acceleration
-dAccTot(1:3) = - (dMainGM/dPosNorm3) * dxState(ui8posVelIdx(1:3));
+%% Gravity Main acceleration
+dAccTot(1:3) = - (dMainGM/dPosNorm3) * dxState_IN(ui16posVelIdx(1:3));
 
 %% Spherical Harmonics acceleration
 % dAccNonSphr_IN = zeros(3,1);
@@ -154,31 +169,34 @@ dAccTot(1:3) = - (dMainGM/dPosNorm3) * dxState(ui8posVelIdx(1:3));
 
 
 % J2 Zonal Harmonic acceleration
-dAccJ2 = dDCMmainAtt_INfromTF* (3*dCoeffJ2*dMainGM*dRearth^2)/(2*dPosNorm4)*...
-                                    [dxTF/dPosNorm *(5* dzTF^2/(dPosNorm2) - 1);
-                                     dyTF/dPosNorm *(5* dzTF^2/(dPosNorm2) - 1);
-                                     dzTF/dPosNorm *(5* dzTF^2/(dPosNorm2) - 3)];
+dAccJ2 = zeros(3,1);
+dAccJ2(1:3) = dDCMmainAtt_INfromTF* (3*dCoeffJ2*dMainGM*dRearth^2)/(2*dPosNorm4)*...
+                                    [drx_TF/dPosNorm *(5* drz_TF^2/(dPosNorm2) - 1);
+                                     dry_TF/dPosNorm *(5* drz_TF^2/(dPosNorm2) - 1);
+                                     drz_TF/dPosNorm *(5* drz_TF^2/(dPosNorm2) - 3)];
 
 % J3 Zonal Harmonic acceleration
 % z3 = z*z*z;
 % z3divPosNorm3 = z3/dPosNorm3;
 % 
-% dAccJ3 = 0.5 * i_dCoeffJ3 * i_dEarthGM * i_dRearth^3 / (dPosNorm4*dPosNorm)*...
+% dAccJ3 = 0.5 * dCoeffJ3 * dEarthGM * dRearth^3 / (dPosNorm4*dPosNorm)*...
 %     [5* x/dPosNorm * (7 * z3divPosNorm3 - 3*z/dPosNorm);
 %      5* y/dPosNorm * (7 * z3divPosNorm3 - 3*z/dPosNorm);
 %      3* (35/3)*(z3divPosNorm3*(z/dPosNorm) - 10*(z/dPosNorm)^2 + 1)];
 
 % Cannonball-like Drag
-dVrel = norm( [dv_x;dv_y;dv_z] - cross([0;0;dEarthSpinRate] , [dx;dy;dz]) ); % relative velocity s/c-air [km/s]
+dVrel = zeros(1,1);
+dVrel(1) = norm( [dvx;dvy;dvz] - cross([0;0;dEarthSpinRate] , [drx;dry;drz]) ); % relative velocity s/c-air [km/s]
 
 % Evaluate atmospheric density model
-dAtmDensity = 1E9 * (evalAtmExpDensity(dAtmCoeffsData, dPosNorm - dRearth)); % [kg/km^3]
+dAtmDensity = zeros(1,1);
+dAtmDensity(1) = 1E9 * (evalAtmExpDensity(dAtmCoeffsData, dPosNorm - dRearth)); % [kg/km^3]
 
 % Compute drag acceleration
 dAccDrag = -0.5 * dAtmDensity * dVrel * (dDragCoeff*dDragCrossArea/dMassSC) * ...
-                                                    [(dv_x + dEarthSpinRate*dy);
-                                                     (dv_y - dEarthSpinRate*dx);
-                                                      dv_z]; % [km/s^2]
+                                                    [(dvx + dEarthSpinRate*dry);
+                                                     (dvy - dEarthSpinRate*drx);
+                                                      dvz]; % [km/s^2]
 
 %% 3rd Body accelerations
 dTotAcc3rdBody = zeros(3,1);
@@ -215,7 +233,7 @@ if ~isempty(dBodyEphemerides)
         dSCdistToSun(:) = norm(dPosSunToSC);
 
         if coder.target('MATLAB') || coder.target('MEX')
-            assert(abs(dSCdistToSun) > eps, 'ERROR: distance to the Sun cannot be zero!')
+            assert(abs(dSCdistToSun) > eps && not(isnan(dSCdistToSun)), 'ERROR: distance to the Sun cannot be zero or nan!')
         end
 
         % DEVNOTE: replace with more accurate formula to handle it in double precision
@@ -242,7 +260,7 @@ if ~isempty(dBodyEphemerides)
 
 end
 
-% Cannonball SRP acceleration
+%% Cannonball SRP acceleration
 if ~isempty(dBodyEphemerides) % TODO: need a way to disable this --> factory pattern for classes?
     dAccCannonBallSRP = dCoeffSRP * dPosSunToSC./dSCdistToSun;
 else
@@ -268,7 +286,7 @@ dAccTot = dAccTot + dAccJ2 + dAccJ3 + dTotAcc3rdBody +...
 %% Compute output state time derivative
 % Replace to be more general, using indices
 
-dPosVeldt(1:6) = [dxState(ui8posVelIdx(4:6));
+dPosVeldt(1:6) = [dxState_IN(ui16posVelIdx(4:6));
                 dAccTot];
 
 end
