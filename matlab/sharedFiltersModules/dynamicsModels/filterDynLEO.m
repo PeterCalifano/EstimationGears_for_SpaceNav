@@ -40,7 +40,7 @@ end
 % 22-02-2024        Pietro Califano         Moved code to evalRHS function.
 % 08-05-2024        Pietro Califano         Fix of incorrect frame in computing SH acceleration. Added
 %                                           attitude ephemerides as evaluation of Chbv polynomials.
-% 09-07-2025        Pietro Califano         [MAJOR] Reworking for new filter standard architectures.
+% 23-07-2025        Pietro Califano         [MAJOR] Reworking for new filter standard architectures.
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % evalAttQuatChbvPolyWithCoeffs()
