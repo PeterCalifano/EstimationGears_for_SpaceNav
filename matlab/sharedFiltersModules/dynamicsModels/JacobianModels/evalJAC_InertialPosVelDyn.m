@@ -57,9 +57,14 @@ dDynMatrix_PosVel = zeros(6, ui16StateSize);
 % Get indices for allocation
 ui8PosVelIdx        = strFilterConstConfig.strStatesIdx.ui8posVelIdx;
 % ui8attBiasDeltaIdx  = strFilterConstConfig.strStatesIdx.ui8attBiasDeltaIdx; % NOTE: influences SH if any
-ui8CoeffSRPidx      = strFilterConstConfig.strStatesIdx.ui8CoeffSRPidx;
 ui8ResidualAccelIdx = strFilterConstConfig.strStatesIdx.ui8ResidualAccelIdx;
 % ui8LidarMeasBiasIdx = strFilterConstConfig.strStatesIdx.ui8LidarMeasBiasIdx;
+
+if coder.const(isfield(strFilterConstConfig.strStatesIdx, "ui8CoeffSRPidx"))
+    ui8CoeffSRPidx = strFilterConstConfig.strStatesIdx.ui8CoeffSRPidx;
+else
+    ui8CoeffSRPidx = coder.const(0);
+end
 
 %% Jacobian wrt velocity vector (shared)
 dDynMatrix_PosVel(ui8PosVelIdx(1:3), ui8PosVelIdx(4:6)) = eye(3);
@@ -108,8 +113,12 @@ dDynMatrix_PosVel(ui8PosVelIdx(4:6), ui8ResidualAccelIdx) = dDynMatrix_PosVel(ui
 
 % DEVNOTE: derivative of velocity wrt delta C SRP has order of unit vector, but seems quite large with
 % respect to other contributions?
-dDynMatrix_PosVel(ui8PosVelIdx, [ui8PosVelIdx(1:3); ui8CoeffSRPidx]) = dDynMatrix_PosVel(ui8PosVelIdx, [ui8PosVelIdx(1:3); ui8CoeffSRPidx]) ...
-                                                                            + drvSRPwithBiasJac;
+if coder.const(ui8CoeffSRPidx > 0)
+    dDynMatrix_PosVel(ui8PosVelIdx, [ui8PosVelIdx(1:3); ui8CoeffSRPidx]) = dDynMatrix_PosVel(ui8PosVelIdx, [ui8PosVelIdx(1:3); ui8CoeffSRPidx]) ...
+                                                                                + drvSRPwithBiasJac;
+else
+    dDynMatrix_PosVel(ui8PosVelIdx, ui8PosVelIdx(1:3)) = dDynMatrix_PosVel(ui8PosVelIdx, ui8PosVelIdx(1:3)) + drvSRPwithBiasJac;
+end
 
 %% Jacobian wrt 3rd bodies
 [drv3rdBodyGravityJac] = evalJAC_3rdBodyGrav(dxState, ...
