@@ -170,10 +170,10 @@ dAccTot(1:3) = - (dMainGM/dPosNorm3) * dxState_IN(ui16posVelIdx(1:3));
 
 % J2 Zonal Harmonic acceleration
 dAccJ2 = zeros(3,1);
-dAccJ2(1:3) = dDCMmainAtt_INfromTF* (3*dCoeffJ2*dMainGM*dRearth^2)/(2*dPosNorm4)*...
-                                    [drx_TF/dPosNorm *(5* drz_TF^2/(dPosNorm2) - 1);
-                                     dry_TF/dPosNorm *(5* drz_TF^2/(dPosNorm2) - 1);
-                                     drz_TF/dPosNorm *(5* drz_TF^2/(dPosNorm2) - 3)];
+dAccJ2(1:3) = - dDCMmainAtt_INfromTF * (3*abs(dCoeffJ2)*dMainGM*dRearth^2) / (2*dPosNorm4)*...
+                                        [drx_TF/dPosNorm *(5* drz_TF^2/(dPosNorm2) - 1);
+                                         dry_TF/dPosNorm *(5* drz_TF^2/(dPosNorm2) - 1);
+                                         drz_TF/dPosNorm *(5* drz_TF^2/(dPosNorm2) - 3)];
 
 % J3 Zonal Harmonic acceleration
 % z3 = z*z*z;
@@ -193,7 +193,8 @@ dAtmDensity = zeros(1,1);
 dAtmDensity(1) = 1E9 * (evalAtmExpDensity(dAtmCoeffsData, dPosNorm - dRearth)); % [kg/km^3]
 
 % Compute drag acceleration
-dAccDrag = -0.5 * dAtmDensity * dVrel * (dDragCoeff*dDragCrossArea/dMassSC) * ...
+dAccDrag = zeros(3,1);
+dAccDrag(:) = -0.5 * dAtmDensity * dVrel * (dDragCoeff*dDragCrossArea/dMassSC) * ...
                                                     [(dvx + dEarthSpinRate*dry);
                                                      (dvy - dEarthSpinRate*drx);
                                                       dvz]; % [km/s^2]
@@ -277,7 +278,9 @@ if nargout > 1
     strAccelInfo.dTotAcc3rdBody     = dTotAcc3rdBody;
     strAccelInfo.dAcc3rdSun         = dAcc3rdSun;
     strAccelInfo.dAccCannonBallSRP  = dAccCannonBallSRP;
-    strAccelInfo.dAccNonSphr_IN     = dAccJ2;
+    strAccelInfo.dAccDrag           = dAccDrag;
+    strAccelInfo.dResidualAccel     = dResidualAccel;
+    strAccelInfo.dAccJ2             = dAccJ2;
 end
 
 dAccTot = dAccTot + dAccJ2 + dAccJ3 + dTotAcc3rdBody +...

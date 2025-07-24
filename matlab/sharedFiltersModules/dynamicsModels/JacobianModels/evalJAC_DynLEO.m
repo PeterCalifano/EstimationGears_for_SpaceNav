@@ -143,13 +143,12 @@ dDynMatrix(ui8PosVelIdx(4:6), ui8PosVelIdx(1:3)) = dDynMatrix(ui8PosVelIdx(4:6),
 dBcoeff = (fDragCoeff * fDragCrossArea/dSCmass);
 
 % Compute velocity relative to atmosphere
-
 dAtmRelVel = dxState_IN(ui8PosVelIdx(4:6)) - cross( [0; 0; dEarthSpinRate], dxState_IN(ui8PosVelIdx(1:3))) ; % relative velocity s/c-air
 dNormAtmRelVel = norm(dAtmRelVel);
 
 % Evaluate density derivative wrt position
-densityGradPos = dAtmCoeffsData(ui8AtmExpModelEntryID, 2) * exp( -(dPosNorm-dRearth)/dAtmCoeffsData(ui8AtmExpModelEntryID, 1) )*...
-    (-dxState_IN(ui8PosVelIdx(1:3))/dPosNorm ) * 1/dAtmCoeffsData(ui8AtmExpModelEntryID, 3);
+dDensityGradPos = dAtmCoeffsData(ui8AtmExpModelEntryID, 2) * exp( -(dPosNorm-dRearth)/dAtmCoeffsData(ui8AtmExpModelEntryID, 1) )*...
+                    (-dxState_IN(ui8PosVelIdx(1:3))/dPosNorm ) * 1/dAtmCoeffsData(ui8AtmExpModelEntryID, 3);
 
 dAuxMatrix = zeros(3);
 dAuxMatrix(1,2) = -dEarthSpinRate;
@@ -157,7 +156,7 @@ dAuxMatrix(2,1) = dEarthSpinRate;
 
 % Position derivative (DERIVATIVE TO VERIFY)
 dDynMatrix(ui8PosVelIdx(4:6), ui8PosVelIdx(1:3)) = dDynMatrix(ui8PosVelIdx(4:6), ui8PosVelIdx(1:3)) ...
-                        -0.5 * dBcoeff * (densityGradPos * dNormAtmRelVel * transpose(dAtmRelVel) ...
+                        -0.5 * dBcoeff * (dDensityGradPos * dNormAtmRelVel * transpose(dAtmRelVel) ...
                         + dAtmDensity * transpose( dAtmRelVel' ./dNormAtmRelVel * dAuxMatrix ) * transpose(dAtmRelVel) ...
                         + dAtmDensity * dNormAtmRelVel * dAuxMatrix);
 
