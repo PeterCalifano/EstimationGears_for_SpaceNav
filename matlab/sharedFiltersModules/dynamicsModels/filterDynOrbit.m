@@ -31,8 +31,9 @@ end
 % dxdt
 % -------------------------------------------------------------------------------------------------------------
 %% CHANGELOG
-% 17-08-2024        Pietro Califano         Version adapted from FUTURE EKF to use general purpose evalRHS_DynOrbit
-% 17-03-2024        Pietro Califano         Updated version for use in MSKCF
+% 17-08-2024    Pietro Califano     Version adapted from FUTURE EKF to use general purpose evalRHS_DynOrbit
+% 17-03-2024    Pietro Califano     Updated version for use in MSKCF
+% 28-07-2025    Pietro Califano     Update version to recompute P_SRP and eclipse flag
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % evalAttQuatChbvPolyWithCoeffs()
@@ -60,6 +61,8 @@ end
 
 % Variables definition
 dDrvDt = zeros(6, 1);
+dMainPosition_W = zeros(3,1); % ACHTUNG: HARDCODED VALUE
+
 dBodyEphemerides = coder.nullcopy(zeros(3*ui8NumOf3rdBodies, 1));
 d3rdBodiesGM = coder.nullcopy(zeros(ui8NumOf3rdBodies, 1));
 dDCMmainAtt_INfromTF  = zeros(3, 3);
@@ -123,6 +126,17 @@ if isfield(strFilterConstConfig.strStatesIdx, "ui8CoeffSRPidx") && ...
 end
 
 % Update SRP value from SRP0 at 1AU
+dDistToSun = norm(dBodyEphemerides(1:3) - dMainPosition_W);
+if dDistToSun <= 1e10
+    % Assumes km scale
+    dAU = 1.495978707E8;
+    strDynParams.strSRPdata.dP_SRP0 = 1367 / (299792458 * 1E-3);
+else
+    % Assumes m scale
+    dAU = 1.495978707E11;
+    strDynParams.strSRPdata.dP_SRP0 = 1367 / 299792458; % Approx. 4.54e-6 N/m^2
+end
+
 dDistFromSunAU = dDistToSun / dAU;
 strDynParams.strSRPdata.dP_SRP = strDynParams.strSRPdata.dP_SRP0 * (1/(dDistFromSunAU)^2); % [N/m^2] or [N/km^2]
 
@@ -140,13 +154,16 @@ end
 %% Evaluate eclipse flag
 % DEVNOTE this code may require changed based on the reference frame. Here it assumes that the Earth (main)
 % is centred in the "world" frame (whatever it is)
-dSunPositionFromMain_W = dBodyEphemerides(1:3);
-dPositionFromMain_W = dxState(strStatesIdx.ui8posVelIdx(1:3));
+% dSunPositionFromMain_W = dBodyEphemerides(1:3);
+% dPositionFromMain_W = dxState(strStatesIdx.ui8posVelIdx(1:3));
 
-strDynParams.bIsInEclipse = CheckForEclipseMainSphereBody(dSunPositionFromMain_W, ...
-                                                            dPositionFromMain_W, ...
-                                                            strDynParams.strMainData.dRefRadius, ...
-                                                            dDistToSun);
+% strDynParams.bIsInEclipse = CheckForEclipseMainSphereBody(dSunPositionFromMain_W, ...
+%                                                             dPositionFromMain_W, ...
+%                                                             strDynParams.strMainData.dRefRadius, ...
+%                                                             dDistToSun);
+
+% ACHTUNG current implementation does not seem to work well for asteroids?
+% TODO compare with Alban's one
 
 %% Evaluate RHS
 % ACHTUNG: Sun must be first in ephemerides and GM data
@@ -160,7 +177,8 @@ dDrvDt(:) = evalRHS_InertialDynOrbit(dxState, ...
                                   [], ...        % strDynParams.strMainData.dSHcoeff
                                   uint32(0), ... % strDynParams.strMainData.ui16MaxSHdegree
                                   ui16StatesIdx, ...
-                                  dResidualAccel);
+                                  dResidualAccel, ...
+                                  strDynParams.bIsInEclipse);
 
 % dxdt(ui16StatesIdx(2,:)) = evalRHS_DynFOGM(dxState, ...
 %     dTimeConst, ...

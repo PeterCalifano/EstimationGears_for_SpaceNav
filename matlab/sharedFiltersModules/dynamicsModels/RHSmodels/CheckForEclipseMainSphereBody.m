@@ -15,7 +15,7 @@ end
 %                                                         dDistToSun) %#codegen
 % -------------------------------------------------------------------------------------------------------------
 %% DESCRIPTION
-% What the function does
+% Function checking for eclipse occurrence 
 % -------------------------------------------------------------------------------------------------------------
 %% INPUT
 % dSunPositionFromMain_W  (3,1) {isvector, isnumeric}
@@ -34,7 +34,7 @@ end
 % -------------------------------------------------------------------------------------------------------------
 
 % Compute Sun distance
-if dDistToSun == 0.0
+if (dDistToSun - 10 * eps) < 0
     dDistToSun = norm(dSunPositionFromMain_W);
 end
 
