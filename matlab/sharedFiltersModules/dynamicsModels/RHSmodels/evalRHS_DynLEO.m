@@ -170,7 +170,7 @@ dAccTot(1:3) = - (dMainGM/dPosNorm3) * dxState_IN(ui16posVelIdx(1:3));
 
 % J2 Zonal Harmonic acceleration
 dAccJ2 = zeros(3,1);
-dAccJ2(1:3) = - dDCMmainAtt_INfromTF * (3*abs(dCoeffJ2)*dMainGM*dRearth^2) / (2*dPosNorm4)*...
+dAccJ2(1:3) = dDCMmainAtt_INfromTF * (3*abs(dCoeffJ2)*dMainGM*dRearth^2) / (2*dPosNorm4)*...
                                         [drx_TF/dPosNorm *(5* drz_TF^2/(dPosNorm2) - 1);
                                          dry_TF/dPosNorm *(5* drz_TF^2/(dPosNorm2) - 1);
                                          drz_TF/dPosNorm *(5* drz_TF^2/(dPosNorm2) - 3)];
