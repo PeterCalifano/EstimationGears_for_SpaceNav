@@ -110,7 +110,7 @@ dTmpQuat = evalAttQuatChbvPolyWithCoeffs(strDynParams.strMainData.strAttData.ui3
                                         strDynParams.strMainData.strAttData.dTimeLowBound, ...
                                         strDynParams.strMainData.strAttData.dTimeUpBound);
 
-dDCMmainAtt_INfromTF(1:3, 1:3) = Quat2DCM(dTmpQuat, true);
+dDCMmainAtt_INfromTF(1:3, 1:3) = Quat2DCM(dTmpQuat, false);
 
 % Evaluate position Ephemerides of 3rd bodies
 ui16PtrAlloc = uint16(1);
