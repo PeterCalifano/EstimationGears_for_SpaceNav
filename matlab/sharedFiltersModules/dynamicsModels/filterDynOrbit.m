@@ -48,6 +48,8 @@ end
 %% Function code
 % ui16StateSize = strFilterConstConfig.ui16StateSize;
 
+dMainPosition_W = zeros(3,1); % DEVNOTE: hardcoded. Must come from ephemerides if necessary
+
 % Check for 3rd bodies
 if coder.target('MATLAB') || coder.target('MEX')
     if not(isfield(strDynParams, 'strBody3rdData'))
@@ -61,7 +63,6 @@ end
 
 % Variables definition
 dDrvDt = zeros(6, 1);
-dMainPosition_W = zeros(3,1); % ACHTUNG: HARDCODED VALUE
 
 dBodyEphemerides = coder.nullcopy(zeros(3*ui8NumOf3rdBodies, 1));
 d3rdBodiesGM = coder.nullcopy(zeros(ui8NumOf3rdBodies, 1));
@@ -126,7 +127,10 @@ if isfield(strFilterConstConfig.strStatesIdx, "ui8CoeffSRPidx") && ...
 end
 
 % Update SRP value from SRP0 at 1AU
-dDistToSun = norm(dBodyEphemerides(1:3) - dMainPosition_W);
+dSunPositionFromSC_W = dBodyEphemerides(1:3) + dMainPosition_W -...
+                    dxState(strFilterConstConfig.strStatesIdx.ui8posVelIdx(1:3));
+dDistToSun = norm(dSunPositionFromSC_W);
+
 if dDistToSun <= 1e10
     % Assumes km scale
     dAU = 1.495978707E8;
@@ -138,6 +142,7 @@ else
 end
 
 dDistFromSunAU = dDistToSun / dAU;
+
 strDynParams.strSRPdata.dP_SRP = strDynParams.strSRPdata.dP_SRP0 * (1/(dDistFromSunAU)^2); % [N/m^2] or [N/km^2]
 
 dCoeffSRP = (strDynParams.strSRPdata.dP_SRP * strDynParams.strSCdata.dReflCoeff * ...
