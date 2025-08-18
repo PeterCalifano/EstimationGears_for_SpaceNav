@@ -37,7 +37,7 @@ if coder.target('MATLAB') || coder.target('MEX')
     % TODO: asserts validity of sizes
 end
 
-ui32StateSize = uint32(size(dMeanWeights, 2));
+ui32StateSize = uint32(size(dSigmaPoints, 1));
 dxMean        = coder.nullcopy(zeros(ui32StateSize, 1));
 dxCovariance  = coder.nullcopy(zeros(ui32StateSize, ui32StateSize));
 
