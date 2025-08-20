@@ -36,7 +36,7 @@ classdef CDensityFcnPropagator
     end
 
     methods (Static, Access = public)
-
+        %%% Sigma Points method
         function [dxMeanOut, dxCovarianceOut] = PropagateSigmaPointTransformPropagateDyn(dxMeanIn, ...
                                                                                         dxCovarianceIn, ...
                                                                                         strDynParams, ...
@@ -348,6 +348,151 @@ classdef CDensityFcnPropagator
             dxCovariance(:,:) = 0.5 * (dxCovariance + dxCovariance');
 
         end
+    
+    
+    
+        %%% Monte Carlo methods
+        function [dxMeanOut, dxCovarianceOut] = PropagateMonteCarloTransformHandle(fcnHandle, ...
+                                                                                    dxMeanIn, ...
+                                                                                    dxCovarianceIn, ...
+                                                                                    dTimestampStart, ...
+                                                                                    dTimestampEnd, ...
+                                                                                    ui32NumOfSamples, ...
+                                                                                    varargin)%#codegen
+            %PROPAGATEMONTECARLOTRANSFORMHANDLE Monte Carlo propagation of state moments through a nonlinear map
+            % -------------------------------------------------------------------------------------------------
+            % DESCRIPTION
+            %   Draws ui32NumOfSamples samples from a Gaussian N(dxMeanIn, dxCovarianceIn), propagates each
+            %   sample through the provided function handle fcnHandle, and returns the empirical mean and
+            %   covariance of the propagated set.
+            %
+            %   The function mirrors the design and calling style of the Sigma-Points counterpart, including:
+            %   - Optional time-augmented signature for fcnHandle
+            %   - Parallel propagation over samples (parfor-safe)
+            %   - Arguments validation and codegen readiness
+            %
+            % IMPROVABLE SAMPLING OPTIONS (not implemented here; consider for accuracy/variance reduction)
+            %   1) Antithetic Variates: for each standard normal z, also use -z before correlation injection.
+            %      Preserves mean exactly and reduces variance of estimators.
+            %   2) Latin Hypercube / Stratified Sampling (LHS): stratify each dimension in [0,1] (via inverse
+            %      CDF to normal) to produce better space-filling than pure i.i.d. normals.
+            %   3) Quasi-Monte Carlo (Sobol/Halton): generate low-discrepancy points u in [0,1]^n and map
+            %      via the Gaussian inverse CDF; then correlate with Cholesky. Faster convergence in practice.
+            %   4) Moment-Matching / Spherical-Radial MC: enforce zero sample mean and unit covariance on
+            %      the standard normal set before correlation, then inject correlation to better match
+            %      target moments with finite N (useful for small/medium sample sizes).
+            %   5) Importance Sampling: when fcnHandle induces strong nonlinearity in specific regions, bias
+            %      sampling toward such regions and reweight samples accordingly.
+            %
+            %   All the above can be adapted to respect your naming and codegen constraints (e.g., prebuilt
+            %   Sobol sequences mapped through icdf('Normal',...); or deterministic antithetic pairing).
+            %
+            % CHANGELOG
+            %   19-08-2025    Pietro Califano, GPT-5 Thinking     First implementation.
+            %
+            % DEPENDENCIES
+            %   [-]
+            %
+            % FUTURE UPGRADES
+            %   - Add antithetic/Stratified/Quasi-MC paths (compile-time switches friendly to codegen)
+            %   - Add moment-matching normalization of standard normals before correlation injection
+            %   - Optional return of full propagated cloud
+            % -------------------------------------------------------------------------------------------------
+
+            arguments (Input)
+                fcnHandle         (1,1) {mustBeA(fcnHandle, "function_handle")}
+                dxMeanIn          (:,1) double {isvector, mustBeReal}
+                dxCovarianceIn    (:,:) double {ismatrix, mustBeReal}
+                dTimestampStart   (1,1) double {isscalar, mustBeReal} = -1.0
+                dTimestampEnd     (1,1) double {isscalar, mustBeReal, mustBeGreaterThan(dTimestampEnd, dTimestampStart)} = 0.0
+                ui32NumOfSamples  (1,1) {mustBeInteger, mustBePositive} = uint32(512)
+            end
+            arguments (Input, Repeating)
+                varargin
+            end
+            arguments (Output)
+                dxMeanOut          (:,1) double {ismatrix, mustBeReal}
+                dxCovarianceOut    (:,:) double {ismatrix, mustBeReal}
+            end
+
+            % Initialize outputs
+            dxMeanOut       = zeros(size(dxMeanIn));
+            dxCovarianceOut = zeros(size(dxCovarianceIn));
+            ui32DomainSize  = uint32(size(dxMeanIn,1));
+
+            % Optional integration timestep 
+            dIntegrTimestep = 0.0; % Default value to allow parfor usage
+            if ~isempty(varargin)
+                dIntegrTimestep = varargin{1};
+            end
+
+            % -------------------------------------------------------------------------
+            % Generate Monte Carlo samples ~ N(dxMeanIn, dxCovarianceIn)
+            % -------------------------------------------------------------------------
+            % Symmetrize covariance and build a numerically robust Cholesky factor.
+            dSymCov_tmp = 0.5 * ( dxCovarianceIn + transpose(dxCovarianceIn) );
+            dTraceAbs   = sum(abs(diag(dSymCov_tmp)));
+            dJitter     = max(1e-12, 1e-12 * dTraceAbs);
+
+            % Try Cholesky; if it fails (semi-definite), fall back to eig-clip.
+            % try
+            dLchol = chol(dSymCov_tmp + dJitter * eye(double(ui32DomainSize)), 'lower');
+            % catch %#ok<CTCH>
+            %     % Eigenvalue clipping to nearest SPD approximation
+            %     [dVEig_tmp, dDEig_tmp] = eig(dSymCov_tmp);
+            %     dLam = max(diag(dDEig_tmp), 0.0);
+            %     dDEig_clip = diag(dLam + dJitter);
+            %     dSPD_tmp   = dVEig_tmp * dDEig_clip * dVEig_tmp.';
+            %     dSPD_tmp   = 0.5 * (dSPD_tmp + dSPD_tmp.'); % enforce symmetry
+            %     dLchol     = chol(dSPD_tmp, 'lower');
+            % end
+
+            % Standard normal draws (population size = ui32NumOfSamples)
+            % Note: For reproducibility in MATLAB, set rng(...) BEFORE calling this function.
+            dStdNormalSamples = randn(double(ui32DomainSize), double(ui32NumOfSamples));
+
+            % Inject correlation and mean shift
+            dxSamplesSet = dLchol * dStdNormalSamples;
+            dxSamplesSet = dxSamplesSet + dxMeanIn; 
+
+            % -------------------------------------------------------------------------
+            % Propagate samples through the user function handle
+            % -------------------------------------------------------------------------
+            parfor idSample = 1:double(ui32NumOfSamples)
+                if dTimestampStart > 0 - eps
+                    % Time-augmented signature
+                    dxSamplesSet(:, idSample) = fcnHandle(dxSamplesSet(:, idSample), ...
+                                                        dTimestampStart, ...
+                                                        dTimestampEnd - dTimestampStart, ...
+                                                        dIntegrTimestep);
+                else
+                    % State-only signature
+                    dxSamplesSet(:, idSample) = fcnHandle(dxSamplesSet(:, idSample));
+                end
+            end
+
+            % -------------------------------------------------------------------------
+            % Empirical moments (population versions: divide by N)
+            % -------------------------------------------------------------------------
+            [dxMeanOut(:), dxCovarianceOut(:,:)] = SumSamplesToMoments(dxSamplesSet);
+
+        end
+
+        function [dMeanOut, dCovOut, dCentredDataMatrix] = SumSamplesToMoments(dxSamplesSet)
+            arguments
+                dxSamplesSet (:,:) double {mustBeReal, ismatrix}
+            end
+            %SUMSAMPLESTOMOMENTS Compute empirical mean and covariance from sample matrix
+
+            dMeanOut           = mean(dxSamplesSet, 2);
+            dCentredDataMatrix = dxSamplesSet - dMeanOut;
+
+            ui32SampleSize = size(dxSamplesSet, 2);
+
+            % Population covariance (consistent with sigma-point weighting style)
+            dCovOut = (dCentredDataMatrix * transpose(dCentredDataMatrix)) / ui32SampleSize;
+        end
+
     end
 
 end
