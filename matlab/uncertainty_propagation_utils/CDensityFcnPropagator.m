@@ -35,7 +35,110 @@ classdef CDensityFcnPropagator
    
     end
 
+    methods(Static, Access = private)
+            function [dxCurrentCov] = PropagateLinCov_internal_(dxCurrentCov, dFlowSTM)%#codegen
+            arguments
+                dxCurrentCov    (:,:) double {ismatri, mustBeReal}
+                dFlowSTM        (:,:) double {ismatri, mustBeReal}
+            end
+            
+            assert( all(size(dxCurrentCov) == size(dFlowSTM), 'all'), 'ERROR: STM and covariance does not match in size');
+            dxCurrentCov = dFlowSTM * dxCurrentCov * transpose(dxCurrentCov);
+        end
+    end
+    
     methods (Static, Access = public)
+
+        %%% Linear Covariance methods
+        function [dxMeanOut, dxCovarianceOut] = PropagateFiniteDiffLinCovHandle(fcnHandle, ...
+                                                                                dxMeanIn, ...
+                                                                                dxCovarianceIn, ...
+                                                                                dTimestampStart, ...
+                                                                                dTimestampEnd, ...
+                                                                                dDeviationSize, ...
+                                                                                varargin)%#codegen
+            arguments (Input)
+                fcnHandle         (1,1) {mustBeA(fcnHandle, "function_handle")}
+                dxMeanIn          (:,1) double {isvector, mustBeReal}
+                dxCovarianceIn    (:,:) double {ismatrix, mustBeReal}
+                dTimestampStart   (1,1) double {isscalar, mustBeReal} = -1.0
+                dTimestampEnd     (1,1) double {isscalar, mustBeReal, mustBeGreaterThan(dTimestampEnd, dTimestampStart)} = 0.0
+                dDeviationSize    (1,1) double {mustBeGreaterThan(dDeviationSize, 0.0)} = 1e-5;
+            end
+            arguments (Input, Repeating)
+                varargin
+            end
+            arguments (Output)
+                dxMeanOut          (:,1) double {ismatrix, mustBeReal}
+                dxCovarianceOut    (:,:) double {ismatrix, mustBeReal}
+            end
+
+            % Initialize output variables
+            dxMeanOut       = zeros(size(dxMeanIn));
+            dxCovarianceOut = zeros(size(dxCovarianceIn));
+
+            dIntegrTimestep = 0.0; % Default value to allow parfor usage
+            if ~isempty(varargin)
+                dIntegrTimestep = varargin{1};
+            end
+
+            dFiniteDiffSTM = zeros(numel(dF0), length(dX0diff));
+            d2ndOrdFiniteDiffDenom = 1/(2*dDeviationSize);
+
+            % Propagate mean state
+            if dTimestampStart > 0 - eps
+                % Input point + timestamps
+                dxMeanOut(:)  = fcnHandle(dxMeanIn, dTimestampStart, ...
+                    dTimestampEnd - dTimestampStart, ...
+                    dIntegrTimestep);
+
+            else
+                % Input point only signature
+                dxMeanOut(:)  = fcnHandle(dxMeanIn);
+
+            end
+
+            % Loop over input states to evaluate function
+            parfor ii = 1:length(dxMeanIn)
+
+                dEpsVec = zeros(size(dxMeanIn));
+                dEpsVec(ii) = dDeviationSize;
+
+                % Compute plus-minus function vector values
+                if dTimestampStart > 0 - eps
+                    % Input point + timestamps
+                    dfPlus  = fcnHandle(dxMeanIn + dEpsVec, dTimestampStart, ...
+                                        dTimestampEnd - dTimestampStart, ...
+                                        dIntegrTimestep);
+
+                    dfMinus = fcnHandle(dxMeanIn - dEpsVec, dTimestampStart, ...
+                                        dTimestampEnd - dTimestampStart, ...
+                                        dIntegrTimestep);
+                else
+                    % Input point only signature
+                    dfPlus  = fcnHandle(dxMeanIn + dEpsVec);
+                    dfMinus = fcnHandle(dxMeanIn - dEpsVec);
+                end
+
+
+                if isvector(dfPlus)
+                    dfPlus = dfPlus(:);
+                end
+
+                if isvector(dfMinus)
+                    dfMinus = dfMinus(:);
+                end
+
+                dDiffVec = reshape(dfPlus - dfMinus, [], 1);
+                dFiniteDiffSTM(:, ii) = d2ndOrdFiniteDiffDenom * (dDiffVec);
+            end
+
+            % Propagate covariance
+            dxCovarianceOut(:,:) = CDensityFcnPropagator.PropagateLinCov_internal_(dxCovarianceIn, dFiniteDiffSTM);
+
+        end
+
+
         %%% Sigma Points method
         function [dxMeanOut, dxCovarianceOut] = PropagateSigmaPointTransformPropagateDyn(dxMeanIn, ...
                                                                                         dxCovarianceIn, ...
@@ -350,14 +453,63 @@ classdef CDensityFcnPropagator
         end
     
     
-    
+        %%% ------------------------------------------------------------------------------------------------- %%%
         %%% Monte Carlo methods
+        function [dxMeanOut, dxCovarianceOut] = PropagateMonteCarloTransformPropagateDyn(dxMeanIn, ...
+                                                                                        dxCovarianceIn, ...
+                                                                                        strDynParams, ...
+                                                                                        strFilterMutabConfig, ...
+                                                                                        strFilterConstConfig, ...
+                                                                                        dTimestampStart, ...
+                                                                                        dTimestampEnd, ...
+                                                                                        dIntegrTimestep, ...
+                                                                                        ui32NumOfSamples, ...
+                                                                                        bStartParpool)%#codegen
+            arguments (Input)
+                dxMeanIn          (:,1) double {isvector, mustBeReal}
+                dxCovarianceIn    (:,:) double {ismatrix, mustBeReal}
+                strDynParams         (1,1) {isstruct}
+                strFilterMutabConfig (1,1) {isstruct}
+                strFilterConstConfig (1,1) {isstruct}
+                dTimestampStart   (1,1) double {isscalar, mustBeReal} = 0.0
+                dTimestampEnd     (1,1) double {isscalar, mustBeReal} = 1.0
+                dIntegrTimestep   (1,1) double {isscalar, mustBeReal} = 1.0
+                ui32NumOfSamples  (1,1) uint32 {isscalar, mustBeReal} = 100
+                bStartParpool     (1,1) logical {isscalar} = false
+            end
+            arguments (Output)
+                dxMeanOut          (:,1) double {ismatrix, mustBeReal}
+                dxCovarianceOut    (:,:) double {ismatrix, mustBeReal}
+            end
+
+            % Define function handle for PropagateDyn function
+            fcnDynHandle = @(dxSamplePoint, dTimestart, dDeltaTime, dIntegrTimestep) PropagateDyn(dxSamplePoint, ...
+                                                                                        dTimestart, ...
+                                                                                        dDeltaTime, ...
+                                                                                        dIntegrTimestep, ...
+                                                                                        strDynParams, ...
+                                                                                        strFilterMutabConfig, ...
+                                                                                        strFilterConstConfig);
+
+            % Call handle version
+            [dxMeanOut, dxCovarianceOut] = CDensityFcnPropagator.PropagateMonteCarloTransformHandle(fcnDynHandle, ...
+                                                                                               dxMeanIn, ...
+                                                                                               dxCovarianceIn, ...
+                                                                                               dTimestampStart, ...
+                                                                                               dTimestampEnd, ...
+                                                                                               ui32NumOfSamples, ...
+                                                                                               bStartParpool, ...
+                                                                                               dIntegrTimestep);%#codegen
+
+        end
+
         function [dxMeanOut, dxCovarianceOut] = PropagateMonteCarloTransformHandle(fcnHandle, ...
                                                                                     dxMeanIn, ...
                                                                                     dxCovarianceIn, ...
                                                                                     dTimestampStart, ...
                                                                                     dTimestampEnd, ...
                                                                                     ui32NumOfSamples, ...
+                                                                                    bStartParpool, ...
                                                                                     varargin)%#codegen
             %PROPAGATEMONTECARLOTRANSFORMHANDLE Monte Carlo propagation of state moments through a nonlinear map
             % -------------------------------------------------------------------------------------------------
@@ -406,6 +558,7 @@ classdef CDensityFcnPropagator
                 dTimestampStart   (1,1) double {isscalar, mustBeReal} = -1.0
                 dTimestampEnd     (1,1) double {isscalar, mustBeReal, mustBeGreaterThan(dTimestampEnd, dTimestampStart)} = 0.0
                 ui32NumOfSamples  (1,1) {mustBeInteger, mustBePositive} = uint32(512)
+                bStartParpool     (1,1) logical {isscalar} = false
             end
             arguments (Input, Repeating)
                 varargin
@@ -458,6 +611,14 @@ classdef CDensityFcnPropagator
             % -------------------------------------------------------------------------
             % Propagate samples through the user function handle
             % -------------------------------------------------------------------------
+            if bStartParpool
+                objCurrentPool = gcp('nocreate');
+                if isempty(objCurrentPool)
+                    parpool('Threads');
+                end
+            end
+
+            tic
             parfor idSample = 1:double(ui32NumOfSamples)
                 if dTimestampStart > 0 - eps
                     % Time-augmented signature
@@ -471,10 +632,13 @@ classdef CDensityFcnPropagator
                 end
             end
 
+            dElapsedTimeMC = toc;
+            fprintf('\nMC propagation of %d samples completed in %2.4g [s].\n', ui32NumOfSamples, dElapsedTimeMC);
+
             % -------------------------------------------------------------------------
             % Empirical moments (population versions: divide by N)
             % -------------------------------------------------------------------------
-            [dxMeanOut(:), dxCovarianceOut(:,:)] = SumSamplesToMoments(dxSamplesSet);
+            [dxMeanOut(:), dxCovarianceOut(:,:)] = CDensityFcnPropagator.SumSamplesToMoments(dxSamplesSet);
 
         end
 
