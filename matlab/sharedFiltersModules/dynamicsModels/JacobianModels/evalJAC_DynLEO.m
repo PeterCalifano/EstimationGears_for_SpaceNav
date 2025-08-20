@@ -48,6 +48,7 @@ end
 % 13-03-2024    Pietro Califano     Function execution verified.
 % 02-05-2024    Pietro Califano     Incorrect J2 jacobian fixed.
 % 22-07-2025    Pietro Califano     Update of implementation with new function signature
+% 19-08-2025    Pietro Califano     Add definitions of auxiliary variables for debugging (MATLAB only)
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % evalAtmExpDensity()
@@ -56,7 +57,6 @@ end
 % TODO Review of drag acceleration jacobian
 % TODO Memory and code optimization
 % TODO Conversion of code lines to functions
-% TODO Modify input interface: change ui16StatesIdx to strFilterConstConfig
 % -------------------------------------------------------------------------------------------------------------
 
 ui8PosVelIdx        = strFilterConstConfig.strStatesIdx.ui8posVelIdx; % [1 to 6]
@@ -88,14 +88,13 @@ dPosNorm = norm(dxState_IN(ui8PosVelIdx(1:3)));
 dPosNorm3 = dPosNorm*dPosNorm*dPosNorm;
 dPosNorm5 = dPosNorm3*dPosNorm*dPosNorm;
 dPosNorm7 = dPosNorm5*dPosNorm*dPosNorm;
-dPosNorm9 = dPosNorm7*dPosNorm*dPosNorm;
 
 dCoeffJ2        = strDynParams.strMainData.dCoeffJ2;
 dRearth         = strDynParams.strMainData.dRefRadius;
-fDragCoeff      = strDynParams.strSCdata.dDragCoeff;
-fDragCrossArea  = strDynParams.strSCdata.dDragCrossArea;
-dSCmass         = strDynParams.strSCdata.dSCmass;
-dEarthSpinRate = strDynParams.strMainData.dEarthSpinRate;
+dDragCoeff      = strDynParams.strSCdata.dDragCoeff;
+dDragCrossArea  = strDynParams.strSCdata.dDragCrossArea;
+dMassSC         = strDynParams.strSCdata.dSCmass;
+dEarthSpinRate  = strDynParams.strMainData.dEarthSpinRate;
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 
@@ -130,49 +129,38 @@ dDynMatrix(ui8PosVelIdx, :) = dDynMatrix_PosVel;
 %                                                                                      + 35/dPosNorm9 * drz_TF^2 * ( dxState_IN(ui8PosVelIdx(1:3))* ...
 %                                                                                      transpose(dxState_IN(ui8PosVelIdx(1:3))) ) )*transpose(dDCMmainAtt_INfromTF);
 
-dAuxPos_TF = dr_TF;
-dAuxPos_TF(3) = 3 * dAuxPos_TF(3);
+dJacWrtInertialState = zeros(3,3);
+% [dJacWrtTargetFixedState, dJacWrtInertialState(:,:)] = evalJAC_ZonalHarmonics20(dxState_IN(ui8PosVelIdx), ...
+%                                                                             dDCMmainAtt_INfromTF, ...
+%                                                                             abs(dCoeffJ2), ...            
+%                                                                             dMainBodyGM, ...             
+%                                                                             dRearth, ...          
+%                                                                             dPosNorm, ...            
+%                                                                             dPosNorm5, ...           
+%                                                                             dPosNorm7); %#ok<ASGLU>
 
-dJac_wrt_InertialState = - 1.5 * abs(dCoeffJ2) * dMainBodyGM * dRearth^2 * ( 1/dPosNorm5 * diag([1 1 3]) ...
-                                                                             - 5/dPosNorm7 * dAuxPos_TF * transpose(dr_TF) ...
-                                                                             + 35/dPosNorm9 * dr_TF(3)^2 * ( dr_TF(ui8PosVelIdx(1:3))* ...
-                                                                                                    transpose(dr_TF(ui8PosVelIdx(1:3))) ) );
-
-dDynMatrix(ui8PosVelIdx(4:6), ui8PosVelIdx(1:3)) = dDynMatrix(ui8PosVelIdx(4:6), ui8PosVelIdx(1:3)) + ...
-                                                      dDCMmainAtt_INfromTF * (dJac_wrt_InertialState) * transpose(dDCMmainAtt_INfromTF);
+dDynMatrix(ui8PosVelIdx(4:6), ui8PosVelIdx(1:3)) = dDynMatrix(ui8PosVelIdx(4:6), ui8PosVelIdx(1:3)) + dJacWrtInertialState;
 
 
-%% Drag acceleration Jacobian % DEVNOTE: REVIEW NEEDED
+
+
+%% Drag acceleration Jacobian 
 % dAtmCoeffsData(:, 1) % h0 reference altitudes [km]
 % dAtmCoeffsData(:, 2) % rho0 reference densities [km]
 % dAtmCoeffsData(:, 3) % H scale altitudes [km] TO CHECK
+[dDVelDPos, dDVelDVel] = evalJAC_AtmExpDrag(dxState_IN(ui8PosVelIdx), ...
+                                            dAtmCoeffsData, ...
+                                            dEarthSpinRate, ...
+                                            dDragCoeff, ...
+                                            dDragCrossArea, ...
+                                            dMassSC, ...
+                                            dRearth, ...
+                                            dPosNorm);
 
-
-[dAtmDensity, ui8AtmExpModelEntryID] = evalAtmExpDensity(dAtmCoeffsData, dPosNorm - dRearth); % Evaluate density
-dBcoeff = (fDragCoeff * fDragCrossArea/dSCmass);
-
-% Compute velocity relative to atmosphere
-dAtmRelVel = dxState_IN(ui8PosVelIdx(4:6)) - cross( [0; 0; dEarthSpinRate], dxState_IN(ui8PosVelIdx(1:3))) ; % relative velocity s/c-air
-dNormAtmRelVel = norm(dAtmRelVel);
-
-% Evaluate density derivative wrt position
-dDensityGradPos = dAtmCoeffsData(ui8AtmExpModelEntryID, 2) * exp( -(dPosNorm-dRearth)/dAtmCoeffsData(ui8AtmExpModelEntryID, 1) )*...
-                    (-dxState_IN(ui8PosVelIdx(1:3))/dPosNorm ) * 1/dAtmCoeffsData(ui8AtmExpModelEntryID, 3);
-
-dAuxMatrix = zeros(3);
-dAuxMatrix(1,2) = -dEarthSpinRate;
-dAuxMatrix(2,1) = dEarthSpinRate;
-
-% Position derivative (DERIVATIVE TO VERIFY)
-% dDynMatrix(ui8PosVelIdx(4:6), ui8PosVelIdx(1:3)) = dDynMatrix(ui8PosVelIdx(4:6), ui8PosVelIdx(1:3)) ...
-%                         -0.5 * dBcoeff * (dDensityGradPos * dNormAtmRelVel * transpose(dAtmRelVel) ...
-%                         + dAtmDensity * transpose( dAtmRelVel' ./dNormAtmRelVel * dAuxMatrix ) * transpose(dAtmRelVel) ...
-%                         + dAtmDensity * dNormAtmRelVel * dAuxMatrix);
+% Position derivative 
+dDynMatrix(ui8PosVelIdx(4:6), ui8PosVelIdx(1:3)) = dDynMatrix(ui8PosVelIdx(4:6), ui8PosVelIdx(1:3)) + dDVelDPos;
 
 % Velocity derivative
-% dDynMatrix(ui8PosVelIdx(4:6), ui8PosVelIdx(4:6)) = dDynMatrix(ui8PosVelIdx(4:6), ui8PosVelIdx(4:6)) - 0.5 * dAtmDensity * dBcoeff * ...
-%                ( dAtmRelVel./dNormAtmRelVel * transpose(dAtmRelVel) + dNormAtmRelVel * eye(3) );% Temporary for development
-
-
+dDynMatrix(ui8PosVelIdx(4:6), ui8PosVelIdx(4:6)) = dDynMatrix(ui8PosVelIdx(4:6), ui8PosVelIdx(4:6)) + dDVelDVel;
 
 end
