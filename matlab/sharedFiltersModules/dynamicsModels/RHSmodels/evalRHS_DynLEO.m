@@ -137,13 +137,6 @@ dPosNorm3 = dPosNorm2 * dPosNorm;
 dPosNorm4 = dPosNorm3 * dPosNorm;
 
 % Assign auxiliary variables
-drx   = dxState_IN(ui16posVelIdx(1)); 
-dry   = dxState_IN(ui16posVelIdx(2));
-drz   = dxState_IN(ui16posVelIdx(3));
-dvx = dxState_IN(ui16posVelIdx(4)); 
-dvy = dxState_IN(ui16posVelIdx(5));
-dvz = dxState_IN(ui16posVelIdx(6));
-
 drx_TF = dDCMmainAtt_INfromTF(:, 1)' * dxState_IN(ui16posVelIdx(1:3));
 dry_TF = dDCMmainAtt_INfromTF(:, 2)' * dxState_IN(ui16posVelIdx(1:3));
 drz_TF = dDCMmainAtt_INfromTF(:, 3)' * dxState_IN(ui16posVelIdx(1:3));
@@ -170,10 +163,18 @@ dAccTot(1:3) = - (dMainGM/dPosNorm3) * dxState_IN(ui16posVelIdx(1:3));
 
 % J2 Zonal Harmonic acceleration
 dAccJ2 = zeros(3,1);
-dAccJ2(1:3) = dDCMmainAtt_INfromTF * (3*abs(dCoeffJ2)*dMainGM*dRearth^2) / (2*dPosNorm4)*...
-                                        [drx_TF/dPosNorm *(5* drz_TF^2/(dPosNorm2) - 1);
-                                         dry_TF/dPosNorm *(5* drz_TF^2/(dPosNorm2) - 1);
-                                         drz_TF/dPosNorm *(5* drz_TF^2/(dPosNorm2) - 3)];
+% dAccJ2(1:3) = dDCMmainAtt_INfromTF * (3*abs(dCoeffJ2)*dMainGM*dRearth^2) / (2*dPosNorm4)*...
+%                                         [drx_TF/dPosNorm *(5* drz_TF^2/(dPosNorm2) - 1);
+%                                          dry_TF/dPosNorm *(5* drz_TF^2/(dPosNorm2) - 1);
+%                                          drz_TF/dPosNorm *(5* drz_TF^2/(dPosNorm2) - 3)];
+dAccJ2(1:3) = evalRHS_ZonalHarmonics20(dxState_IN(ui16posVelIdx), ...
+                                        dDCMmainAtt_INfromTF, ...
+                                        abs(dCoeffJ2), ...
+                                        dMainGM, ...
+                                        dRearth, ...
+                                        dPosNorm, ...
+                                        dPosNorm2, ...
+                                        dPosNorm4);
 
 % J3 Zonal Harmonic acceleration
 % z3 = z*z*z;
@@ -184,20 +185,16 @@ dAccJ2(1:3) = dDCMmainAtt_INfromTF * (3*abs(dCoeffJ2)*dMainGM*dRearth^2) / (2*dP
 %      5* y/dPosNorm * (7 * z3divPosNorm3 - 3*z/dPosNorm);
 %      3* (35/3)*(z3divPosNorm3*(z/dPosNorm) - 10*(z/dPosNorm)^2 + 1)];
 
-% Cannonball-like Drag
-dVrel = zeros(1,1);
-dVrel(1) = norm( [dvx;dvy;dvz] - cross([0;0;dEarthSpinRate] , [drx;dry;drz]) ); % relative velocity s/c-air [km/s]
-
-% Evaluate atmospheric density model
-dAtmDensity = zeros(1,1);
-dAtmDensity(1) = 1E9 * (evalAtmExpDensity(dAtmCoeffsData, dPosNorm - dRearth)); % [kg/km^3]
-
-% Compute drag acceleration
+% Compute drag acceleration (Cannonball-like)
 dAccDrag = zeros(3,1);
-dAccDrag(:) = -0.5 * dAtmDensity * dVrel * (dDragCoeff*dDragCrossArea/dMassSC) * ...
-                                                    [(dvx + dEarthSpinRate*dry);
-                                                     (dvy - dEarthSpinRate*drx);
-                                                      dvz]; % [km/s^2]
+[dAccDrag(:)] = evalRHS_ExponentialAtmDrag(dxState_IN(ui16posVelIdx), ...
+                                            dAtmCoeffsData, ...
+                                            dEarthSpinRate, ...
+                                            dDragCoeff, ...
+                                            dDragCrossArea, ...
+                                            dMassSC, ...
+                                            dRearth, ...
+                                            dPosNorm);
 
 %% 3rd Body accelerations
 dTotAcc3rdBody = zeros(3,1);

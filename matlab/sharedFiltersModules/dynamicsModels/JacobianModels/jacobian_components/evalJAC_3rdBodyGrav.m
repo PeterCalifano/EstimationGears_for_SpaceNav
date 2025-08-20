@@ -24,14 +24,14 @@ end
 % drv3rdBodyGravityJac
 % -------------------------------------------------------------------------------------------------------------
 %% CHANGELOG
-% 24-02-2025       Pietro Califano      First version implemented from legacy code.
+% 24-02-2025    Pietro Califano     First version implemented from legacy code.
+% 19-08-2025    Pietro Califano     [MAJOR] Bug fix of indexing to allocate Jacobian 
+%                                           (was being allocated to veloicty!)
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % [-]
 % -------------------------------------------------------------------------------------------------------------
-%% Future upgrades
-% [-]
-% -------------------------------------------------------------------------------------------------------------
+
 %% Function code
 drv3rdBodyGravityJac = zeros(6,6);
 ui8PosVelIdx = strFilterConstConfig.strStatesIdx.ui8posVelIdx;
@@ -52,9 +52,9 @@ if ui32NumOf3rdBodies > 0
         dNormBodyPosToSC3 = dNormBodyPosToSC * dNormBodyPosToSC * dNormBodyPosToSC;
 
         % Compute and sum jacobian
-        drv3rdBodyGravityJac(ui8PosVelIdx(4:6), ui8PosVelIdx(4:6)) = drv3rdBodyGravityJac(ui8PosVelIdx(4:6), ui8PosVelIdx(4:6)) ...
-            + d3rdBodiesGM * ( (1/dNormBodyPosToSC3) * eye(3) ...
-            - ( 3/(dNormBodyPosToSC3*dNormBodyPosToSC*dNormBodyPosToSC) ) * dBodyPosToSC * transpose(dBodyPosToSC) );
+        drv3rdBodyGravityJac(ui8PosVelIdx(4:6), ui8PosVelIdx(1:3)) = drv3rdBodyGravityJac(ui8PosVelIdx(4:6), ui8PosVelIdx(1:3)) ...
+                                                            + d3rdBodiesGM * ( (1/dNormBodyPosToSC3) * eye(3) ...
+                                                            - ( 3/(dNormBodyPosToSC3*dNormBodyPosToSC*dNormBodyPosToSC) ) * dBodyPosToSC * transpose(dBodyPosToSC) );
         
         % DEVNOTE: zero-out contributions below machine precision
         drv3rdBodyGravityJac( abs(drv3rdBodyGravityJac) < eps ) = 0.0;
