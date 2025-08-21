@@ -69,19 +69,44 @@ elseif dPosNorm7 < eps
 
 end
 
-% Compute acceleration
-dPosVec_TF = transpose(dDCMmainAtt_INfromTF) * dxState_IN(1:3);
-dAuxPos_TF = dPosVec_TF;
-dAuxPos_TF(3) = 3 * dAuxPos_TF(3);
+%% Compute acceleration Jacobian
+% dJacWrtTargetFixedState = - 1.5 * dCoeffJ2 * dMainBodyGM * dRefRadius^2 * ( 1/dPosNorm5 * diag([1 1 3]) ...
+%                                                                      - 5/dPosNorm7 * (dPosVec_TF * transpose(dPosVec_TF))...
+%                                                                          + 35/(dPosNorm7*dPosNorm*dPosNorm) * dPosVec_TF(3)^2 * ...
+%                                                                                     ( dAuxPos_TF * transpose(dPosVec_TF) ) );
+% 
+% dJacWrtInertialState = dDCMmainAtt_INfromTF * (dJacWrtTargetFixedState) * transpose(dDCMmainAtt_INfromTF);
 
-% DEVNOTE:  
-% 1) sign changed to +1.5
-% 2) Term of 1/r^7 now using symmetric form 0.5(a*r^T + r*a^T)
-dJacWrtTargetFixedState = 1.5 * dCoeffJ2 * dMainBodyGM * dRefRadius^2 * ( 1/dPosNorm5 * diag([1 1 3]) ...
-                                                                     - 5/dPosNorm7 * 0.5 * (dAuxPos_TF * transpose(dPosVec_TF) + dPosVec_TF * transpose(dAuxPos_TF))...
-                                                                         + 35/(dPosNorm7*dPosNorm*dPosNorm) * dPosVec_TF(3)^2 * ...
-                                                                                    ( dPosVec_TF * transpose(dPosVec_TF) ) );
+% Rotate position to TF (body-fixed)
+dPosVec_TF = transpose(dDCMmainAtt_INfromTF) * dxState_IN(1:3);
+dx = dPosVec_TF(1); 
+dy = dPosVec_TF(2); 
+dz = dPosVec_TF(3);
+
+dPosNorm9 = dPosNorm7 * dPosNorm * dPosNorm;
+
+% Constant scalar coefficient
+dConstCoeff = 1.5 * dCoeffJ2 * dMainBodyGM * (dRefRadius^2);
+
+% Diagonal entries
+dJacWrtTargetFixedState = zeros(3,3);
+dJacWrtTargetFixedState(1,1) = dConstCoeff * ( -1/dPosNorm5 + 5*(dx*dx + dz*dz)/dPosNorm7 - 35*(dx*dx)*(dz*dz)/dPosNorm9 );
+dJacWrtTargetFixedState(2,2) = dConstCoeff * ( -1/dPosNorm5 + 5*(dy*dy + dz*dz)/dPosNorm7 - 35*(dy*dy)*(dz*dz)/dPosNorm9 );
+dJacWrtTargetFixedState(3,3) = dConstCoeff * ( -3/dPosNorm5 + 30*(dz*dz)/dPosNorm7 - 35*(dz*dz)*(dz*dz)/dPosNorm9 );
+
+% Cross-terms
+dxy = dConstCoeff * ( 5*dx*dy/dPosNorm7 - 35*dx*dy*(dz*dz)/dPosNorm9 );
+dxz = dConstCoeff * ( 15*dx*dz/dPosNorm7 - 35*dx*(dz*dz*dz)/dPosNorm9 );
+dyz = dConstCoeff * ( 15*dy*dz/dPosNorm7 - 35*dy*(dz*dz*dz)/dPosNorm9 );
+
+dJacWrtTargetFixedState(1,2) = dxy; 
+dJacWrtTargetFixedState(2,1) = dxy;
+dJacWrtTargetFixedState(1,3) = dxz; 
+dJacWrtTargetFixedState(3,1) = dxz;
+dJacWrtTargetFixedState(2,3) = dyz; 
+dJacWrtTargetFixedState(3,2) = dyz;
 
 dJacWrtInertialState = dDCMmainAtt_INfromTF * (dJacWrtTargetFixedState) * transpose(dDCMmainAtt_INfromTF);
+
 end
 
