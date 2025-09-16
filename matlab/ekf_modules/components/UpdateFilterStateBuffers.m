@@ -3,25 +3,28 @@ function [strMeasModelParams, ui32PoseCounter] = UpdateFilterStateBuffers(dNewTi
                                                                         bNewImageAcquisition, ...
                                                                         strMeasModelParams, ...
                                                                         dCurrentDCM_SCBfromIN, ...
+                                                                        dDCM_CamFromSCB, ...
                                                                         ui32PoseCounter, ...
                                                                         strFilterConstConfig) %#codegen
 arguments
-    dNewTimestamp         double {isscalar, isnumeric}
-    bMeasTypeFlags        (:,1) {islogical, isvector}
-    bNewImageAcquisition  {islogical, isscalar}
-    strMeasModelParams    {isstruct}
-    dCurrentDCM_SCBfromIN (3,3) {ismatrix, isnumeric}
-    ui32PoseCounter       uint32 {isscalar, isnumeric}
-    strFilterConstConfig  {isstruct}
+    dNewTimestamp           double {isscalar, isnumeric}
+    bMeasTypeFlags          (:,1) {islogical, isvector}
+    bNewImageAcquisition    {islogical, isscalar}
+    strMeasModelParams      {isstruct}
+    dCurrentDCM_SCBfromIN   (3,3) {ismatrix, isnumeric}
+    dDCM_CamFromSCB         (3,3) {ismatrix, isnumeric}
+    ui32PoseCounter         uint32 {isscalar, isnumeric}
+    strFilterConstConfig    {isstruct}
 end
 %% SIGNATURE
 % [strMeasModelParams, ui32PoseCounter] = UpdateFilterStateBuffers(dNewTimestamp, ...
-%                                                                         bMeasTypeFlags, ...
-%                                                                         bNewImageAcquisition, ...
-%                                                                         strMeasModelParams, ...
-%                                                                         dCurrentDCM_SCBfromIN, ...
-%                                                                         ui32PoseCounter, ...
-%                                                                         strFilterConstConfig) %#codegen
+%                                                                  bMeasTypeFlags, ...
+%                                                                  bNewImageAcquisition, ...
+%                                                                  strMeasModelParams, ...
+%                                                                  dCurrentDCM_SCBfromIN, ...
+%                                                                  dDCM_CamFromSCB, ...
+%                                                                  ui32PoseCounter, ...
+%                                                                  strFilterConstConfig) %#codegen
 % -------------------------------------------------------------------------------------------------------------
 %% DESCRIPTION
 % Function to manage spacecraft attitude buffer and associated timestamps by removing oldest entry at each
@@ -33,6 +36,7 @@ end
 % bNewImageAcquisition  {islogical, isscalar}
 % strMeasModelParams    {isstruct}
 % dCurrentDCM_SCBfromIN (3,3) {ismatrix, isnumeric}
+% dDCM_CamFromSCB         (3,3) {ismatrix, isnumeric}
 % ui32PoseCounter       uint32 {isscalar, isnumeric}
 % strFilterConstConfig  {isstruct}
 % -------------------------------------------------------------------------------------------------------------
@@ -67,7 +71,7 @@ if bNewImageAcquisition || any(bMeasTypeFlags)
 
     % Store current attitude of SCB wrt IN in LATEST
     strMeasModelParams.dBufferTimestamps(1)     = dNewTimestamp;
-    strMeasModelParams.dDCM_SCBiFromIN(:, :, 1) = dCurrentDCM_SCBfromIN;
+    strMeasModelParams.dDCM_SCBiFromIN(:, :, 1) = dDCM_CamFromSCB * dCurrentDCM_SCBfromIN;
 
 end
 
