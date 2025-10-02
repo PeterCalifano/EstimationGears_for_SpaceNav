@@ -1,10 +1,11 @@
-function [strMeasModelParams, ui16PoseCounter] = UpdateFilterStateBuffers(dNewTimestamp, ...
+function [strMeasModelParams, ui32PoseCounter] = UpdateFilterStateBuffers(dNewTimestamp, ...
                                                                         bMeasTypeFlags, ...
                                                                         bNewImageAcquisition, ...
                                                                         strMeasModelParams, ...
                                                                         dCurrentDCM_SCBfromIN, ...
                                                                         dDCM_CamFromSCB, ...
                                                                         ui32PoseCounter, ...
+                                                                        strDynParams, ...
                                                                         strFilterConstConfig) %#codegen
 arguments
     dNewTimestamp           (1,1)   double {mustBeNumericOrLogical, mustBeNumeric}
@@ -14,6 +15,7 @@ arguments
     dCurrentDCM_SCBfromIN   (3,3)   {mustBeNumeric}
     dDCM_CamFromSCB         (1,1)   double {mustBeNumeric}
     ui32PoseCounter         (1,1)   uint32
+    strDynParams            (1,1)   struct
     strFilterConstConfig    (1,1)   struct
 end
 
@@ -61,9 +63,9 @@ if bNewImageAcquisition || any(bMeasTypeFlags)
         dTmpTimeBuffer = strMeasModelParams.dBufferTimestamps(1:end-1);
         strMeasModelParams.dBufferTimestamps(2:end) = dTmpTimeBuffer;
 
-        if ui16PoseCounter == strFilterConstConfig.ui16NumWindowPoses + 1
+        if ui32PoseCounter == strFilterConstConfig.ui16NumWindowPoses + 1
             % Keep counter equal to MAX
-            ui16PoseCounter = uint16(strFilterConstConfig.ui16NumWindowPoses + 1);
+            ui32PoseCounter = uint32(strFilterConstConfig.ui16NumWindowPoses + 1);
         end
 
         ui32PoseCounter = ui32PoseCounter + uint32(1);
