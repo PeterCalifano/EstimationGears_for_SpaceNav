@@ -1,10 +1,10 @@
-function [strMeasModelParams, ui32PoseCounter] = UpdateFilterStateBuffers(dNewTimestamp, ...
+function [strMeasModelParams, ui16PoseCounter] = UpdateFilterStateBuffers(dNewTimestamp, ...
                                                                         bMeasTypeFlags, ...
                                                                         bNewImageAcquisition, ...
                                                                         strMeasModelParams, ...
                                                                         dCurrentDCM_SCBfromIN, ...
                                                                         dDCM_CamFromSCB, ...
-                                                                        ui32PoseCounter, ...
+                                                                        ui16PoseCounter, ...
                                                                         strDynParams, ...
                                                                         strFilterConstConfig) %#codegen
 arguments
@@ -14,7 +14,7 @@ arguments
     strMeasModelParams      (1,1)   struct
     dCurrentDCM_SCBfromIN   (3,3)   {mustBeNumeric}
     dDCM_CamFromSCB         (1,1)   double {mustBeNumeric}
-    ui32PoseCounter         (1,1)   uint32
+    ui16PoseCounter         (1,1)   uint16
     strDynParams            (1,1)   struct
     strFilterConstConfig    (1,1)   struct
 end
@@ -40,12 +40,12 @@ end
 % strMeasModelParams      (1,1)   struct
 % dCurrentDCM_SCBfromIN   (3,3)   {mustBeNumeric}
 % dDCM_CamFromSCB         (1,1)   double {mustBeNumeric}
-% ui32PoseCounter         (1,1)   uint32
+% ui16PoseCounter         (1,1)   uint16
 % strFilterConstConfig    (1,1)   struct
 % -------------------------------------------------------------------------------------------------------------
 %% OUTPUT
 % strMeasModelParams
-% ui32PoseCounter
+% ui16PoseCounter
 % -------------------------------------------------------------------------------------------------------------
 %% CHANGELOG
 % 26-05-2025    Pietro Califano     Implementation derived from existing simulation code
@@ -63,12 +63,12 @@ if bNewImageAcquisition || any(bMeasTypeFlags)
         dTmpTimeBuffer = strMeasModelParams.dBufferTimestamps(1:end-1);
         strMeasModelParams.dBufferTimestamps(2:end) = dTmpTimeBuffer;
 
-        if ui32PoseCounter == strFilterConstConfig.ui16NumWindowPoses + 1
+        if ui16PoseCounter == strFilterConstConfig.ui16NumWindowPoses + 1
             % Keep counter equal to MAX
-            ui32PoseCounter = uint32(strFilterConstConfig.ui16NumWindowPoses + 1);
+            ui16PoseCounter = uint16(strFilterConstConfig.ui16NumWindowPoses + 1);
         end
 
-        ui32PoseCounter = ui32PoseCounter + uint32(1);
+        ui16PoseCounter = ui16PoseCounter + uint16(1);
     end
 
     % Store current attitude of SCB wrt IN in LATEST
