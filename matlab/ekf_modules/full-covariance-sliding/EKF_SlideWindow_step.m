@@ -12,7 +12,7 @@ arguments
     dxState                 (:,1) double {mustBeNumeric}
     dxStateCov              (:,:) double {mustBeNumeric}
     dStateTimetag           (:,1) double {mustBeNumeric}
-    dTargetTimetag          (1,1) double {mustBeScalarOrEmpty, mustBeNumeric}
+    dTargetTimetag          (1,1) double {mustBeNumeric}
     strMeasBus              (1,1) struct
     strMeasModelParams      (1,1) struct
     strDynParams            (1,1) struct
@@ -40,7 +40,7 @@ end
 % dxState                 (:,1) double {mustBeNumeric}
 % dxStateCov              (:,:) double {mustBeNumeric}
 % dStateTimetag           (:,1) double {mustBeNumeric}
-% dTargetTimetag          (1,1) double {mustBeScalarOrEmpty, mustBeNumeric}
+% dTargetTimetag          (1,1) double {mustBeNumeric}
 % strMeasBus              (1,1) struct
 % strMeasModelParams      (1,1) struct
 % strDynParams            (1,1) struct

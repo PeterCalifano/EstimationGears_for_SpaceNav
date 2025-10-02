@@ -3,10 +3,10 @@ function [dxState, strFilterMutabConfig] = EKF_SlideWindow_AdaptivityManagementS
                                                                                 strFilterMutabConfig, ...
                                                                                 strFilterConstConfig)%#codegen
 arguments
-    dxState              (:,1) {isvector, isnumeric}
-    strMeasBus           (1,1) {isstruct}
-    strFilterMutabConfig (1,1) {isstruct}
-    strFilterConstConfig (1,1) {isstruct}
+    dxState              (:,1) {mustBeNumeric}
+    strMeasBus           (1,1) struct
+    strFilterMutabConfig (1,1) struct
+    strFilterConstConfig (1,1) struct
 end
 
 % Enforce constness constraint for code generation
@@ -27,10 +27,10 @@ if all(strMeasBus.bMeasTypeFlags(1:2) == false)
 
         % Reset biases states to zero value
         ui32BiasStatesIdx = [strFilterConstConfig.strStatesIdx.ui8attBiasDeltaIdx;
-            strFilterConstConfig.strStatesIdx.ui8CoeffSRPidx;
-            strFilterConstConfig.strStatesIdx.ui8ResidualAccelIdx;
-            strFilterConstConfig.strStatesIdx.ui8LidarMeasBiasIdx;
-            strFilterConstConfig.strStatesIdx.ui8CenMeasBiasIdx];
+                            strFilterConstConfig.strStatesIdx.ui8CoeffSRPidx;
+                            strFilterConstConfig.strStatesIdx.ui8ResidualAccelIdx;
+                            strFilterConstConfig.strStatesIdx.ui8LidarMeasBiasIdx;
+                            strFilterConstConfig.strStatesIdx.ui8CenMeasBiasIdx];
 
         dxState(ui32BiasStatesIdx) = 0.0;
 

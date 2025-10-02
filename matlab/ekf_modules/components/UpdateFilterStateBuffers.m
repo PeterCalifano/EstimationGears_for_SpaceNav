@@ -4,18 +4,19 @@ function [strMeasModelParams, ui16PoseCounter] = UpdateFilterStateBuffers(dNewTi
                                                                         strMeasModelParams, ...
                                                                         dCurrentDCM_SCBfromIN, ...
                                                                         dDCM_CamFromSCB, ...
-                                                                        ui16PoseCounter, ...
+                                                                        ui32PoseCounter, ...
                                                                         strFilterConstConfig) %#codegen
 arguments
-    dNewTimestamp           (1,1) double {mustBeScalarOrEmpty, mustBeNumeric}
-    bMeasTypeFlags          (:,1) {mustBeNumericOrLogical}
-    bNewImageAcquisition    {mustBeNumericOrLogical, mustBeScalarOrEmpty}
-    strMeasModelParams      (1,1) struct
-    dCurrentDCM_SCBfromIN   (3,3) double {mustBeNumeric}
-    dDCM_CamFromSCB         (3,3) double {mustBeNumeric}
-    ui16PoseCounter         (1,1) uint16 {mustBeScalarOrEmpty, mustBeNumeric}
-    strFilterConstConfig    (1,1) struct
+    dNewTimestamp           (1,1)   double {mustBeNumericOrLogical, mustBeNumeric}
+    bMeasTypeFlags          (:,1)   {mustBeNumericOrLogical}
+    bNewImageAcquisition    (1,1)   {mustBeNumericOrLogical}
+    strMeasModelParams      (1,1)   struct
+    dCurrentDCM_SCBfromIN   (3,3)   {mustBeNumeric}
+    dDCM_CamFromSCB         (1,1)   double {mustBeNumeric}
+    ui32PoseCounter         (1,1)   uint32
+    strFilterConstConfig    (1,1)   struct
 end
+
 %% SIGNATURE
 % [strMeasModelParams, ui32PoseCounter] = UpdateFilterStateBuffers(dNewTimestamp, ...
 %                                                                  bMeasTypeFlags, ...
@@ -31,14 +32,14 @@ end
 % new function call and "sliding" the existing entries.
 % -------------------------------------------------------------------------------------------------------------
 %% INPUT
-% dNewTimestamp           (1,1) double {mustBeScalarOrEmpty, mustBeNumeric}
-% bMeasTypeFlags          (:,1) {mustBeNumericOrLogical}
-% bNewImageAcquisition    {mustBeNumericOrLogical, mustBeScalarOrEmpty}
-% strMeasModelParams      (1,1) struct
-% dCurrentDCM_SCBfromIN   (3,3) double {mustBeNumeric}
-% dDCM_CamFromSCB         (3,3) double {mustBeNumeric}
-% ui16PoseCounter         (1,1) uint16 {mustBeScalarOrEmpty, mustBeNumeric}
-% strFilterConstConfig    (1,1) struct
+% dNewTimestamp           (1,1)   double {mustBeNumericOrLogical, mustBeNumeric}
+% bMeasTypeFlags          (:,1)   {mustBeNumericOrLogical}
+% bNewImageAcquisition    (1,1)   {mustBeNumericOrLogical}
+% strMeasModelParams      (1,1)   struct
+% dCurrentDCM_SCBfromIN   (3,3)   {mustBeNumeric}
+% dDCM_CamFromSCB         (1,1)   double {mustBeNumeric}
+% ui32PoseCounter         (1,1)   uint32
+% strFilterConstConfig    (1,1)   struct
 % -------------------------------------------------------------------------------------------------------------
 %% OUTPUT
 % strMeasModelParams
@@ -65,7 +66,7 @@ if bNewImageAcquisition || any(bMeasTypeFlags)
             ui16PoseCounter = uint16(strFilterConstConfig.ui16NumWindowPoses + 1);
         end
 
-        ui16PoseCounter = ui16PoseCounter + uint16(1);
+        ui32PoseCounter = ui32PoseCounter + uint32(1);
     end
 
     % Store current attitude of SCB wrt IN in LATEST
