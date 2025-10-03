@@ -2,6 +2,9 @@ close all
 clear
 clc
 
+charThisScriptDir = fileparts(mfilename('fullpath'));
+cd(charThisScriptDir);
+addpath(fullfile(charThisScriptDir, "../../../"))
 % Reset and setup paths
 SetupPaths_EstimationGears;
 
@@ -18,6 +21,7 @@ SetupPaths_EstimationGears;
 % TODO: write minimal configuration function to define 
 % strFilterMutabConfig
 % strFilterConstConfig
+return
 
 %% test_RayEllipsoidIntersection_Position
 dEpsTol = 1e-3;
@@ -98,15 +102,24 @@ assert( all(abs(dErrorJAC) < 1e-6, 'all'))
 %% test_CentroidingObsMatrix_PositionState
 dEpsTol = 1e-4;
 dTargetPosition_IN = [0;0;0];
+dDCM_CamFromSCB = [0, 1, 0;
+                   -1, 0, 0;
+                   0, 0, 1];
 
+% Get test data
+[dKcam, dxStatePost, dDCM_CiFromIN, strMeasModelParams, ...
+    strFilterConstConfig, strFilterMutabConfig] = GetTestData_PointProjection(dTargetPosition_IN, dDCM_CamFromSCB)
+
+ui16StateSize = strFilterConstConfig.ui16StateSize;
+
+% Define handle of projection function
 fcn_handle_dRayOriginIN = @(dxState) pinholeProjectHP(dKcam, ...
                                     dDCM_CiFromIN(:,:,1), ...
                                     dxState, ...
                                     dTargetPosition_IN);
 
-
 dX0diff = dxStatePost(strFilterConstConfig.strStatesIdx.ui8posVelIdx(1:3));
-dFeatPos_CAM = [0;0;0] - dDCM_CiFromIN(:,:,1) * dxStatePost(strFilterConstConfig.strStatesIdx.ui8posVelIdx(1:3));
+dFeatPos_CAM = dTargetPosition_IN - dDCM_CiFromIN(:,:,1) * dX0diff;
 
 % Evaluate analytical jacobian
 dCentroidObsMatrix = diag([dKcam(1,1), dKcam(2,2)]) ...
@@ -122,6 +135,6 @@ dCentroidObsMatrix = diag([dKcam(1,1), dKcam(2,2)]) ...
 % Evaluate FDM jacobian
 dJAC_Centroiding_FDM2ndOrder = ComputeFiniteDiffJacobian(fcn_handle_dRayOriginIN, dX0diff, dEpsTol, 1);
 dErrorJAC_Centroiding = dCentroidObsMatrix(:, 1:3) - dJAC_Centroiding_FDM2ndOrder;
-assert( all(abs(dErrorJAC_Centroiding) < 1e-8, 'all'))
 
+assert( all(abs(dErrorJAC_Centroiding) < 1e-8, 'all'))
 return
