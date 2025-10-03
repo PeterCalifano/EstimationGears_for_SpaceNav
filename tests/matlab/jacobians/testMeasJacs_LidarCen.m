@@ -2,62 +2,22 @@ close all
 clear
 clc
 
+% Reset and setup paths
+SetupPaths_EstimationGears;
+
 % TEST SETUP
 %%% DESCRIPTION
 % Test script to validate implementation of measurements jacobians in MSCKF prototype.
 % -------------------------------------------------------------------------------------------------------------
 %%% CHANGELOG
 % 06-03-2025    Pietro Califano     Added tests.
-% 
 % -------------------------------------------------------------------------------------------------------------
 %%% DEPENDENCIES
 % dFiniteDiffJac = ComputeFiniteDiffJacobian(fcn_handle, dX0diff, dEps, varargs);
 
-% Load test data from WS file
-load('testJac_Lidar_EKF_SlideWindow_30062025.mat');
-
-% % Load test data for feature tracking % TODO
-% bFeatVisibilityMask                     = strMeasModelParams.bFeatVisibilityMask(:, ui16FeatCountID);
-% 
-% % [dFeatJacMatrixProj, dObsVectorProj, dFeatHobs] = ComputeFeatureTrackObsMatrix( dxStatePost, ...
-% %                                                                             bFeatVisibilityMask, ...
-% %                                                                             strMeasModelParams, ...
-% %                                                                             strFilterMutabConfig, ...
-% %                                                                             strFilterConstConfig );
-% 
-% % Get data from buffer struct (FDM)
-% ui32TrackMeasPtr        = strMeasModelParams.ui32TrackMeasPtr;
-% dFeatPos_EstTB          = strMeasModelParams.dFeatPos_EstTB;
-% dFeatPos_Ci             = strMeasModelParams.dFeatPos_Ci;
-% dFeatNormProjRes        = strMeasModelParams.dFeatNormProjRes;
-% % bFeatVisibilityMask     = strMeasModelParams.bFeatVisibilityMask;
-% dDCM_EstTBfromIN        = strMeasModelParams.dDCM_EstTBfromIN;
-% dDCM_TBfromIN           = strMeasModelParams.dDCM_TBfromIN;
-% dDCM_SCBiFromIN          = strMeasModelParams.dDCM_SCBiFromIN;
-% 
-% assert( ui32TrackMeasPtr <= strFilterMutabConfig.ui16WindowStateCounter + 1, 'ERROR: track length cannot be larger than the current window size!');
-% 
-% % Get constant configuration variables
-% ui16WindowSize              = uint16(strFilterConstConfig.ui16WindowPoseSize);
-% ui16StateSize               = strFilterConstConfig.ui16StateSize;
-% ui16MaxNumOfPosesInWindow   = uint16(strFilterConstConfig.ui16NumWindowPoses);
-% ui16MaxTrackLength          = strFilterConstConfig.ui16MaxTrackLength;
-% 
-% % Get mutable configuration variables
-% ui8DecorrAlgorithmID    = strFilterMutabConfig.ui8DecorrAlgorithmID;
-% % ui32LastStateEntryPtr   = ui16StateSize + uint16( strFilterMutabConfig.ui16WindowStateCounter * strFilterConstConfig.ui16WindowPoseSize );
-% ui32LastJacEntryPos     = ui16StateSize + uint16( strFilterMutabConfig.ui16WindowStateCounter * strFilterConstConfig.ui16WindowStateCovSize );
-% 
-% % Allocate variables
-% % Usable size: [2*Nmeas, ui32CurrentStateSize + ui32WindowSize * ui32NumOfPosesInWindow]
-% % Max size: [2*MaxNmeas, ui32CurrentStateSize + ui32WindowSize * ui32MaxNumOfPosesInWindow]
-% % dHobs_State: ith measurement [dHobs_CurrentState, dHobs_Feature]
-% dFeatHobs           = zeros(2*ui16MaxTrackLength, ui16StateSize + ui16MaxNumOfPosesInWindow * ui16WindowSize + 3);
-% dFeatJacMatrixProj  = zeros(2*ui16MaxTrackLength-3, ui16StateSize + ui16MaxNumOfPosesInWindow * ui16WindowSize);
-% dObsVectorProj      = zeros(2*ui16MaxTrackLength-3, 1);
-% 
-% % Define function handle to compute normalized coordinates from position of feature
-% fcn_handle_NormCoordFromPos = @(dPos) dPos(1:2) / dPos(3);
+% TODO: write minimal configuration function to define 
+% strFilterMutabConfig
+% strFilterConstConfig
 
 %% test_RayEllipsoidIntersection_Position
 dEpsTol = 1e-3;
