@@ -1,5 +1,5 @@
 % Reset and add path for this repository only
-charCallDir = cd(fileparts(mfilename));
+charCallDir = cd(fileparts(mfilename('fullpath')));
 
 restoredefaultpath;
 
