@@ -13,7 +13,7 @@ arguments
     bNewImageAcquisition    (1,1)   {mustBeNumericOrLogical}
     strMeasModelParams      (1,1)   struct
     dCurrentDCM_SCBfromIN   (3,3)   {mustBeNumeric}
-    dDCM_CamFromSCB         (1,1)   double {mustBeNumeric}
+    dDCM_CamFromSCB         (3,3)   double {mustBeNumeric}
     ui16PoseCounter         (1,1)   uint16
     strDynParams            (1,1)   struct
     strFilterConstConfig    (1,1)   struct
@@ -73,7 +73,7 @@ if bNewImageAcquisition || any(bMeasTypeFlags)
 
     % Store current attitude of SCB wrt IN in LATEST
     strMeasModelParams.dBufferTimestamps(1)     = dNewTimestamp;
-    strMeasModelParams.dDCM_SCBiFromIN(:, :, 1) = dDCM_CamFromSCB * dCurrentDCM_SCBfromIN;
+    strMeasModelParams.dDCM_SCBiFromIN(:, :, 1) = dCurrentDCM_SCBfromIN;
 
 end
 
