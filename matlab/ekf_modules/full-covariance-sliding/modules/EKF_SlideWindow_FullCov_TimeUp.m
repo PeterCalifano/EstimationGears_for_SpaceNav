@@ -89,6 +89,9 @@ end
 % [-]
 % -------------------------------------------------------------------------------------------------------------
 
+% Coder directives
+coder.inline("always");
+
 % Enforce constraint on constness of struct;
 strFilterConstConfig = coder.const(strFilterConstConfig);
 

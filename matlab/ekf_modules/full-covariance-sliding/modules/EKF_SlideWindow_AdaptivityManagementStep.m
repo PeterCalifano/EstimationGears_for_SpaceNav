@@ -6,8 +6,34 @@ arguments
     dxState              (:,1) {mustBeNumeric}
     strMeasBus           (1,1) struct
     strFilterMutabConfig (1,1) struct
-    strFilterConstConfig (1,1) struct
+    strFilterConstConfig (1,1) struct {coder.mustBeConst}
 end
+%% SIGNATURE
+% [dxState, strFilterMutabConfig] = EKF_SlideWindow_AdaptivityManagementStep(dxState, ...
+%                                                                            strMeasBus, ...
+%                                                                            strFilterMutabConfig, ...
+%                                                                            strFilterConstConfig)%#codegen
+% -------------------------------------------------------------------------------------------------------------
+%% DESCRIPTION
+% Performs  execution of adaptivity modules of the EKF_SlideWindow. Wrap here anything that must modify
+% state or filter (mutable) configuration at runtime in autonomous way.
+% -------------------------------------------------------------------------------------------------------------
+%% INPUT
+% dxState              (:,1) {mustBeNumeric}
+% strMeasBus           (1,1) struct
+% strFilterMutabConfig (1,1) struct
+% strFilterConstConfig (1,1) struct {coder.mustBeConst}
+% -------------------------------------------------------------------------------------------------------------
+%% OUTPUT
+% dxState
+% strFilterMutabConfig
+% -------------------------------------------------------------------------------------------------------------
+%% CHANGELOG
+% 04-10-2025    Pietro Califano     Add function documentation.
+% -------------------------------------------------------------------------------------------------------------
+
+% Coder directives
+coder.inline("always");
 
 % Enforce constness constraint for code generation
 strFilterConstConfig = coder.const(strFilterConstConfig);

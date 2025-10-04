@@ -17,7 +17,7 @@ arguments
     strMeasModelParams      (1,1) struct
     strDynParams            (1,1) struct
     strFilterMutabConfig    (1,1) struct
-    strFilterConstConfig    (1,1) struct
+    strFilterConstConfig    (1,1) struct {coder.mustBeConst}
 end
 %% SIGNATURE
 % [strOutBus, dxState, dxStateCov, dStateTimetag, ...
@@ -45,7 +45,7 @@ end
 % strMeasModelParams      (1,1) struct
 % strDynParams            (1,1) struct
 % strFilterMutabConfig    (1,1) struct
-% strFilterConstConfig    (1,1) struct
+% strFilterConstConfig    (1,1) struct {coder.mustBeConst}
 % -------------------------------------------------------------------------------------------------------------
 %% OUTPUT
 % strOutBus

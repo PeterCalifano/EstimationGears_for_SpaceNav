@@ -16,14 +16,14 @@ function [dxStatePost, ...
                                                     strFilterMutabConfig, ...
                                                     strFilterConstConfig)%#codegen
 arguments
-    dxStatePrior            (:,1) {isvector,isnumeric}
-    dxStateCovPrior         (:,:) {ismatrix,isnumeric}
-    dStateTimetag           (:,1) {isvector,isnumeric}
-    strMeasBus              (1,1) {isstruct}
-    strDynParams            (1,1) {isstruct}
-    strMeasModelParams      (1,1) {isstruct}
-    strFilterMutabConfig    (1,1) {isstruct}
-    strFilterConstConfig    (1,1) {isstruct}
+    dxStatePrior            (:,1) {mustBeNumeric}
+    dxStateCovPrior         (:,:) {mustBeNumeric}
+    dStateTimetag           (:,1) {mustBeNumeric}
+    strMeasBus              (1,1) struct
+    strDynParams            (1,1) struct
+    strMeasModelParams      (1,1) struct
+    strFilterMutabConfig    (1,1) struct
+    strFilterConstConfig    (1,1) struct {coder.mustBeConst}
 end
 %% SIGNATURE
 % [dxStatePost, ...
@@ -34,14 +34,14 @@ end
 %  dAllObservJac, ...
 %  dKalmanGain, ...
 %  dxErrState, ...
-%  dPyyResCov] = MSCKF_FullCov_ObsUp(dxStatePrior, ...
-%                                 dxStateCovPrior, ...
-%                                 dStateTimetag, ...
-%                                 strMeasBus, ...
-%                                 strDynParams, ...
-%                                 strMeasModelParams, ...
-%                                 strFilterMutabConfig, ...
-%                                 strFilterConstConfig)%#codegen
+%  dPyyResCov] = EKF_SlideWindow_FullCov_ObsUp(dxStatePrior, ...
+%                                               dxStateCovPrior, ...
+%                                               dStateTimetag, ...
+%                                               strMeasBus, ...
+%                                               strDynParams, ...
+%                                               strMeasModelParams, ...
+%                                               strFilterMutabConfig, ...
+%                                               strFilterConstConfig)%#codegen
 % -------------------------------------------------------------------------------------------------------------
 %% DESCRIPTION
 % Performs the measurement update step for an Extended Kalman Filter (EKF) with a sliding window and full covariance.
@@ -50,14 +50,14 @@ end
 % The implementation is tailored for spacecraft navigation and supports both additive and multiplicative state corrections.
 % -------------------------------------------------------------------------------------------------------------
 %% INPUT
-% dxStatePrior            (:,1) {isvector,isnumeric}
-% dxStateCovPrior         (:,:) {ismatrix,isnumeric}
-% dStateTimetag           (:,1) {isvector,isnumeric}
-% strMeasBus              {isstruct}
-% strDynParams            {isstruct}
-% strMeasModelParams      {isstruct}
-% strFilterMutabConfig    {isstruct}
-% strFilterConstConfig    {isstruct}
+% dxStatePrior            (:,1) {mustBeNumeric}
+% dxStateCovPrior         (:,:) {mustBeNumeric}
+% dStateTimetag           (:,1) {mustBeNumeric}
+% strMeasBus              (1,1) struct
+% strDynParams            (1,1) struct
+% strMeasModelParams      (1,1) struct
+% strFilterMutabConfig    (1,1) struct
+% strFilterConstConfig    (1,1) struct {coder.mustBeConst}
 % -------------------------------------------------------------------------------------------------------------
 %% OUTPUT
 % dxStatePost
@@ -81,6 +81,9 @@ end
 % 06-06-2025    Pietro Califano     Update observation module with measurement rejection
 % 11-07-2025    Pietro Califano     [MAJOR] Fix incorrect pointer to sliding window entries for update step
 % -------------------------------------------------------------------------------------------------------------
+
+% Coder directives
+coder.inline("always");
 
 % Enforce constraint on constness of struct;
 strFilterConstConfig = coder.const(strFilterConstConfig);
