@@ -7,14 +7,14 @@ function [dxState, dxStateCov, dStateTimetag, strDynParams, strFilterMutabConfig
                                                                                                                 strFilterMutabConfig, ...
                                                                                                                 strFilterConstConfig)%#codegen
 arguments
-    dxState                 (:,1) double {isvector, isnumeric}
-    dxStateCov              (:,:) double {ismatrix, isnumeric}
-    dStateTimetag           (:,1) double {isvector, isnumeric}
-    dTargetTimetag          (1,1) double {isscalar, isnumeric}
-    strMeasModelParams      (1,1) {isstruct}
-    strDynParams            (1,1) {isstruct}
-    strFilterMutabConfig    (1,1) {isstruct}
-    strFilterConstConfig    (1,1) {isstruct}
+    dxState                 (:,1) double {mustBeNumeric}
+    dxStateCov              (:,:) double {mustBeNumeric}
+    dStateTimetag           (:,1) double {mustBeNumeric}
+    dTargetTimetag          (1,1) double {mustBeNumeric}
+    strMeasModelParams      (1,1) struct
+    strDynParams            (1,1) struct
+    strFilterMutabConfig    (1,1) struct
+    strFilterConstConfig    (1,1) struct {coder.mustBeConst}
 end
 
 if coder.const(strFilterConstConfig.ui16NumWindowPoses > 0)

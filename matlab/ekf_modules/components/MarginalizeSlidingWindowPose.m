@@ -1,11 +1,11 @@
 function [dxStateCov, strFilterMutabConfig] = MarginalizeSlidingWindowPose(dxStateCov, ...
-                                                    strFilterMutabConfig, ...
-                                                    strFilterConstConfig, ...
-                                                    enumMarginalizeMethod)%#codegen
+                                                                strFilterMutabConfig, ...
+                                                                strFilterConstConfig, ...
+                                                                enumMarginalizeMethod)%#codegen
 arguments
-    dxStateCov              (:,:) double {ismatrix, isnumeric}
-    strFilterMutabConfig    (1,1) {isstruct}
-    strFilterConstConfig    (1,1) {isstruct}
+    dxStateCov              (:,:) double {mustBeNumeric}
+    strFilterMutabConfig    (1,1) struct
+    strFilterConstConfig    (1,1) struct {coder.mustBeConst}
     enumMarginalizeMethod   (1,:) char {mustBeMember(enumMarginalizeMethod, ["reset", "shur"])} = "reset"
 end
 %% SIGNATURE
@@ -15,9 +15,9 @@ end
 % Function implementing methods to remove state entries from state vector and covariance.
 % -------------------------------------------------------------------------------------------------------------
 %% INPUT
-% dxStateCov              (:,:) double {ismatrix, isnumeric}
-% strFilterMutabConfig    (1,1) {isstruct}
-% strFilterConstConfig    (1,1) {isstruct}
+% dxStateCov              (:,:) double {mustBeNumeric}
+% strFilterMutabConfig    (1,1) struct
+% strFilterConstConfig    (1,1) struct
 % enumMarginalizeMethod   (1,:) char {mustBeMember(enumMarginalizeMethod, ["reset", "shur"])} = "reset"
 % -------------------------------------------------------------------------------------------------------------
 %% OUTPUT
