@@ -296,10 +296,59 @@ if bMeasTypeFlags(3) == true
         if coder.target("MATLAB") || coder.target("MEX")
             fprintf('Lidar: OK.\t')
         end
+    elseif (bFailureFlag || not(bIntersectFlag)) && not(strFilterMutabConfig.bEnableLidarFallbackPrediction)
+
+        % Set failure flag
+        strFilterMutabConfig.bLidarIntersectFailure = true;
+
+        if coder.target('MATLAB') || coder.target('MEX')
+            warning('ERROR: Lidar measurement received but not processed due to error in filter prediction model (Ray Ellipsoid intersection test)!')
+        end
+
+        bMeasTypeFlags(2) = false;
     else
-        warning('Lidar measurement received but not processed due to error in filter prediction model (Ray Ellipsoid intersection test)!')
-        bMeasTypeFlags(3) = false;
-        %strFilterMutabConfig.bConsiderStatesMode(strFilterConstConfig.strStatesIdx.ui8LidarMeasBiasIdx) = true;
+        if coder.target('MATLAB') || coder.target('MEX')
+            % Lidar fallback model (range only)
+            warning('WARNING: Lidar measurement received but ellipsoid intersection test failed. Processing using fallback (range) model.')
+        end
+
+        % Reset bias to zero if false (switch from intersection)
+        if strFilterMutabConfig.bLidarIntersectFailure == false
+            dxStatePost(strFilterConstConfig.strStatesIdx.ui8LidarMeasBiasIdx) = 0.0;
+        end
+
+        % Set failure flag
+        strFilterMutabConfig.bLidarIntersectFailure = true;
+
+        % Compute range residual
+        dIntersectDistance = norm(dRayOrigin_IN) - strDynParams.strMainData.dRefRadius;
+        dRangeLidarPredict = dIntersectDistance + dxStatePost(strFilterConstConfig.strStatesIdx.ui8LidarMeasBiasIdx);
+
+        % Residual computation
+        dRangeLidarResidual = strMeasBus.dRangeLidarCentroid(1) - dRangeLidarPredict;
+
+        % Increase autocovariance of measurement to account for simplified model
+        dMeasAutoCovR(ui32ResStartAllocPtr,ui32ResStartAllocPtr) = strFilterMutabConfig.dRangeLidarSigma.^2 + strFilterMutabConfig.dRangeLidarShapeSigma^2;
+
+        % Jacobian evaluation
+        dRangeLidarObsMatrix = zeros(1, ui16StateSize);
+        dRangeLidarObsMatrix(1, strFilterConstConfig.strStatesIdx.ui8posVelIdx(1:3))    = dRayOrigin_IN / norm(dRayOrigin_IN);
+
+        if not(strFilterConstConfig.bOrbitStateOnly)
+            dRangeLidarObsMatrix(1, strFilterConstConfig.strStatesIdx.ui8LidarMeasBiasIdx)  = 1.0;
+        end
+
+        % Compute and allocation global Jacobian and residuals entry
+        dAllObservJac(ui32ResStartAllocPtr, 1:ui16StateSize )  = dRangeLidarObsMatrix; %#ok<*UNRCH> % TODO
+        dAllPriorResVector( ui32ResStartAllocPtr )             = dRangeLidarResidual;
+        ui32MeasAllocIndex(1,:) = [ui32ResStartAllocPtr, ui32ResStartAllocPtr];
+
+        % Increment residual allocation pointer
+        ui32ResStartAllocPtr = ui32ResStartAllocPtr + uint32(1);
+
+        if coder.target("MATLAB") || coder.target("MEX")
+            fprintf('Lidar: OK.  ')
+        end
     end
 end
 
