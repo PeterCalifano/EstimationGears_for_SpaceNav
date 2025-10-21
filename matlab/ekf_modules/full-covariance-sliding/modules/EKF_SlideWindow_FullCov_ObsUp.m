@@ -720,6 +720,15 @@ if any(bMeasTypeFlags) % Run update step if measurements are available
     %%% Update Mean state
     dxErrState(1:ui16LastCovEntryPtr)  = dKalmanGain(1:ui16LastCovEntryPtr, 1:ui32LastValidResEntryPtr) * dObsVectorRedux(1:ui32LastValidResEntryPtr); 
     
+    % Set entries of error state to zero if consider
+    if any(strFilterMutabConfig.bConsiderStatesMode, 'all')
+
+        bConsiderStatesMode   = strFilterMutabConfig.bConsiderStatesMode;
+        strCurrentStateIndex = 1:ui16StateSize;
+        dxErrState(strCurrentStateIndex(bConsiderStatesMode)) = 0.0;
+    end
+
+
     % State Correction (current state, assumed additive only for current implementation)
     dxStatePost(1:ui16StateSize) = dxStatePrior(1:ui16StateSize) + dxErrState(1:ui16StateSize);
     
