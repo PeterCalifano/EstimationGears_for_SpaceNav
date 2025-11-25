@@ -6,9 +6,9 @@ function dDrvDt = filterDynOrbit(dStateTimetag, ...
 arguments
     dStateTimetag           (1, 1) double
     dxState                 (:, 1) double
-    strDynParams            {isstruct}
-    strFilterMutabConfig    {isstruct}
-    strFilterConstConfig    {isstruct}
+    strDynParams            (1,1) struct 
+    strFilterMutabConfig    (1,1) struct 
+    strFilterConstConfig    (1,1) struct {coder.mustBeConst}
 end
 %% PROTOTYPE
 % dDrvDt = filterDynOrbit(dStateTimetag, ...
