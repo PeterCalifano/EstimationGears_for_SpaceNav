@@ -4,29 +4,37 @@ function [drvMainBodyGravityJac] = evalJAC_InertialMainBodyGrav(dxState_IN, ...
                                                                 dDCMmainAtt_INfromTF, ...
                                                                 dSHcoeff, ...
                                                                 ui16MaxSHdegree, ...
-                                                                dBodyPosition_IN) %#codegen %#codegen
+                                                                dBodyPosition_IN) %#codegen
 arguments
-    dxState_IN
-    dMainBodyGM
-    strFilterConstConfig
-    dDCMmainAtt_INfromTF
-    dSHcoeff
-    ui16MaxSHdegree
-    dBodyPosition_IN
+    dxState_IN              (:,1) {isvector,isnumeric}
+    dMainBodyGM             (1,1) {isscalar, isnumeric}
+    strFilterConstConfig            {isstruct}
+    dDCMmainAtt_INfromTF    (3,3) {ismatrix, isnumeric}
+    dSHcoeff                
+    ui16MaxSHdegree               {isscalar, isnumeric}
+    dBodyPosition_IN        (3,1) {isvector, isnumeric} = zeros(3,1)
 end
 %% PROTOTYPE
+% [drvMainBodyGravityJac] = evalJAC_InertialMainBodyGrav(dxState_IN, ...
+%                                                         dMainBodyGM, ...
+%                                                         strFilterConstConfig, ...
+%                                                         dDCMmainAtt_INfromTF, ...
+%                                                         dSHcoeff, ...
+%                                                         ui16MaxSHdegree, ...
+%                                                         dBodyPosition_IN) %#codegen
 % -------------------------------------------------------------------------------------------------------------
 %% DESCRIPTION
-% What the function does
+% Function evaluating the RHS of the main body (spherical + spherical harmonics if any), in an Inertially
+% fixed reference frame.
 % -------------------------------------------------------------------------------------------------------------
 %% INPUT
-% in1 [dim] description
-% Name1                     []
-% Name2                     []
-% Name3                     []
-% Name4                     []
-% Name5                     []
-% Name6                     []
+% dxState_IN              (:,1) {isvector,isnumeric}
+% dMainBodyGM             (1,1) {isscalar, isnumeric}
+% strFilterConstConfig            {isstruct}
+% dDCMmainAtt_INfromTF    (3,3) {ismatrix, isnumeric}
+% dSHcoeff
+% ui16MaxSHdegree               {isscalar, isnumeric}
+% dBodyPosition_IN        (:,1) {isvector, isnumeric}
 % -------------------------------------------------------------------------------------------------------------
 %% OUTPUT
 % out1 [dim] description
@@ -38,7 +46,8 @@ end
 % Name6                     []
 % -------------------------------------------------------------------------------------------------------------
 %% CHANGELOG
-% 24-02-2025       Pietro Califano      First version implemented from evalJAC_DynLEO
+% 24-02-2025    Pietro Califano     First version implemented from evalJAC_DynLEO
+% 19-05-2025    Pietro Califano     Preliminary changes for SLX version (SH disabled)
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % [-]
@@ -63,28 +72,27 @@ drvMainBodyGravityJac(ui8PosVelIdx(4:6), ui8PosVelIdx(1:3)) = 3 * (dMainBodyGM /
 
 
 %% NSG gravity (Ext. Spherical Harmonics)
-if isfield(strFilterConstConfig, "bEnableNonSphericalGravity")
-    bEnableNonSphericalGravity = strFilterConstConfig.bEnableNonSphericalGravity;
-else
-    bEnableNonSphericalGravity = false;
-end
+% if isfield(strFilterConstConfig, "bEnableNonSphericalGravity")
+%     bEnableNonSphericalGravity = strFilterConstConfig.bEnableNonSphericalGravity;
+% else
+%     bEnableNonSphericalGravity = false;
+% end
 
-if bEnableNonSphericalGravity
-    error('NOT IMPLEMENTED YET')
-    % TODO
-    drx_TF = dDCMmainAtt_INfromTF(:, 1)' * dxState_IN(ui8PosVelIdx(1:3));
-    dry_TF = dDCMmainAtt_INfromTF(:, 2)' * dxState_IN(ui8PosVelIdx(1:3));
-    drz_TF = dDCMmainAtt_INfromTF(:, 3)' * dxState_IN(ui8PosVelIdx(1:3));
-    
-    drvNonSpherGrav_TF = zeros(3,3);
-    
-    % drvNonSpherGrav_TF % TODO;
-
-    drvMainBodyGravityJac(ui8PosVelIdx(4:6), ui8PosVelIdx(1:3)) = drvMainBodyGravityJac(ui8PosVelIdx(4:6), ui8PosVelIdx(1:3)) ...
-                                                                        + drvMainBodyGravityJac * drvNonSpherGrav_TF * drvMainBodyGravityJac';
-                    
-
-end
+% if bEnableNonSphericalGravity
+%     % TODO (PC)
+%     drx_TF = dDCMmainAtt_INfromTF(:, 1)' * dxState_IN(ui8PosVelIdx(1:3));
+%     dry_TF = dDCMmainAtt_INfromTF(:, 2)' * dxState_IN(ui8PosVelIdx(1:3));
+%     drz_TF = dDCMmainAtt_INfromTF(:, 3)' * dxState_IN(ui8PosVelIdx(1:3));
+% 
+%     drvNonSpherGrav_TF = zeros(3,3);
+% 
+%     % drvNonSpherGrav_TF % TODO;
+% 
+%     drvMainBodyGravityJac(ui8PosVelIdx(4:6), ui8PosVelIdx(1:3)) = drvMainBodyGravityJac(ui8PosVelIdx(4:6), ui8PosVelIdx(1:3)) ...
+%                                                                         + drvMainBodyGravityJac * drvNonSpherGrav_TF * drvMainBodyGravityJac';
+% 
+% 
+% end
 
 end
 

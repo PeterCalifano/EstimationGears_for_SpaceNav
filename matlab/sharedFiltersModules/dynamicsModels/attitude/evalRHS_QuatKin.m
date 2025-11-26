@@ -44,7 +44,7 @@ if bIsQuatVSRPplus
 else
     % Vector Last Scalar first Right Chain (TBC)
     dQuatOmega = [0 , -dAngVelocity';
-                  dAngVelocity', -SkewSymm(dAngVelocity)];
+                  dAngVelocity, -SkewSymm(dAngVelocity)];
 end
 
 % Compute RHS for quaternion kinematics

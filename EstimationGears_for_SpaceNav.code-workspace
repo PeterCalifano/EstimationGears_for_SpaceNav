@@ -8,6 +8,9 @@
 		},
 		{
 			"path": "../SLAM-repos/MSCKF_for_SpaceNav"
+		},
+		{
+			"path": "../nav-backend"
 		}
 	],
 	"settings": {}

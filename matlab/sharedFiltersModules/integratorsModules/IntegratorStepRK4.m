@@ -83,15 +83,15 @@ if not(abs(dDeltaTime) == dIntegrTimeStep)
     ui16IntegrStepsNum = uint16( floor(abs(dDeltaTime) / dIntegrTimeStep) );
 
     % Add 1 step if i_dDeltaTime not multiple of i_dIntegTimeStep
-    dresidualTime = abs(dDeltaTime) - double(ui16IntegrStepsNum) * dIntegrTimeStep;
+    dResidualTime = abs(dDeltaTime) - double(ui16IntegrStepsNum) * dIntegrTimeStep;
 
-    if dresidualTime > 0.0
+    if dResidualTime > 0.0
         bSTEP_ADDED = true;
         ui16IntegrStepsNum = ui16IntegrStepsNum + uint16(1);
     end
 else
     ui16IntegrStepsNum = uint16(1);
-    dresidualTime = 0.0;
+    dResidualTime = 0.0;
 end
 
 % Handle backward propagation case
@@ -105,7 +105,7 @@ for idStep = 1:ui16IntegrStepsNum
 
     % Handle STEP_ADDED case adjusting integrator timestep
     if bSTEP_ADDED == true && idStep == ui16IntegrStepsNum 
-        dIntegrTimeStep = sign(dDeltaTime) * dresidualTime;
+        dIntegrTimeStep = sign(dDeltaTime) * dResidualTime;
     end
 
     % Evaluate integrator stages over timestep domain

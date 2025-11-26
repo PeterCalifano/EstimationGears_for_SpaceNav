@@ -25,6 +25,7 @@ end
 % -------------------------------------------------------------------------------------------------------------
 %% CHANGELOG
 % 04-02-2025    Pietro Califano     Function coded for MSCKF implementation
+% 02-07-2025    Pietro Califano     Add check to prevent incorrect output (no processing of zero input)    
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % [-]
@@ -45,6 +46,10 @@ dCy = dKcam(2, 3);
 % DEVNOTE: for loop here deemed better than writing vectorized with masks
 for idY = 1:ui32PtrToLast
     
+    if dyPixMeasVec(1, idY) == 0.0 && dyPixMeasVec(2, idY) == 0.0
+        continue;
+    end
+
     % Compute normalized (X, Y) coordinates
     dTmpNormVec = [ (dyPixMeasVec(1, idY) - dCx) / dfx; (dyPixMeasVec(2, idY) - dCy) / dfy]; 
     

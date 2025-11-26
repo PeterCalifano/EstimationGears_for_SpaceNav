@@ -41,18 +41,24 @@ end
 % Get indices for allocation
 ui8PosVelIdx        = strFilterConstConfig.strStatesIdx.ui8posVelIdx;
 % ui8attBiasDeltaIdx  = strFilterConstConfig.strStatesIdx.ui8attBiasDeltaIdx;
-ui8CoeffSRPidx      = strFilterConstConfig.strStatesIdx.ui8CoeffSRPidx;
 % ui8ResidualAccelIdx = strFilterConstConfig.strStatesIdx.ui8ResidualAccelIdx;
 % ui8LidarMeasBiasIdx = strFilterConstConfig.strStatesIdx.ui8LidarMeasBiasIdx;
 
-drvSRPwithBiasJac = zeros(6, 4);
+if coder.const(isfield(strFilterConstConfig.strStatesIdx, "ui8CoeffSRPidx"))
+    ui8CoeffSRPidx = strFilterConstConfig.strStatesIdx.ui8CoeffSRPidx;
+else
+    ui8CoeffSRPidx = coder.const(0);
+end
 
-if strFilterMutabConfig.bEnableBiasSRP && not(strFilterConstConfig.bOrbitStateOnly)
+
+if strFilterMutabConfig.bEnableBiasSRP && coder.const(ui8CoeffSRPidx > 0)
     % DEVNOTE: in principle this branching should force the coder to generate two different copies if needed
     % but only one will be instantiated as long as strFilterConstConfig.bEnableBiasSRP is hardcoded.
     dBiasCoeff = dxState(ui8CoeffSRPidx);
+    drvSRPwithBiasJac = zeros(6, 4);
 else
     dBiasCoeff = 0.0;
+    drvSRPwithBiasJac = zeros(6, 3);
 end
 
 %% Compute jacobian wrt SRP acceleration
@@ -62,10 +68,7 @@ dNormSunPositionFromSC_IN = norm( dSunPositionFromSC_IN );
 % DEVNOTE this coefficient is recomputed here, instead of re-using calculation from propagateDyn
 % TODO modify to recompute P_SRP depending on the spacecraft position
 
-dDistFromSunAU = dNormSunPositionFromSC_IN / (149597870.7*1E3); % DEVNOTE Assuming meters!
-dP_SRP0 = 1367/299792458 * ( 1 / dDistFromSunAU^2 ); % [N/m^2]
-
-dCoeffSRP = (dP_SRP0 * strDynParams.strSCdata.dReflCoeff * ...
+dCoeffSRP = (strDynParams.strSRPdata.dP_SRP * strDynParams.strSCdata.dReflCoeff * ...
              strDynParams.strSCdata.dA_SRP)/strDynParams.strSCdata.dSCmass; % Move to compute outside, since this
 
 % Compute Jacobian of position and velocity
@@ -81,7 +84,7 @@ drvSRPwithBiasJac(ui8PosVelIdx(4:6), 1:3) = - ( dCoeffSRP + dBiasCoeff ) * ( dIn
                                                   - 3*dInvNormSunPositionFromSC5 * (dSunPositionFromSC_IN * transpose(dSunPositionFromSC_IN)) ) ; % [3x3]
 
 %% Compute jacobian wrt SRP bias coefficient
-if strFilterMutabConfig.bEnableBiasSRP && not(strFilterConstConfig.bOrbitStateOnly)
+if strFilterMutabConfig.bEnableBiasSRP && coder.const(ui8CoeffSRPidx > 0)
     % DEVNOTE not sure if need to be disabled because in principle the stochastic process affecting the C_SRP
     % coefficient does not enter the deterministic part of the dynamics (hence in A).
     dJacCoeffSRP = - (dCoeffSRP + 1.0) * dInvNormSunPositionFromSC * dSunPositionFromSC_IN;
