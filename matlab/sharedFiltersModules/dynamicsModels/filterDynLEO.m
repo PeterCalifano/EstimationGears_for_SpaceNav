@@ -6,9 +6,9 @@ function dDrvDt = filterDynLEO(dStateTimetag, ...
 arguments
     dStateTimetag           (:, 1) double
     dxState                 (:, 1) double
-    strDynParams            {isstruct}
-    strFilterMutabConfig    {isstruct}
-    strFilterConstConfig    {isstruct}
+    strDynParams            (1,1) struct
+    strFilterMutabConfig    (1,1) struct
+    strFilterConstConfig    (1,1) struct {coder.mustBeConst}
 end
 %% SIGNATURE
 % dDrvDt = filterDynLEO(dStateTimetag, ...
@@ -28,9 +28,9 @@ end
 %% INPUT
 % dStateTimetag           (:, 1) double
 % dxState                 (:, 1) double
-% strDynParams            {isstruct}
-% strFilterMutabConfig    {isstruct}
-% strFilterConstConfig    {isstruct}
+% strDynParams            (1,1) struct
+% strFilterMutabConfig    (1,1) struct
+% strFilterConstConfig    (1,1) struct {coder.mustBeConst}
 % -------------------------------------------------------------------------------------------------------------
 %% OUTPUT
 % dDrvDt
@@ -50,7 +50,7 @@ end
 % -------------------------------------------------------------------------------------------------------------
 %% Function code
 % ui16StateSize = strFilterConstConfig.ui16StateSize;
-ui32PolyMaxDeg = 20; 
+% ui32PolyMaxDeg = 20; 
 strStatesIdx = strFilterConstConfig.strStatesIdx;
 
 % DEVNOTE
