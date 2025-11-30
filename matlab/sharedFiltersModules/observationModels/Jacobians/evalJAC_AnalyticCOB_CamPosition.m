@@ -94,7 +94,7 @@ dJac_ProjectedUnitDir_CamPos = zeros(2,3);
 %%% Compute intermediate gradients
 % Jacobian of reference radius in pixels w.r.t. camera position
 dJac_RefRadiusInPix_CamPos = zeros(1,3);
-dJac_RefRadiusInPix_CamPos(1,1:3) = dMeanInvInstIFOV * (-dNormalizedRefRadius / (1 + dNormalizedRefRadius^2)) * ...
+dJac_RefRadiusInPix_CamPos(1,1:3) = dMeanInvInstIFOV * (-dReferenceMetricRadius / (1 + dNormalizedRefRadius^2)) * ...
                                                     transpose(dCamPosition_W) / dNormPosition^3;
 
 % Jacobian of phase angle in radians w.r.t. camera position
