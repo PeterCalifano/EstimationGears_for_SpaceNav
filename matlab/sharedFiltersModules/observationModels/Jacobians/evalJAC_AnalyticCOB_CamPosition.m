@@ -82,7 +82,7 @@ if dNormProjectSunPos_Cam <= eps('single')
             'Jacobian is undefined for sun vector aligned with camera optical axis.');
         return; % Correction should not be applied in this case (ill-conditioned)
     end
-else
+end
 
 dProjectedCorrectionUnitDir = dSunPosition_Cam(1:2) / dNormProjectSunPos_Cam; % Projection onto image plane, flipped
 
@@ -94,22 +94,20 @@ dJac_ProjectedUnitDir_CamPos = zeros(2,3);
 %%% Compute intermediate gradients
 % Jacobian of reference radius in pixels w.r.t. camera position
 dJac_RefRadiusInPix_CamPos = zeros(1,3);
-dJac_RefRadiusInPix_CamPos(1,1:3) = (dCorrectionScalingCoeff * dPhaseAngleInRad * dMeanInvInstIFOV) * ...
-                                 (-dNormalizedRefRadius / (1 + dNormalizedRefRadius^2)) * ...
-                                 transpose(dCamPosition_W) / dNormPosition^3;
+dJac_RefRadiusInPix_CamPos(1,1:3) = dMeanInvInstIFOV * (-dNormalizedRefRadius / (1 + dNormalizedRefRadius^2)) * ...
+                                                    transpose(dCamPosition_W) / dNormPosition^3;
 
 % Jacobian of phase angle in radians w.r.t. camera position
 dSunUnitDir_W = dSunPosition_W / norm(dSunPosition_W);
 dAuxDotProduct_CamDirSunDir = dot(dCamPosition_W/dNormPosition, dSunUnitDir_W);
 
 dJac_PhaseAngleInRad_CamPos = zeros(1,3);
-dJac_PhaseAngleInRad_CamPos(1,1:3) = dCorrectionScalingCoeff * dRefRadiusInPix * ...
-    ( - transpose(dSunUnitDir_W) / sqrt(1 - dAuxDotProduct_CamDirSunDir^2) ) * ...
-    ( eye(3) / dNormPosition - (dCamPosition_W * transpose(dCamPosition_W)) / dNormPosition^3 );
+dJac_PhaseAngleInRad_CamPos(1,1:3) = ( - transpose(dSunUnitDir_W) / sqrt(1 - dAuxDotProduct_CamDirSunDir^2) ) * ...
+                                        ( eye(3) / dNormPosition - (dCamPosition_W * transpose(dCamPosition_W)) / dNormPosition^3 );
 
 % Compute gradient of magnitude w.r.t. camera position
-dGrad_CorrectionMag_CamPos(:) = dCorrectionScalingCoeff * dPhaseAngleInDeg * dJac_RefRadiusInPix_CamPos + ...
-    dCorrectionScalingCoeff * dRefRadiusInPix * rad2deg(dJac_PhaseAngleInRad_CamPos);
+dGrad_CorrectionMag_CamPos(:) = (dCorrectionScalingCoeff * dPhaseAngleInDeg) * dJac_RefRadiusInPix_CamPos + ...
+                                dCorrectionScalingCoeff * dRefRadiusInPix * rad2deg(dJac_PhaseAngleInRad_CamPos);
 
 % Projected light unit direction term
 if not(bAssumeDirectionIndependent)
@@ -119,6 +117,6 @@ end
 
 %% Assemble complete Jacobian
 dJac_CorrectionXY_CamPos(:,:) = - (dProjectedCorrectionUnitDir * dGrad_CorrectionMag_CamPos + ...
-                                dCorrectionMag * dJac_ProjectedUnitDir_CamPos);
+                                        dCorrectionMag * dJac_ProjectedUnitDir_CamPos);
 
 end
