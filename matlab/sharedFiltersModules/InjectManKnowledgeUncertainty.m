@@ -1,4 +1,4 @@
-function [o_dxStateCov, o_dDeltaVCov] = injectManDispersion(i_dxStateCov, i_dDeltaV, i_dSigmaMag, i_dSigmaDir) %#codegen
+function [o_dxStateCov, o_dDeltaVCov] = InjectManKnowledgeUncertainty(i_dxStateCov, i_dDeltaV, i_dSigmaMag, i_dSigmaDir) %#codegen
 %% PROTOTYPE
 % [o_dxStateCov, P_dV] = injectManDispersion(i_dxStateCov, i_dDeltaV, i_dSigmaMag, i_dSigmaDir)
 % -------------------------------------------------------------------------------------------------------------
@@ -28,9 +28,8 @@ function [o_dxStateCov, o_dDeltaVCov] = injectManDispersion(i_dxStateCov, i_dDel
 %% DEPENDENCIES
 % [-]
 % -------------------------------------------------------------------------------------------------------------
-%% Future upgrades
-% [-]
-% -------------------------------------------------------------------------------------------------------------
+
+
 %% Function code
 
 % Compute dV magnitude and direction

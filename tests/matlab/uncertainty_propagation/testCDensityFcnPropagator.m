@@ -12,7 +12,7 @@ classdef testCDensityFcnPropagator < matlab.unittest.TestCase
         end
         function SetupPaths(self)
             charThisPath = fileparts(mfilename('fullpath'));
-            addpath( genpath(fullfile(charThisPath, 'helpers_mocks')) );
+            addpath( genpath(fullfile(charThisPath, "../test_helpers", "helpers_mocks")) );
         end
     end
 

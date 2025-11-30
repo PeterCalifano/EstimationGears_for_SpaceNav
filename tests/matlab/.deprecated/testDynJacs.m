@@ -2,6 +2,7 @@ close all
 clear
 clc
 
+error('Deprecated, requires rework.')
 % TEST SETUP
 %%% DESCRIPTION
 % Test script to validate implementation of dynamics jacobians in MSCKF prototype.
