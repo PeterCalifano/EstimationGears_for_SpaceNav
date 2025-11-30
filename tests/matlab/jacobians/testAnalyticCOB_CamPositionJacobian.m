@@ -71,6 +71,7 @@ dPhaseAngleInDeg = 60.0; % target phase angle for test case
 dSunDistance = 1e8; % [m] Pick far-away sun position for stability
 
 cfg.dSunPosition_IN = GenerateSunPositionWithPhase_(cfg.dCamPosition_IN, deg2rad(dPhaseAngleInDeg), dSunDistance);
+
 cfg.dPhaseAngleInRad = acos(dot(cfg.dCamPosition_IN / norm(cfg.dCamPosition_IN), cfg.dSunPosition_IN / norm(cfg.dSunPosition_IN)));
 
 end
@@ -100,17 +101,16 @@ end
 
 % Helper to evaluate correction vector
 if bAssumeCorrectionDirIndependence
-    dSunDirection_Cam = cfg.dDCM_CamFromIN(:,:,1) * (cfg.dSunPosition_IN);
+    dSunPosition_Cam = cfg.dDCM_CamFromIN(:,:,1) * (cfg.dSunPosition_IN);
 else
-    dSunDirection_Cam = cfg.dDCM_CamFromIN(:,:,1) * (cfg.dSunPosition_IN - dCamPosition_W);
+    dSunPosition_Cam = cfg.dDCM_CamFromIN(:,:,1) * (cfg.dSunPosition_IN - dCamPosition_W);
 end
 
-dSunDirection_Cam = dSunDirection_Cam / norm(dSunDirection_Cam);
-
 dApparentRadiusInPix = atan(cfg.dReferenceMetricRadius / norm(dCamPosition_W)) * (1 / cfg.dMeanInstFOV);
+
 dPhaseAngleInRad = acos(dot(dCamPosition_W / norm(dCamPosition_W), cfg.dSunPosition_IN / norm(cfg.dSunPosition_IN)));
 
-dCorrection = ComputeCorrectionAnalyticCoB(dSunDirection_Cam, dApparentRadiusInPix, rad2deg(dPhaseAngleInRad));
+dCorrection = ComputeCorrectionAnalyticCoB(dSunPosition_Cam, dApparentRadiusInPix, rad2deg(dPhaseAngleInRad));
 end
 
 function R = RotFromAxis_(axis, angle)
