@@ -1,8 +1,8 @@
-function dCorrectionCoB = ComputeCorrectionAnalyticCoB(dSunDirection_Cam, ...
+function dCorrectionCoB = ComputeCorrectionAnalyticCoB(dSunPosition_Cam, ...
                                                        dApparentRadiusInPix, ...
                                                        dPhaseAngleInDeg)%#codegen
 arguments (Input)
-    dSunDirection_Cam       (3,1) double
+    dSunPosition_Cam       (3,1) double
     dApparentRadiusInPix    (1,1) double 
     dPhaseAngleInDeg        (1,1) double 
 end
@@ -56,10 +56,10 @@ end
 % dUnitCorrectionVector = [cos(dCorrectionDirAngleFromX); sin(dCorrectionDirAngleFromX)];
 
 % Compute direction of correction vector from sun direction
-dOppositeSunDir_Cam = - dSunDirection_Cam(1:2);      % Projection onto image plane, flipped
-dNormSunDir         = norm(dOppositeSunDir_Cam);
+dOppositeSunPos_Cam = - dSunPosition_Cam(1:2);      % Projection onto image plane, flipped
+dNormSunPos         = norm(dOppositeSunPos_Cam);
 
-if dNormSunDir <= eps('double')
+if dNormSunPos <= eps('double')
     % Sun direction is (close to) aligned with camera optical axis
     if coder.target("MATLAB") || coder.target("MEX")
         warning('ComputeCorrectionAnalyticCoB:SunDirAlignedWithOpticalAxis', ...
@@ -69,12 +69,12 @@ if dNormSunDir <= eps('double')
     return;
 end
     
-dUnitCorrectionVector = dOppositeSunDir_Cam / dNormSunDir;    % Unit direction
+dUnitCorrectionVector = dOppositeSunPos_Cam / dNormSunPos;    % Unit direction
 
 % TODO extend to additional correction laws
 % Compute magnitude of correction vector
 dAlphaCoeff = coder.const(0.0062);
-dCorrectionMagnitude = dAlphaCoeff * dApparentRadiusInPix * (dPhaseAngleInDeg); % Lommel Seeliger approximation
+dCorrectionMagnitude = dAlphaCoeff * dApparentRadiusInPix * dPhaseAngleInDeg; % Lommel Seeliger approximation
 
 % Compute the correction vector
 dCorrectionCoB = dCorrectionMagnitude * dUnitCorrectionVector;
