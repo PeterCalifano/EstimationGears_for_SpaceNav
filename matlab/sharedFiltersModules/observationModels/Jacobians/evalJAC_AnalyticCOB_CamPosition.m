@@ -4,7 +4,8 @@ function [dJac_CorrectionXY_CamPos] = evalJAC_AnalyticCOB_CamPosition(dCamPositi
     dDCM_CamFromW, ...
     dReferenceMetricRadius, ...
     dMeanInstFOV, ...
-    dCorrectionScalingCoeff) %#codegen
+    dCorrectionScalingCoeff, ...
+    bAssumeDirectionIndependent) %#codegen
 arguments (Input)
     dCamPosition_W              (3,1) double
     dPhaseAngleInRad            (1,1) double
@@ -13,6 +14,7 @@ arguments (Input)
     dReferenceMetricRadius      (1,1) double
     dMeanInstFOV                (1,1) double
     dCorrectionScalingCoeff     (1,1) double = 0.0062; % From Lommel-Seeliger approximation
+    bAssumeDirectionIndependent (1,1) logical {coder.mustBeConst} = false; % If true, assume correction direction does not depend on camera position (Jacobian remains zero)
 end
 arguments (Output)
     dJac_CorrectionXY_CamPos (2,3) double
@@ -39,6 +41,7 @@ end
 % dReferenceMetricRadius  (1,1) Target physical radius used to compute apparent size [m].
 % dMeanInstFOV            (1,1) Mean instrument instantaneous FOV [rad/px].
 % dCorrectionScalingCoeff (1,1) Analytic CoB scaling coefficient (default 0.0062).
+% bAssumeDirectionIndependent (1,1) If true, assumes correction direction does not depend on camera position.
 % -------------------------------------------------------------------------------------------------------------
 %% OUTPUT
 % dJac_CorrectionXY_CamPos (2,3) Jacobian of the image-plane correction vector wrt camera position.
@@ -65,7 +68,12 @@ dRefRadiusInPix = atan(dNormalizedRefRadius) * dMeanInvIFOV; % [px]
 dPhaseAngleInDeg = rad2deg(dPhaseAngleInRad); % [deg]
 dCorrectionMag = dCorrectionScalingCoeff * dPhaseAngleInDeg * dRefRadiusInPix; % [px]
 
-dSunPosition_Cam = dDCM_CamFromW * (dSunPosition_W - dCamPosition_W);
+if not(bAssumeDirectionIndependent)
+    dSunPosition_Cam = dDCM_CamFromW * (dSunPosition_W - dCamPosition_W);
+else
+    dSunPosition_Cam = dDCM_CamFromW * dSunPosition_W; % Ignore dependence on camera position
+end
+
 dNormProjectSunPos_Cam = norm(dSunPosition_Cam(1:2));
 
 if dNormProjectSunPos_Cam <= eps('single')
@@ -104,8 +112,10 @@ dGrad_CorrectionMag_CamPos(:) = dCorrectionScalingCoeff * dPhaseAngleInDeg * dJa
     dCorrectionScalingCoeff * dRefRadiusInPix * rad2deg(dJac_PhaseAngleInRad_CamPos);
 
 % Projected light unit direction term
-dAuxSelector = [1 0 0; 0 1 0]; % To select x,y components only
-dJac_ProjectedUnitDir_CamPos(:,:) = (eye(2) / dNormProjectSunPos_Cam - (dSunPosition_Cam(1:2) * transpose(dSunPosition_Cam(1:2))) / dNormProjectSunPos_Cam^3) * dAuxSelector * (-dDCM_CamFromW);
+if not(bAssumeDirectionIndependent)
+    dAuxSelector = [1 0 0; 0 1 0]; % To select x,y components only
+    dJac_ProjectedUnitDir_CamPos(:,:) = (eye(2) / dNormProjectSunPos_Cam - (dSunPosition_Cam(1:2) * transpose(dSunPosition_Cam(1:2))) / dNormProjectSunPos_Cam^3) * dAuxSelector * (-dDCM_CamFromW);
+end
 
 %% Assemble complete Jacobian
 dJac_CorrectionXY_CamPos(:,:) = - (dProjectedCorrectionUnitDir * dGrad_CorrectionMag_CamPos + ...
