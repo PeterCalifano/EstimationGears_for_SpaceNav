@@ -4,6 +4,7 @@ tests = functiontests(localfunctions);
 end
 
 function setupOnce(~)
+% Add repository paths for test discovery
 charThisDir = fileparts(mfilename('fullpath'));
 addpath(fullfile(charThisDir, "../../../"));
 SetupPaths_EstimationGears;
@@ -11,6 +12,7 @@ end
 
 function testJacobian_IndependentCorrectionDir(testCase)
 
+% Path where correction direction is assumed constant wrt camera position
 cfg = BuildProjectionWithACoBCase_([150; -40; 900], ...
                                     RotFromAxis_([0.3; -0.1; 0.9], deg2rad(10)));
 
@@ -20,6 +22,7 @@ end
 
 function testJacobian_GeneralCase(testCase)
 
+% General path: direction depends on camera position
 cfg = BuildProjectionWithACoBCase_([150; -40; 900], ...
                                     RotFromAxis_([0.3; -0.1; 0.9], deg2rad(10)));
 
@@ -31,6 +34,7 @@ end
 %% Helpers
 function VerifyJacobianMatchesFiniteDiff_(testCase, cfg, bAssumeIndependentDirection)
 
+% Compare analytic Jacobian against finite-difference reference
 dJacAnalytic = evalJAC_AnalyticCOB_CamPosition(cfg.dCamPosition_IN, ...
                                                cfg.dPhaseAngleInRad, ...
                                                cfg.dSunPosition_IN, ...
@@ -54,7 +58,7 @@ end
 
 function cfg = BuildProjectionWithACoBCase_(dTargetPosition_IN, dDCM_CamFromSCB)
 
-% Make up test case data (camera pose, pointing, intrinsics)
+% Build a coherent mock projection case with sun geometry for ACoB
 [cfg.dKcam, cfg.dxStatePost, cfg.dDCM_CiFromIN, cfg.strMeasModelParams, ...
     cfg.strFilterConstConfig, cfg.strFilterMutabConfig] = GetTestData_PointProjection(dTargetPosition_IN, dDCM_CamFromSCB);
 
