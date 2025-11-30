@@ -18,16 +18,30 @@ arguments (Output)
     dJac_CorrectionXY_CamPos (2,3) double
 end
 %% SIGNATURE
-%
+% dJac_CorrectionXY_CamPos = evalJAC_AnalyticCOB_CamPosition(dCamPosition_W, ...
+%     dPhaseAngleInRad, dSunPosition_W, dDCM_CamFromW, dReferenceMetricRadius, ...
+%     dMeanInstFOV, dCorrectionScalingCoeff)
 % -------------------------------------------------------------------------------------------------------------
 %% DESCRIPTION
-% Computes Jacobian of analytical law of CoB of the form: CoF = CoB * DeltaMag(CamPosition) * UnitVec(SunDir_Cam)
+% Computes the Jacobian of the centre of brightness correction (CoB) with respect to the camera position.
+% The correction applied to the CoB estimate follows an analytical law:
+%   dCorrection = alpha * R_app_pix * phase_angle_deg * unitVec(sunDir_Cam)
+% where the magnitude scales with the apparent radius of the target and the phase angle, while the
+% direction is aligned with the projected sun vector in camera coordinates. This function returns
+% partial derivatives of the 2-D correction vector with respect to the 3-D camera position expressed
+% in the world frame.
 % -------------------------------------------------------------------------------------------------------------
 %% INPUT
-%
+% dCamPosition_W          (3,1) Camera position in world frame [m].
+% dPhaseAngleInRad        (1,1) Phase angle between camera position and sun direction [rad].
+% dSunPosition_W          (3,1) Sun position in world frame [m].
+% dDCM_CamFromW           (3,3) Direction cosine matrix from world to camera frame.
+% dReferenceMetricRadius  (1,1) Target physical radius used to compute apparent size [m].
+% dMeanInstFOV            (1,1) Mean instrument instantaneous FOV [rad/px].
+% dCorrectionScalingCoeff (1,1) Analytic CoB scaling coefficient (default 0.0062).
 % -------------------------------------------------------------------------------------------------------------
 %% OUTPUT
-%
+% dJac_CorrectionXY_CamPos (2,3) Jacobian of the image-plane correction vector wrt camera position.
 % -------------------------------------------------------------------------------------------------------------
 %% CHANGELOG
 % 30-11-2025        Pietro Califano         First version, validated by unit test.
@@ -44,12 +58,12 @@ dJac_CorrectionXY_CamPos = zeros(2,3);
 dNormPosition = norm(dCamPosition_W);
 dMeanInvIFOV = 1 / dMeanInstFOV; % [px/rad]
 
-dAuxRatio_AlphaPhaseIFOV = dCorrectionScalingCoeff * dPhaseAngleInRad * dMeanInvIFOV; % [-]
 dNormalizedRefRadius = dReferenceMetricRadius / dNormPosition; % [-]
 dRefRadiusInPix = atan(dNormalizedRefRadius) * dMeanInvIFOV; % [px]
 
 % Compute linearization points
-dCorrectionMag = dCorrectionScalingCoeff * raad2deg(dPhaseAngleInRad) * dRefRadiusInPix; % [px]
+dPhaseAngleInDeg = rad2deg(dPhaseAngleInRad); % [deg]
+dCorrectionMag = dCorrectionScalingCoeff * dPhaseAngleInDeg * dRefRadiusInPix; % [px]
 
 dSunPosition_Cam = dDCM_CamFromW * (dSunPosition_W - dCamPosition_W);
 dNormProjectSunPos_Cam = norm(dSunPosition_Cam(1:2));
@@ -80,14 +94,14 @@ dJac_RefRadiusInPix_CamPos(1,1:3) = dAuxRatio_AlphaPhaseIFOV * ...
 dSunUnitDir_W = dSunPosition_W / norm(dSunPosition_W);
 dAuxDotProduct_CamDirSunDir = dot(dCamPosition_W/dNormPosition, dSunUnitDir_W);
 
-dJac_PhaseAngleRad_CamPos = zeros(1,3);
-dJac_PhaseAngleRad_CamPos(1,1:3) = dCorrectionScalingCoeff * dRefRadiusInPix * ...
+dJac_PhaseAngleInRad_CamPos = zeros(1,3);
+dJac_PhaseAngleInRad_CamPos(1,1:3) = dCorrectionScalingCoeff * dRefRadiusInPix * ...
     ( - transpose(dSunUnitDir_W) / sqrt(1 - dAuxDotProduct_CamDirSunDir^2) ) * ...
     ( eye(3) / dNormPosition - (dCamPosition_W * transpose(dCamPosition_W)) / dNormPosition^3 );
 
 % Compute gradient of magnitude w.r.t. camera position
-dGrad_CorrectionMag_CamPos(:) = dCorrectionScalingCoeff * dPhaseAngleInRad * dJac_RefRadiusInPix_CamPos + ...
-    dCorrectionScalingCoeff * dRefRadiusInPix * dJac_PhaseAngleRad_CamPos;
+dGrad_CorrectionMag_CamPos(:) = dCorrectionScalingCoeff * dPhaseAngleInDeg * dJac_RefRadiusInPix_CamPos + ...
+    dCorrectionScalingCoeff * dRefRadiusInPix * rad2deg(dJac_PhaseAngleInRad_CamPos);
 
 % Projected light unit direction term
 dAuxSelector = [1 0 0; 0 1 0]; % To select x,y components only
