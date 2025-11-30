@@ -59,10 +59,10 @@ dJac_CorrectionXY_CamPos = zeros(2,3);
 
 % Compute auxiliary variables
 dNormPosition = norm(dCamPosition_W);
-dMeanInvIFOV = 1 / dMeanInstFOV; % [px/rad]
+dMeanInvInstIFOV = 1 / dMeanInstFOV; % [px/rad]
 
 dNormalizedRefRadius = dReferenceMetricRadius / dNormPosition; % [-]
-dRefRadiusInPix = atan(dNormalizedRefRadius) * dMeanInvIFOV; % [px]
+dRefRadiusInPix = atan(dNormalizedRefRadius) * dMeanInvInstIFOV; % [px]
 
 % Compute linearization points
 dPhaseAngleInDeg = rad2deg(dPhaseAngleInRad); % [deg]
@@ -94,7 +94,7 @@ dJac_ProjectedUnitDir_CamPos = zeros(2,3);
 %%% Compute intermediate gradients
 % Jacobian of reference radius in pixels w.r.t. camera position
 dJac_RefRadiusInPix_CamPos = zeros(1,3);
-dJac_RefRadiusInPix_CamPos(1,1:3) = dAuxRatio_AlphaPhaseIFOV * ...
+dJac_RefRadiusInPix_CamPos(1,1:3) = (dCorrectionScalingCoeff * dPhaseAngleInRad * dMeanInvInstIFOV) * ...
                                  (-dNormalizedRefRadius / (1 + dNormalizedRefRadius^2)) * ...
                                  transpose(dCamPosition_W) / dNormPosition^3;
 
