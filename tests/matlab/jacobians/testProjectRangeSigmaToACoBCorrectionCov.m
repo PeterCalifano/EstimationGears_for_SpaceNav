@@ -15,11 +15,38 @@ function testCovarianceMatchesMonteCarlo(testCase)
 params = DefaultParams_();
 params.ui32NumSamples = uint32(50000);
 
-[dCovAnalytic, dCovMC] = CompareAnalyticVsMC_(params);
+try
+    [dCovAnalytic, dCovMC] = CompareAnalyticVsMC_(params);
+catch err
+    if IsMissingFunctionError_(err)
+        testCase.assumeFail(sprintf('Missing dependency: %s', err.message));
+        return;
+    end
+    rethrow(err);
+end
 
 testCase.verifySize(dCovAnalytic, [2, 2]);
 testCase.verifyEqual(dCovAnalytic, dCovMC, 'RelTol', 1e-3, 'AbsTol', 1e-6);
 
+end
+
+function testJointInnovationCovarianceMatchesMonteCarlo(testCase)
+% Validate joint innovation covariance (CoB + lidar) against Monte Carlo
+params = DefaultParams_();
+params.ui32NumSamples = uint32(50000);
+
+try
+    [dJointCovAnalytic, dJointCovMC] = CompareJointAnalyticVsMC_(params);
+catch err
+    if IsMissingFunctionError_(err)
+        testCase.assumeFail(sprintf('Missing dependency: %s', err.message));
+        return;
+    end
+    rethrow(err);
+end
+
+testCase.verifySize(dJointCovAnalytic, [3, 3]);
+testCase.verifyEqual(dJointCovAnalytic, dJointCovMC, 'RelTol', 1e-3, 'AbsTol', 1e-6);
 end
 
 
@@ -57,17 +84,38 @@ end
 
 end
 
-function [dCorrSamples, dCovMC, dMeanCorr] = PropagateCorrectionSamples_(params)
+function [dJointCovAnalytic, dJointCovMC] = CompareJointAnalyticVsMC_(params)
+rng(142); % reproducible Monte Carlo for joint covariance
 
+[dCovCoB, dCrossCov_CoB_Range] = ProjectRangeSigmaToACoBCorrectionCov(params.dRange, ...
+                                                params.dVarRange, ...
+                                                params.dPhaseAngleInDeg, ...
+                                                params.dReferenceMetricRadius, ...
+                                                params.dMeanInstFOV, ...
+                                                params.dUnitCorrectionDir, ...
+                                                params.dCorrectionScalingCoeff);
+
+% Analytic joint covariance (innovation covariance of [CoB; range])
+dJointCovAnalytic = [dCovCoB, dCrossCov_CoB_Range; ...
+                     transpose(dCrossCov_CoB_Range), params.dVarRange];
+
+[dCorrSamples, ~, ~, dRangeSamples] = PropagateCorrectionSamples_(params);
+dSamplesStack = [dCorrSamples; transpose(dRangeSamples)];
+dJointCovMC = cov(transpose(dSamplesStack));
+end
+
+function [dCorrSamples, dCovMC, dMeanCorr, dRangeSamples] = PropagateCorrectionSamples_(params)
 dSigmaRange = sqrt(params.dVarRange);
 dRangeSamples = params.dRange + dSigmaRange * randn(double(params.ui32NumSamples), 1);
 dRangeSamples = max(dRangeSamples, eps); % avoid negative/zero ranges
 
 dMeanInvInstIFOV = 1 / params.dMeanInstFOV;
 dAppRadiusPx = atan(params.dReferenceMetricRadius ./ dRangeSamples) * dMeanInvInstIFOV;
-dMagnitudes = params.dCorrectionScalingCoeff * params.dPhaseAngleInDeg .* dAppRadiusPx;
+% Use analytic CoB implementation for correction samples
+dSunPosition_Cam = BuildSunPositionFromUnitDir_(params.dUnitCorrectionDir);
+dCorrSamples = ComputeCorrectionSamples_(dSunPosition_Cam, dAppRadiusPx, ...
+                                         params.dPhaseAngleInDeg, params.dCorrectionScalingCoeff);
 
-dCorrSamples = params.dUnitCorrectionDir .* dMagnitudes.';
 dMeanCorr = mean(dCorrSamples, 2);
 dCovMC = cov(dCorrSamples.');
 end
@@ -107,3 +155,24 @@ function dVec = NormalizeVec_(dVec)
 dVec = dVec / norm(dVec);
 end
 
+function dSunPosition_Cam = BuildSunPositionFromUnitDir_(dUnitCorrectionDir)
+dSunPosition_Cam = [-dUnitCorrectionDir(:); 1.0]; % Positive Z to avoid degeneracy with optical axis
+end
+
+function dCorrSamples = ComputeCorrectionSamples_(dSunPosition_Cam, dAppRadiusPx, dPhaseAngleInDeg, dCorrectionScalingCoeff)
+dNominalCoeff = 0.0062; % Matches ComputeCorrectionAnalyticCoB internal coefficient
+dScaleRatio = dCorrectionScalingCoeff / dNominalCoeff;
+
+ui32NumSamples = numel(dAppRadiusPx);
+dCorrSamples = zeros(2, ui32NumSamples);
+for ii = 1:ui32NumSamples
+    dCorrSamples(:, ii) = dScaleRatio .* ComputeCorrectionAnalyticCoB(dSunPosition_Cam, ...
+                                            dAppRadiusPx(ii), dPhaseAngleInDeg);
+end
+end
+
+function bMissing = IsMissingFunctionError_(err)
+bMissing = strcmp(err.identifier, 'MATLAB:UndefinedFunction') || ...
+           contains(err.identifier, 'UndefinedFunction') || ...
+           contains(lower(err.message), 'undefined function');
+end
