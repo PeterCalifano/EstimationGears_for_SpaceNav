@@ -32,6 +32,13 @@ end
 %                                                                             bUseAveragePerturbDeltaV)%#codegen
 % -------------------------------------------------------------------------------------------------------------
 %% DESCRIPTION
+% Computes the input noise covariance associated with a manoeuvre (delta-V) command, given
+% uncertainties on the magnitude and direction of the applied delta-V. The covariance is first
+% assembled in the thruster frame (assumed +X aligned with the nominal delta-V direction), then
+% projected to the world frame. An optional contribution from attitude uncertainty can be added
+% if an attitude error covariance matrix is provided. Finally, the average perturbed delta-V
+% can be computed to prevent a shift in the nominal state after applying the manoeuvre as described
+% in Laurens, 2021, 8th ESA Space Debris Conference.
 % -------------------------------------------------------------------------------------------------------------
 %% INPUT
 % dCommandDeltaV_W  (3,1) double {mustBeNumeric}
@@ -48,6 +55,8 @@ end
 % dCovDeltaV_TH     (3,3) double
 % dCommandDeltaV_W  (3,1) double
 % -------------------------------------------------------------------------------------------------------------
+%% CHANGELOG
+% 01-12-2025    Pietro Califano     First implementation.
 %% DEPENDENCIES
 % [-]
 % -------------------------------------------------------------------------------------------------------------
