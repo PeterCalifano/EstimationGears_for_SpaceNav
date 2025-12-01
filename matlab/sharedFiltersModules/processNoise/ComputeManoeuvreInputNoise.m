@@ -13,7 +13,7 @@ arguments (Input)
     dDCM_WfromSC    (3,3) double {mustBeNumeric}
     dDCM_SCfromTH   (3,3) double {mustBeNumeric} = [0, 0, 1; 0, 1, 0; -1, 0, 0]% Assumed -Z axis aligned with +X of thruster frame, Y unchanged
     dAttitudeErrCov (3,3) double {mustBeNumeric} = zeros(3,3) % Optional attitude error covariance of spacecraft wrt thruster frame
-    enumModelType   (1,1) uint8 {coder.mustBeConst, mustBeGreaterThanOrEqual(enumModelType,0), mustBeLessThanOrEqual(enumModelType,1)} = 0 % 0: Gates-simplified THR covariance, 1: HERA GNC THR covariance
+    enumModelType   (1,1) uint8 {coder.mustBeConst, mustBeGreaterThanOrEqual(enumModelType,0), mustBeLessThanOrEqual(enumModelType,2)} = 0 % 0: Gates-simplified THR covariance, 1: HERA GNC THR covariance, 2: Full Gates model
     bUseAveragePerturbDeltaV (1,1) logical {coder.mustBeConst} = false % If true, use average perturbation delta-V model to prevent nominal state shift
 end
 arguments (Output)
@@ -57,6 +57,7 @@ end
 % -------------------------------------------------------------------------------------------------------------
 %% CHANGELOG
 % 01-12-2025    Pietro Califano     First implementation.
+% 02-12-2025    Pietro Califano     Add third model from Capolupo, Lau %TODO
 %% DEPENDENCIES
 % [-]
 % -------------------------------------------------------------------------------------------------------------
@@ -92,13 +93,16 @@ switch enumModelType
         dSigmaMagErr2 = dSigmaMagErr * dSigmaMagErr;
 
         % NOTE: Maneouvre covariance matrix is diagonal in the frame aligned with
-        % the manoeuvring direction (Z axis in the thrusting direction)
-        dS1 = 0.5 * dNormDV2 * dSigmaDirErr2 * (dSigmaMagErr2 + 1.0 - dSigmaDirErr2);
+        % the manoeuvring direction (X axis in the thrusting direction)
+        dS1 = 0.5 * dNormDV2 * (dSigmaMagErr2 * (1.0 - dSigmaDirErr2) + 0.75 * dSigmaDirErr2 * dSigmaDirErr2);
         dS2 = 0.5 * dNormDV2 * dSigmaDirErr2 * (dSigmaMagErr2 + 1.0 - dSigmaDirErr2);
-        dS3 = 0.5 * dNormDV2 * (dSigmaMagErr2 * (1.0 - dSigmaDirErr2) + 0.75 * dSigmaDirErr2 * dSigmaDirErr2);
+        dS3 = 0.5 * dNormDV2 * dSigmaDirErr2 * (dSigmaMagErr2 + 1.0 - dSigmaDirErr2);
 
         dCovDeltaV_TH(:,:) = diag([dS1, dS2, dS3]);
 
+    case 2
+        % Full Gates model
+        % TODO implement full Gates model
     otherwise
         if coder.target("MATLAB") || coder.target("MEX")
             error('ComputeManoeuvreInputNoise:InvalidModelType', ...
