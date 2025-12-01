@@ -11,7 +11,7 @@ arguments (Input)
     dSigmaMagErr    (1,1) double {mustBeNonnegative}
     dSigmaDirErr    (1,1) double {mustBeNonnegative}
     dDCM_WfromSC    (3,3) double {mustBeNumeric}
-    dDCM_SCfromTH   (3,3) double {mustBeNumeric} % Assumed -Z axis aligned with +X of thruster frame
+    dDCM_SCfromTH   (3,3) double {mustBeNumeric} = [0, 0, 1; 0, 1, 0; -1, 0, 0]% Assumed -Z axis aligned with +X of thruster frame, Y unchanged
     dAttitudeErrCov (3,3) double {mustBeNumeric} = zeros(3,3) % Optional attitude error covariance of spacecraft wrt thruster frame
     enumModelType   (1,1) uint8 {coder.mustBeConst, mustBeGreaterThanOrEqual(enumModelType,0), mustBeLessThanOrEqual(enumModelType,1)} = 0 % 0: Gates-simplified THR covariance, 1: HERA GNC THR covariance
     bUseAveragePerturbDeltaV (1,1) logical {coder.mustBeConst} = false % If true, use average perturbation delta-V model to prevent nominal state shift
@@ -121,7 +121,7 @@ end
 % Compute average perturbation delta-V if requested
 if bUseAveragePerturbDeltaV
     % Laurens, 2021, 8th ESA Space Debris Conference
-    dCommandDeltaV_W = dDCM_WfromSC * dDCM_SCfromTH * [dNormDV * exp(-0.5 * dSigmaDirErr^2); 0; 0];
+    dCommandDeltaV_W(:) = dDCM_WfromSC * dDCM_SCfromTH * [dNormDV * exp(-0.5 * dSigmaDirErr^2); 0; 0];
 end
 
 end
