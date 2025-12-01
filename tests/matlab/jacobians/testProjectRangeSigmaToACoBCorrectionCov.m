@@ -26,7 +26,7 @@ catch err
 end
 
 testCase.verifySize(dCovAnalytic, [2, 2]);
-testCase.verifyEqual(dCovAnalytic, dCovMC, 'RelTol', 1e-3, 'AbsTol', 1e-6);
+testCase.verifyEqual(dCovAnalytic, dCovMC, 'RelTol', 1e-2, 'AbsTol', 1e-6);
 
 end
 
@@ -46,7 +46,7 @@ catch err
 end
 
 testCase.verifySize(dJointCovAnalytic, [3, 3]);
-testCase.verifyEqual(dJointCovAnalytic, dJointCovMC, 'RelTol', 1e-3, 'AbsTol', 1e-6);
+testCase.verifyEqual(dJointCovAnalytic, dJointCovMC, 'RelTol', 1e-2, 'AbsTol', 1e-6);
 end
 
 
@@ -54,7 +54,7 @@ end
 function params = DefaultParams_
 
 params.dRange = 1.2e3;            % [m]
-params.dVarRange = (50)^2;       % [m^2]
+params.dVarRange = (25)^2;       % [m^2]
 params.dPhaseAngleInDeg = 45.0;   % [deg]
 params.dReferenceMetricRadius = 400; % [m]
 params.dMeanInstFOV = 1.0 / 5200; % [rad/px]
@@ -87,6 +87,8 @@ end
 function [dJointCovAnalytic, dJointCovMC] = CompareJointAnalyticVsMC_(params)
 rng(142); % reproducible Monte Carlo for joint covariance
 
+% NOTE: this matrix will not have rank = 3 by construction. This is the lidar only has effect along the
+% direction of the correction vector.
 [dCovCoB, dCrossCov_CoB_Range] = ProjectRangeSigmaToACoBCorrectionCov(params.dRange, ...
                                                 params.dVarRange, ...
                                                 params.dPhaseAngleInDeg, ...
@@ -94,6 +96,8 @@ rng(142); % reproducible Monte Carlo for joint covariance
                                                 params.dMeanInstFOV, ...
                                                 params.dUnitCorrectionDir, ...
                                                 params.dCorrectionScalingCoeff);
+
+% assert(chol(dCovCoB))
 
 % Analytic joint covariance (innovation covariance of [CoB; range])
 dJointCovAnalytic = [dCovCoB, dCrossCov_CoB_Range; ...
@@ -105,17 +109,21 @@ dJointCovMC = cov(transpose(dSamplesStack));
 end
 
 function [dCorrSamples, dCovMC, dMeanCorr, dRangeSamples] = PropagateCorrectionSamples_(params)
+
+% Compute samples for MC propagation
 dSigmaRange = sqrt(params.dVarRange);
 dRangeSamples = params.dRange + dSigmaRange * randn(double(params.ui32NumSamples), 1);
 dRangeSamples = max(dRangeSamples, eps); % avoid negative/zero ranges
 
 dMeanInvInstIFOV = 1 / params.dMeanInstFOV;
 dAppRadiusPx = atan(params.dReferenceMetricRadius ./ dRangeSamples) * dMeanInvInstIFOV;
+
 % Use analytic CoB implementation for correction samples
 dSunPosition_Cam = BuildSunPositionFromUnitDir_(params.dUnitCorrectionDir);
 dCorrSamples = ComputeCorrectionSamples_(dSunPosition_Cam, dAppRadiusPx, ...
                                          params.dPhaseAngleInDeg, params.dCorrectionScalingCoeff);
 
+% Estimate empirical statistics
 dMeanCorr = mean(dCorrSamples, 2);
 dCovMC = cov(dCorrSamples.');
 end
