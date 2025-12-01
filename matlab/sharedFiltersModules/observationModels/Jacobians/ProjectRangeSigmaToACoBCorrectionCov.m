@@ -1,4 +1,4 @@
-function [dCovCorrectionCoB] = ProjectRangeSigmaToACoBCorrectionCov(dDistanceInMeters, ...
+function [dCovCorrectionCoB, dCrossCov_CoB_Distance] = ProjectRangeSigmaToACoBCorrectionCov(dDistanceInMeters, ...
                                                                   dDistanceVarInMeters, ...
                                                                   dPhaseAngleInDeg, ...
                                                                   dReferenceMetricRadius, ...
@@ -15,7 +15,8 @@ arguments (Input)
     dCorrectionScalingCoeff (1,1) double = 0.0062; % From Lommel-Seeliger approximation
 end
 arguments (Output)
-    dCovCorrectionCoB (2,2) double
+    dCovCorrectionCoB       (2,2) double
+    dCrossCov_CoB_Distance  (2,1) double
 end
 %% SIGNATURE
 % dCov_Correction = projectRangeVarToACoBCorrectionCov(dRange, dVarRange, dPhaseAngleInDeg, ...
@@ -40,16 +41,20 @@ end
 %                                   Analytic CoB scaling coefficient (default 0.0062).
 % -------------------------------------------------------------------------------------------------------------
 %% OUTPUT
-% dCov_Correction (2,2) Covariance of the 2-D correction induced by range variance.
+% dCovCorrectionCoB      (2,2) double Covariance of the 2-D correction induced by range variance.
+% dCrossCov_CoB_Distance (2,1) double Cross-covariance between CoB correction and range (upper right block).
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % [-]
 % -------------------------------------------------------------------------------------------------------------
 
+% Initialize outputs
+dCovCorrectionCoB = zeros(2,2);
+dCrossCov_CoB_Distance = zeros(2,1);
+
 % Guard against non-unit input
 dNormDir = norm(dUnitCorrectionDir_uv);
 if dNormDir <= eps('double')
-    dCovCorrectionCoB = zeros(2,2);
     return;
 end
 dUnitCorrectionDir_uv = dUnitCorrectionDir_uv / dNormDir;
@@ -65,10 +70,14 @@ dJac_RefRadiusInPix_Range = dMeanInvInstIFOV * (-dReferenceMetricRadius) / (dDis
 % Magnitude derivative w.r.t range (phase angle assumed independent of range here)
 dGrad_CorrectionMag_Range = dCorrectionScalingCoeff * dPhaseAngleInDeg * dJac_RefRadiusInPix_Range; % [px/m] [1x1]
 
-% Variance of correction magnitude
-dVar_CorrectionMag = (dGrad_CorrectionMag_Range ^ 2) * dDistanceVarInMeters; % [px^2]
+% Compute 2x1 Jacobian of CoB correction w.r.t range
+dJac_CorrectionCoB_Distance = dGrad_CorrectionMag_Range .* dUnitCorrectionDir_uv; % [2x1]
 
 % Project onto 2-D correction covariance (direction treated as constant)
-dCovCorrectionCoB = dVar_CorrectionMag * (dUnitCorrectionDir_uv * dUnitCorrectionDir_uv.');
+dCovCorrectionCoB(:,:) = dDistanceVarInMeters .* dJac_CorrectionCoB_Distance * transpose(dJac_CorrectionCoB_Distance); % [2x2]
 
+if coder.const(nargout > 1)
+    % If requested, compute cross-covariance between CoB correction and range
+    dCrossCov_CoB_Distance(:,1) = dDistanceVarInMeters .* dJac_CorrectionCoB_Distance;
+end
 end
