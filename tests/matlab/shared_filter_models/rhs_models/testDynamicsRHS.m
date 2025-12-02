@@ -13,7 +13,7 @@ dAccelerations_W = a_RHS(4:6, :);
 
 objRefTrajData  = LoadReferenceDataRCS1(enumTrajName, etVec, "J2000", "APOPHIS_FIXED");
 
-if objModeManager.ui32CurrentFrameID == 0
+if objModeManager.i32CurrentFrameID == 0
     % Initialize inputs to MSCKF
     dxState         = strFilterStateBus_TimeUp.dxState;
     dxStateCov      = strFilterStateBus_TimeUp.dxStateCov;
@@ -65,5 +65,5 @@ for idT = 1:length(dRelativeTimestamps)
                                         ui16StatesIdx, ...
                                         dResidualAccel);
 
-    objModeManager.ui32CurrentFrameID = objModeManager.ui32CurrentFrameID + 1;
+    objModeManager.i32CurrentFrameID = objModeManager.i32CurrentFrameID + 1;
 end
