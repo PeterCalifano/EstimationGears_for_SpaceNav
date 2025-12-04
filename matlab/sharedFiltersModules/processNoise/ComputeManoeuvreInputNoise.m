@@ -7,14 +7,14 @@ function [dCovDeltaV_W, dCovDeltaV_TH, dCommandDeltaV_W] = ComputeManoeuvreInput
                                                                                     enumModelType, ...
                                                                                     bUseAveragePerturbDeltaV)%#codegen
 arguments (Input)
-    dCommandDeltaV_W  (3,1) double {mustBeNumeric}
-    dSigmaMagErr    (1,1) double {mustBeNonnegative}
-    dSigmaDirErr    (1,1) double {mustBeNonnegative}
-    dDCM_WfromSC    (3,3) double {mustBeNumeric}
-    dDCM_SCfromTH   (3,3) double {mustBeNumeric} = [0, 0, 1; 0, 1, 0; -1, 0, 0]% Assumed -Z axis aligned with +X of thruster frame, Y unchanged
-    dAttitudeErrCov (3,3) double {mustBeNumeric} = zeros(3,3) % Optional attitude error covariance of spacecraft wrt thruster frame
-    enumModelType   (1,1) uint8 {coder.mustBeConst, mustBeGreaterThanOrEqual(enumModelType,0), mustBeLessThanOrEqual(enumModelType,2)} = 0 % 0: Gates-simplified THR covariance, 1: HERA GNC THR covariance, 2: Full Gates model
-    bUseAveragePerturbDeltaV (1,1) logical {coder.mustBeConst} = false % If true, use average perturbation delta-V model to prevent nominal state shift
+    dCommandDeltaV_W            (3,1) double {mustBeNumeric}
+    dSigmaMagErr                (1,1) double {mustBeNonnegative}
+    dSigmaDirErr                (1,1) double {mustBeNonnegative}
+    dDCM_WfromSC                (3,3) double {mustBeNumeric}
+    dDCM_SCfromTH               (3,3) double {mustBeNumeric} = [0, 0, 1; 0, 1, 0; -1, 0, 0]% Assumed -Z axis aligned with +X of thruster frame, Y unchanged
+    dAttitudeErrCov             (3,3) double {mustBeNumeric} = zeros(3,3) % Optional attitude error covariance of spacecraft wrt thruster frame
+    enumModelType               (1,1) uint8 {coder.mustBeConst, mustBeGreaterThanOrEqual(enumModelType,0), mustBeLessThanOrEqual(enumModelType,2)} = 0 % 0: Gates-simplified THR covariance, 1: HERA GNC THR covariance, 2: Full Gates model
+    bUseAveragePerturbDeltaV    (1,1) logical {coder.mustBeConst} = false % If true, use average perturbation delta-V model to prevent nominal state shift
 end
 arguments (Output)
     dCovDeltaV_W        (3,3) double
@@ -39,16 +39,23 @@ end
 % if an attitude error covariance matrix is provided. Finally, the average perturbed delta-V
 % can be computed to prevent a shift in the nominal state after applying the manoeuvre as described
 % in Laurens, 2021, 8th ESA Space Debris Conference.
+% References:
+% 1) Rizza, A., D’Amico, S., & Topputo, F. (2025). Goal-Oriented Trajectory Refinement for Asteroid Mapping 
+%    Using Sequential Convex Programming. Journal of Guidance, Control, and Dynamics, 1–15.
+% 2) Capolupo, F., & Labourdette, P. (2019). Receding-Horizon Trajectory Planning Algorithm for Passively 
+%    Safe On-Orbit Inspection Missions. Journal of Guidance, Control, and Dynamics, 42(5), 1023–1032. 
+% 3) Laurens, S., Jouisse, M., & Seimandi, P. (2021). STATE VECTOR UNCERTAINTY AND MANEUVER ERRORS: 
+%    ANALYSIS OF THE EARLY ORBIT AND STATION-KEEPING PHASES OF AN ELECTRICAL SATELLITE. 8.
 % -------------------------------------------------------------------------------------------------------------
 %% INPUT
-% dCommandDeltaV_W  (3,1) double {mustBeNumeric}
-% dSigmaMagErr    (1,1) double {mustBeNonnegative}
-% dSigmaDirErr    (1,1) double {mustBeNonnegative}
-% dDCM_WfromSC    (3,3) double {mustBeNumeric}
-% dDCM_SCfromTH   (3,3) double {mustBeNumeric} % Assumed -Z axis aligned with +X of thruster frame
-% dAttitudeErrCov (3,3) double {mustBeNumeric} = zeros(3,3) % Optional attitude error covariance of spacecraft wrt thruster frame
-% enumModelType   (1,1) uint8 {coder.mustBeConst, mustBeGreaterThanOrEqual(enumModelType,0), mustBeLessThanOrEqual(enumModelType,1)} = 0 % 0: Gates-simplified THR covariance, 1: HERA GNC THR covariance
-% bUseAveragePerturbDeltaV (1,1) logical {coder.mustBeConst} = false % If true, use average perturbation delta-V model to prevent nominal state shift
+% dCommandDeltaV_W          (3,1) double {mustBeNumeric}
+% dSigmaMagErr              (1,1) double {mustBeNonnegative}
+% dSigmaDirErr              (1,1) double {mustBeNonnegative}
+% dDCM_WfromSC              (3,3) double {mustBeNumeric}
+% dDCM_SCfromTH             (3,3) double {mustBeNumeric} % Assumed -Z axis aligned with +X of thruster frame
+% dAttitudeErrCov           (3,3) double {mustBeNumeric} = zeros(3,3) % Optional attitude error covariance of spacecraft wrt thruster frame
+% enumModelType             (1,1) uint8 {coder.mustBeConst, mustBeGreaterThanOrEqual(enumModelType,0), mustBeLessThanOrEqual(enumModelType,1)} = 0 % 0: Gates-simplified THR covariance, 1: HERA GNC THR covariance
+% bUseAveragePerturbDeltaV  (1,1) logical {coder.mustBeConst} = false % If true, use average perturbation delta-V model to prevent nominal state shift
 % -------------------------------------------------------------------------------------------------------------
 %% OUTPUT
 % dCovDeltaV_W      (3,3) double
@@ -57,7 +64,8 @@ end
 % -------------------------------------------------------------------------------------------------------------
 %% CHANGELOG
 % 01-12-2025    Pietro Califano     First implementation.
-% 02-12-2025    Pietro Califano     Add third model from Capolupo, Lau %TODO
+% 04-12-2025    Pietro Califano     Add new model from (Capolupo, Labourdette 2019)
+% -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % [-]
 % -------------------------------------------------------------------------------------------------------------
@@ -70,10 +78,12 @@ dCovDeltaV_TH = zeros(3,3);
 
 % Compute auxiliary variables
 dNormDV = norm(dCommandDeltaV_W);
+dNormDV2 = dNormDV * dNormDV;
 
 % Assemble covariance in thruster frame (assumed +X aligned with desired nominal delta-V)
-switch enumModelType
+switch coder.const(enumModelType)
     case 0
+        %% General model for magnitude + arbitrary direction error
 
         % Compute auxiliary variables
         dMagnitudeAuxVal1 = 0.25 * (1 + dSigmaMagErr^2) * dNormDV;
@@ -81,14 +91,14 @@ switch enumModelType
         dMagnitudeAuxVal22 = dMagnitudeAuxVal2 * dMagnitudeAuxVal2;
 
         % Compute diagonal elements of manoeuvre input noise covariance
-        dCovDeltaV_TH(1,1) = 2 * dMagnitudeAuxVal1 * (1 + dMagnitudeAuxVal22) - dMagnitudeAuxVal2 * dNormDV^2; % X axis
+        dCovDeltaV_TH(1,1) = 2 * dMagnitudeAuxVal1 * (1 + dMagnitudeAuxVal22) - dMagnitudeAuxVal2 * dNormDV2; % X axis
         dCovDeltaV_TH(2,2) = dMagnitudeAuxVal1 * (1 - dMagnitudeAuxVal22); % Y axis
         dCovDeltaV_TH(3,3) = dMagnitudeAuxVal1 * (1 - dMagnitudeAuxVal22); % Z axis
 
     case 1
+        %% HERA GNC implementation (GMV)
 
         % Auxiliary variables
-        dNormDV2 = dNormDV * dNormDV;
         dSigmaDirErr2 = dSigmaDirErr * dSigmaDirErr;
         dSigmaMagErr2 = dSigmaMagErr * dSigmaMagErr;
 
@@ -101,8 +111,18 @@ switch enumModelType
         dCovDeltaV_TH(:,:) = diag([dS1, dS2, dS3]);
 
     case 2
+        %% Simplified Gates model
+        dAuxCommandDeltaV_TH = transpose(dDCM_SCfromTH) * transpose(dDCM_WfromSC) * dCommandDeltaV_W;
+
+        % NOTE: Covariance as sum of two gaussian uncertainty parallel and tangential to DeltaV direction
+        dCovDeltaV_TH(:,:) = dSigmaMagErr^2 * (dAuxCommandDeltaV_TH * transpose(dAuxCommandDeltaV_TH)) + ...
+                                dSigmaDirErr^2 * (skewSymm(dAuxCommandDeltaV_TH) * transpose(skewSymm(dAuxCommandDeltaV_TH)));
+
+    case 3
         % Full Gates model
-        % TODO implement full Gates model
+        % TODO
+        assert(0, 'Currently not implemented.');
+
     otherwise
         if coder.target("MATLAB") || coder.target("MEX")
             error('ComputeManoeuvreInputNoise:InvalidModelType', ...
