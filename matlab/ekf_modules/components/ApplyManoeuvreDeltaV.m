@@ -19,9 +19,9 @@ arguments (Input)
     dManTimestamp           (1,1) double {mustBeNumeric, mustBePositive}
     dDCM_WfromSC            (3,3) double                                                = zeros(3,3)
     enumModelType           (1,1) EnumManCovModel {coder.mustBeConst, ...
-                            mustBeA(enumModelType, ["string", "EnumManCovModel"])} = "MAG_DIR_THR"
-    dSigmaMagErr            (1,1) double {mustBeGreaterThanOrEqual(dSigmaMagErr, 0.0)}  = 0.0
-    dSigmaDirErrInRad       (1,1) double {mustBeGreaterThanOrEqual(dSigmaDirErrInRad, 0.0)}  = 0.0
+                                mustBeA(enumModelType, ["string", "EnumManCovModel"])}      = "MAG_DIR_THR"
+    dSigmaMagErr            (1,1) double {mustBeGreaterThanOrEqual(dSigmaMagErr, 0.0)}      = 0.0
+    dSigmaDirErrInRad       (1,1) double {mustBeGreaterThanOrEqual(dSigmaDirErrInRad, 0.0)} = 0.0
     dAttitudeErrCov         (3,3) double                                                = zeros(3,3)
     dDCM_SCfromTH           (3,3) double                                                = eye(3)
     ui16PosVelIdx           (6,1) uint16 {coder.mustBeConst}                            = uint16(1:6)
@@ -52,17 +52,19 @@ end
 % 
 % -------------------------------------------------------------------------------------------------------------
 %% INPUT
-% dxState_W       (:,1) {mustBeNumeric}
-% dxStateCov_W    (:,:) {mustBeNumeric}
-% dStateTimetags  (:,1) double % DEVNOTE each entry of the window has one timestamp
-% dManDeltaV_W    (3,1) double {mustBeNumeric}
-% dManTimestamp   (1,1) double {mustBeNumeric, mustBePositive}
-% dDCM_WfromSC    (3,3) double                                                = zeros(3,3)
-% dSigmaMagErr    (1,1) double {mustBeGreaterThanOrEqual(dSigmaMagErr, 0.0)}  = 0.0
-% dSigmaDirErr    (1,1) double {mustBeGreaterThanOrEqual(dSigmaDirErr, 0.0)}  = 0.0
-% dAttitudeErrCov (3,3) double                                                = zeros(3,3)
-% dDCM_SCfromTH   (3,3) double                                                = eye(3)
-% ui16PosVelIdx   (6,1) uint16 {coder.mustBeConst}                            = uint16(1:6)
+% dxState_W               (:,1) {mustBeNumeric}
+% dxStateCov_W            (:,:) {mustBeNumeric}
+% dStateTimetags          (:,1) double % DEVNOTE each entry of the window has one timestamp
+% dManDeltaV_W            (3,1) double {mustBeNumeric}
+% dManTimestamp           (1,1) double {mustBeNumeric, mustBePositive}
+% dDCM_WfromSC            (3,3) double                                                = zeros(3,3)
+% enumModelType           (1,1) EnumManCovModel {coder.mustBeConst, ...
+%     mustBeA(enumModelType, ["string", "EnumManCovModel"])}      = "MAG_DIR_THR"
+% dSigmaMagErr            (1,1) double {mustBeGreaterThanOrEqual(dSigmaMagErr, 0.0)}      = 0.0
+% dSigmaDirErrInRad       (1,1) double {mustBeGreaterThanOrEqual(dSigmaDirErrInRad, 0.0)} = 0.0
+% dAttitudeErrCov         (3,3) double                                                = zeros(3,3)
+% dDCM_SCfromTH           (3,3) double                                                = eye(3)
+% ui16PosVelIdx           (6,1) uint16 {coder.mustBeConst}                            = uint16(1:6)
 % -------------------------------------------------------------------------------------------------------------
 %% OUTPUT
 %
