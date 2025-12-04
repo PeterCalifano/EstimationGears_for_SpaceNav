@@ -6,13 +6,13 @@ function [dxStateNext, dStateTimetag] = IntegratorStepRK4(dxState, ...
                                                     strFilterMutabConfig, ...
                                                     strFilterConstConfig) %#codegen
 arguments
-    dxState                 (:, 1) double {isnumeric, isvector}
-    dStateTimetag           (1, 1) double {isnumeric, isscalar}
-    dDeltaTime              (1, 1) double {isnumeric, isscalar}
-    dIntegrTimeStep         (1, 1) double {isnumeric, isscalar} 
-    strDynParams            (1, 1) {isstruct}
-    strFilterMutabConfig    (1, 1) {isstruct}
-    strFilterConstConfig    (1, 1) {isstruct}
+    dxState                 (:,1) double {mustBeNumeric}
+    dStateTimetag           (1,1) double {mustBeNumeric}
+    dDeltaTime              (1,1) double {mustBeNumeric}
+    dIntegrTimeStep         (1,1) double {mustBeNumeric}
+    strDynParams            (1,1) struct
+    strFilterMutabConfig    (1,1) struct
+    strFilterConstConfig    (1,1) struct {coder.mustBeConst}
 end
 %% PROTOTYPE
 % [dxStateNext, dStateTimetag] = IntegratorStepRK4(dxState, ...
@@ -32,12 +32,13 @@ end
 % correct size.
 % -------------------------------------------------------------------------------------------------------------
 %% INPUT
-% dxState               (:, 1) double {isnumeric, isvector}
-% dStateTimetag         (1, 1) double {isnumeric, isscalar}
-% dDeltaTime            (1, 1) double {isnumeric, isscalar}
-% dIntegTimeStep        (1, 1) double {isnumeric, isscalar} 
-% strDynParams          (1, 1) {isstruct}
-% strFilterConstConfig  (1, 1) {isstruct}
+% dxState                 (:,1) double {mustBeNumeric}
+% dStateTimetag           (1,1) double {mustBeNumeric}
+% dDeltaTime              (1,1) double {mustBeNumeric}
+% dIntegrTimeStep         (1,1) double {mustBeNumeric}
+% strDynParams            (1,1) struct
+% strFilterMutabConfig    (1,1) struct
+% strFilterConstConfig    (1,1) struct {coder.mustBeConst}
 % -------------------------------------------------------------------------------------------------------------
 %% OUTPUT
 % dxStateNext
