@@ -13,7 +13,7 @@ arguments (Input)
     dDCM_WfromSC    (3,3) double {mustBeNumeric}
     dDCM_SCfromTH   (3,3) double {mustBeNumeric} = [0, 0, 1; 0, 1, 0; -1, 0, 0]% Assumed -Z axis aligned with +X of thruster frame, Y unchanged
     dAttitudeErrCov (3,3) double {mustBeNumeric} = zeros(3,3) % Optional attitude error covariance of spacecraft wrt thruster frame
-    enumModelType   (1,1) uint8 {coder.mustBeConst, mustBeGreaterThanOrEqual(enumModelType,0), mustBeLessThanOrEqual(enumModelType,2)} = 0 % 0: Gates-simplified THR covariance, 1: HERA GNC THR covariance, 2: Full Gates model
+    enumModelType   (1,1) uint8 {coder.mustBeConst, mustBeGreaterThanOrEqual(enumModelType,0), mustBeLessThanOrEqual(enumModelType,3)} = 0 % 0: Gates-simplified THR covariance, 1: HERA GNC THR covariance, 2: Full Gates model
     bUseAveragePerturbDeltaV (1,1) logical {coder.mustBeConst} = false % If true, use average perturbation delta-V model to prevent nominal state shift
 end
 arguments (Output)
