@@ -4,7 +4,7 @@ function [dCovDeltaV_W, dCovDeltaV_TH, dCommandDeltaV_W] = ComputeManoeuvreInput
                                                                                     dDCM_WfromSC, ...
                                                                                     dDCM_SCfromTH, ...
                                                                                     dAttitudeErrCov, ...
-                                                                                    enumModelType, ...
+                                                                                    enumManCovModel, ...
                                                                                     bUseAveragePerturbDeltaV)%#codegen
 arguments (Input)
     dCommandDeltaV_W  (3,1) double {mustBeNumeric}
@@ -13,7 +13,8 @@ arguments (Input)
     dDCM_WfromSC    (3,3) double {mustBeNumeric}
     dDCM_SCfromTH   (3,3) double {mustBeNumeric} = [0, 0, 1; 0, 1, 0; -1, 0, 0]% Assumed -Z axis aligned with +X of thruster frame, Y unchanged
     dAttitudeErrCov (3,3) double {mustBeNumeric} = zeros(3,3) % Optional attitude error covariance of spacecraft wrt thruster frame
-    enumModelType   (1,1) uint8 {coder.mustBeConst, mustBeGreaterThanOrEqual(enumModelType,0), mustBeLessThanOrEqual(enumModelType,3)} = 0 % 0: Gates-simplified THR covariance, 1: HERA GNC THR covariance, 2: Gates-simplified W covariance, 3: Full Gates model
+    enumManCovModel (1,1) EnumManCovModel {coder.mustBeConst, mustBeA(enumManCovModel, ["EnumManCovModel", "string"])} = "MAG_DIR_THR"
+    % 0: Gates-simplified THR covariance, 1: HERA GNC THR covariance, 2: Gates-simplified W covariance, 3: Full Gates model
     bUseAveragePerturbDeltaV (1,1) logical {coder.mustBeConst} = false % If true, use average perturbation delta-V model to prevent nominal state shift
 end
 arguments (Output)
@@ -81,8 +82,8 @@ dNormDV = norm(dCommandDeltaV_W);
 dNormDV2 = dNormDV * dNormDV;
 
 % Assemble covariance in thruster frame (assumed +X aligned with desired nominal delta-V)
-switch coder.const(enumModelType)
-    case 0
+switch coder.const(enumManCovModel)
+    case EnumManCovModel.MAG_DIR_THR
         %% General model for magnitude + arbitrary direction error
 
         % Compute auxiliary variables
@@ -95,7 +96,7 @@ switch coder.const(enumModelType)
         dCovDeltaV_TH(2,2) = dMagnitudeAuxVal1 * (1 - dMagnitudeAuxVal22); % Y axis
         dCovDeltaV_TH(3,3) = dMagnitudeAuxVal1 * (1 - dMagnitudeAuxVal22); % Z axis
 
-    case 1
+    case EnumManCovModel.HERA_GNC
         %% HERA GNC implementation (GMV)
 
         % Auxiliary variables
@@ -110,7 +111,7 @@ switch coder.const(enumModelType)
 
         dCovDeltaV_TH(:,:) = diag([dS1, dS2, dS3]);
 
-    case 2
+    case EnumManCovModel.MAG_DIR_DIRECT
         %% Simplified Gates model
         dAuxCommandDeltaV_TH = transpose(dDCM_SCfromTH) * transpose(dDCM_WfromSC) * dCommandDeltaV_W;
 
@@ -118,7 +119,7 @@ switch coder.const(enumModelType)
         dCovDeltaV_TH(:,:) = dSigmaMagErr^2 * (dAuxCommandDeltaV_TH * transpose(dAuxCommandDeltaV_TH)) + ...
                                 dSigmaDirErr^2 * (skewSymm(dAuxCommandDeltaV_TH) * transpose(skewSymm(dAuxCommandDeltaV_TH)));
 
-    case 3
+    case EnumManCovModel.GATES
         % Full Gates model
         % TODO
         assert(0, 'Currently not implemented.');
