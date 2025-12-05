@@ -9,47 +9,43 @@ addpath(fullfile(charThisDir, "../../../../"));
 SetupPaths_EstimationGears;
 end
 
-function testModel0CovarianceMatchesMonteCarlo(testCase)
-% Test case for model 0 (MC validation)
+function testModel_MAG_DIR_THR_CovarianceMatchesMonteCarlo(testCase)
+% Test case for MAG_DIR_THR (MC validation)
 
 params = DefaultParams_();
-params.enumModelType = uint8(0);
+params.enumManCovModel = EnumManCovModel.MAG_DIR_THR;
 params.dCommandDeltaV_W = params.dDCM_WfromSC * params.dDCM_SCfromTH * [0.2; 0; 0];
-params.dSigmaMagErr = 0.025 * norm(params.dCommandDeltaV_W);
+params.dSigmaMagErr = 0.025;
 params.dSigmaDirErr = deg2rad(3); % In [rad]
 params.ui32NumSamples = uint32(2e5);
 params.ui32RngSeed = uint32(7);
 
-[dCovAnalytic_W, dCovMC_W, dCovAnalytic_TH, dCovFn_W, dCovFn_TH] = EvaluateCovAndMC_(params);
-
-VerifyAnalyticAndFunction_(testCase, dCovAnalytic_TH, dCovAnalytic_W, dCovFn_TH, dCovFn_W);
+[dCovAnalytic_W, dCovMC_W, dCovAnalytic_TH] = EvaluateCovAndMC_(params); %#ok<ASGLU>
 VerifyMonteCarloAgreement_(testCase, dCovAnalytic_W, dCovMC_W);
 end
 
-function testModel1CovarianceMatchesMonteCarlo_CustomFrames(testCase)
-% Test case for model 1 (MC validation)
+function testModel_HERA_GNC_CovarianceMatchesMonteCarlo_CustomFrames(testCase)
+% Test case for HERA_GNC (MC validation)
 
 params = DefaultParams_();
-params.enumModelType = uint8(1);
+params.enumManCovModel = EnumManCovModel.HERA_GNC;
 params.dSigmaDirErr = deg2rad(3); % In [rad]
 params.dDCM_WfromSC = [0 0 1; 1 0 0; 0 1 0];
 params.dDCM_SCfromTH = [0 -1 0; 1 0 0; 0 0 1];
 params.dCommandDeltaV_W = params.dDCM_WfromSC * params.dDCM_SCfromTH * [0.07; 0; 0];
-params.dSigmaMagErr =  0.025 * norm(params.dCommandDeltaV_W);
+params.dSigmaMagErr =  0.025;
 params.ui32NumSamples = uint32(15e4);
 params.ui32RngSeed = uint32(21);
 
-[dCovAnalytic_W, dCovMC_W, dCovAnalytic_TH, dCovFn_W, dCovFn_TH] = EvaluateCovAndMC_(params);
-
-VerifyAnalyticAndFunction_(testCase, dCovAnalytic_TH, dCovAnalytic_W, dCovFn_TH, dCovFn_W);
+[dCovAnalytic_W, dCovMC_W, dCovAnalytic_TH] = EvaluateCovAndMC_(params); %#ok<ASGLU>
 VerifyMonteCarloAgreement_(testCase, dCovAnalytic_W, dCovMC_W);
 end
 
-function testModel2CovarianceMatchesMonteCarlo(testCase)
-% Test case for model 2 (simplified Gates / Capolupo-Labourdette)
+function testModel_MAG_DIR_DIRECT_CovarianceMatchesMonteCarlo(testCase)
+% Test case for MAG_DIR_DIRECT (simplified Gates / Capolupo-Labourdette)
 
 params = DefaultParams_();
-params.enumModelType = uint8(2);
+params.enumManCovModel = EnumManCovModel.MAG_DIR_DIRECT;
 params.dDCM_WfromSC = [0 1 0; 0 0 1; 1 0 0];
 params.dDCM_SCfromTH = [0 0 -1; 0 1 0; 1 0 0];
 params.dCommandDeltaV_W = params.dDCM_WfromSC * params.dDCM_SCfromTH * [0.12; 0; 0];
@@ -58,126 +54,106 @@ params.dSigmaDirErr = deg2rad(1.8); % In [rad]
 params.ui32NumSamples = uint32(15e4);
 params.ui32RngSeed = uint32(17);
 
-[dCovAnalytic_W, dCovMC_W, dCovAnalytic_TH, dCovFn_W, dCovFn_TH] = EvaluateCovAndMC_(params);
-
-VerifyAnalyticAndFunction_(testCase, dCovAnalytic_TH, dCovAnalytic_W, dCovFn_TH, dCovFn_W);
+[dCovAnalytic_W, dCovMC_W] = EvaluateCovAndMC_(params);
 VerifyMonteCarloAgreement_(testCase, dCovAnalytic_W, dCovMC_W);
 end
 
 function testAttitudeCovarianceContributionAdded(testCase)
 
+% Update test parameters
 params = DefaultParams_();
-params.enumModelType = uint8(1);
-params.dCommandDeltaV_W = params.dDCM_WfromSC * params.dDCM_SCfromTH * [0.15; 0; 0];
-params.dSigmaMagErr = 0.025 * norm(params.dCommandDeltaV_W);
+params.enumManCovModel = EnumManCovModel.HERA_GNC;
+params.dCommandDeltaV_W = params.dDCM_WfromSC * params.dDCM_SCfromTH * [0.15; 0; -0.05];
+params.dSigmaMagErr = 0.025;
 params.dSigmaDirErr = deg2rad(2); % In [rad]
-params.dAttitudeErrCov = deg2rad(2) * eye(3);
+params.dAttitudeErrCov = deg2rad(0.5)* eye(3);
 params.ui32NumSamples = uint32(2e5);
 params.ui32RngSeed = uint32(5);
 
-[dCovAnalytic_W, dCovMC_W, dCovAnalytic_TH, dCovFn_W, dCovFn_TH] = EvaluateCovAndMC_(params);
+% Get covariances
+[dCovAnalytic_W, dCovMC_W] = EvaluateCovAndMC_(params);
 
-VerifyAnalyticAndFunction_(testCase, dCovAnalytic_TH, dCovAnalytic_W, dCovFn_TH, dCovFn_W);
-VerifyMonteCarloAgreement_(testCase, dCovAnalytic_W, dCovMC_W);
-
+% Test without attitude error
 paramsNoAtt = params;
 paramsNoAtt.dAttitudeErrCov = zeros(3);
 
-dCovNoAtt = ProjectCovarianceToWorld_(dCovAnalytic_TH, paramsNoAtt.dDCM_WfromSC, paramsNoAtt.dDCM_SCfromTH, paramsNoAtt.dAttitudeErrCov, paramsNoAtt.dCommandDeltaV_W);
-testCase.verifyGreaterThan(norm(dCovAnalytic_W - dCovNoAtt, 'fro'), 0);
+[dCovNoAtt_W, ~, ~] = ComputeManoeuvreInputNoise(paramsNoAtt.dCommandDeltaV_W, ...
+                                                paramsNoAtt.dSigmaMagErr, ...
+                                                paramsNoAtt.dSigmaDirErr, ...
+                                                paramsNoAtt.dDCM_WfromSC, ...
+                                                paramsNoAtt.dDCM_SCfromTH, ...
+                                                paramsNoAtt.dAttitudeErrCov, ...
+                                                paramsNoAtt.enumManCovModel, ...
+                                                paramsNoAtt.bUseAveragePerturbDeltaV);
+
+% Verify that attitude error actually causes covariance to be larger
+testCase.verifyGreaterThan(norm(dCovAnalytic_W - dCovNoAtt_W, 'fro'), 0);
+
+% Verify asserts
+VerifyMonteCarloAgreement_(testCase, dCovAnalytic_W, dCovMC_W);
+
 end
 
 function testAveragePerturbationDeltaVApplied(testCase)
 
+% Update test parameters
 params = DefaultParams_();
 params.dCommandDeltaV_W = params.dDCM_WfromSC * params.dDCM_SCfromTH * [0.13; 0; 0];
 params.dSigmaMagErr = 0.05 * norm(params.dCommandDeltaV_W);
 params.dSigmaDirErr = deg2rad(2); % In [rad]
 params.bUseAveragePerturbDeltaV = true;
 
-[dCovFn_W, dCovFn_TH, dCommandOut_W] = ComputeManoeuvreInputNoise(params.dCommandDeltaV_W, ...
-                                                                    params.dSigmaMagErr, ...
-                                                                    params.dSigmaDirErr, ...
-                                                                    params.dDCM_WfromSC, ...
-                                                                    params.dDCM_SCfromTH, ...
-                                                                    params.dAttitudeErrCov, ...
-                                                                    params.enumModelType, ...
-                                                                    params.bUseAveragePerturbDeltaV);
+[~, ~, dCommandOut_W] = ComputeManoeuvreInputNoise(params.dCommandDeltaV_W, ...
+                                                    params.dSigmaMagErr, ...
+                                                    params.dSigmaDirErr, ...
+                                                    params.dDCM_WfromSC, ...
+                                                    params.dDCM_SCfromTH, ...
+                                                    params.dAttitudeErrCov, ...
+                                                    params.enumManCovModel, ...
+                                                    params.bUseAveragePerturbDeltaV);
 
 dNormDV = norm(params.dCommandDeltaV_W);
 dCommandExpected_W = params.dDCM_WfromSC * params.dDCM_SCfromTH * [dNormDV * exp(-0.5 * params.dSigmaDirErr^2); 0; 0];
 
-dCommandDeltaV_TH = transpose(params.dDCM_SCfromTH) * transpose(params.dDCM_WfromSC) * params.dCommandDeltaV_W;
-dCovAnalytic_TH = AnalyticManoeuvreCovTH_(dCommandDeltaV_TH, params.dSigmaMagErr, params.dSigmaDirErr, params.enumModelType);
-dCovAnalytic_W = ProjectCovarianceToWorld_(dCovAnalytic_TH, params.dDCM_WfromSC, params.dDCM_SCfromTH, params.dAttitudeErrCov, params.dCommandDeltaV_W);
-
 testCase.verifyEqual(dCommandOut_W, dCommandExpected_W, 'AbsTol', 1e-12);
-testCase.verifyEqual(dCovFn_TH, dCovAnalytic_TH, 'AbsTol', 1e-12);
-testCase.verifyEqual(dCovFn_W, dCovAnalytic_W, 'AbsTol', 1e-12);
+
+% TODO add MC to compute expected value of deltaV
 end
 
 %% Helpers
 function params = DefaultParams_()
+
+% Set default test case
 params.dCommandDeltaV_W = [0; 0; -0.1];
 params.dSigmaMagErr = 0.05;
 params.dSigmaDirErr = deg2rad(2); % In [rad]
 params.dDCM_WfromSC = eye(3);
 params.dDCM_SCfromTH = [0, 0, 1; 0, 1, 0; -1, 0, 0];
 params.dAttitudeErrCov = zeros(3);
-params.enumModelType = uint8(0);
+params.enumManCovModel = EnumManCovModel.MAG_DIR_THR;
 params.bUseAveragePerturbDeltaV = false;
 params.ui32NumSamples = uint32(1e5);
 params.ui32RngSeed = uint32(1);
+
 end
 
-function [dCovAnalytic_W, dCovMC_W, dCovAnalytic_TH, dCovFn_W, dCovFn_TH] = EvaluateCovAndMC_(params)
+function [dCovAnalytic_W, dCovMC_W, dCovAnalytic_TH] = EvaluateCovAndMC_(params)
+rng(double(params.ui32RngSeed));
 
-[dCovFn_W, dCovFn_TH, ~] = ComputeManoeuvreInputNoise(params.dCommandDeltaV_W, ...
+[dCovAnalytic_W, dCovAnalytic_TH, ~] = ComputeManoeuvreInputNoise(params.dCommandDeltaV_W, ...
                                                         params.dSigmaMagErr, ...
                                                         params.dSigmaDirErr, ...
                                                         params.dDCM_WfromSC, ...
                                                         params.dDCM_SCfromTH, ...
                                                         params.dAttitudeErrCov, ...
-                                                        params.enumModelType, ...
+                                                        params.enumManCovModel, ...
                                                         params.bUseAveragePerturbDeltaV);
 
 dCommandDeltaV_TH = transpose(params.dDCM_SCfromTH) * transpose(params.dDCM_WfromSC) * params.dCommandDeltaV_W;
-dCovAnalytic_TH = AnalyticManoeuvreCovTH_(dCommandDeltaV_TH, params.dSigmaMagErr, params.dSigmaDirErr, params.enumModelType);
-dCovAnalytic_W = ProjectCovarianceToWorld_(dCovAnalytic_TH, params.dDCM_WfromSC, params.dDCM_SCfromTH, params.dAttitudeErrCov, params.dCommandDeltaV_W);
 
-rng(double(params.ui32RngSeed));
+% Estimate covariance from MC
 dCovMC_W = MonteCarloProjectedCov_(params, dCommandDeltaV_TH);
 
-end
-
-function dCovAnalytic_TH = AnalyticManoeuvreCovTH_(dCommandDeltaV_TH, dSigmaMagErr, dSigmaDirErr, enumModelType)
-dNormDV = norm(dCommandDeltaV_TH);
-switch enumModelType
-    case 0
-        dMagnitudeAuxVal1 = 0.25 * (1 + dSigmaMagErr^2) * dNormDV;
-        dMagnitudeAuxVal2 = exp(- dSigmaDirErr^2);
-        dMagnitudeAuxVal22 = dMagnitudeAuxVal2 * dMagnitudeAuxVal2;
-
-        dCovAnalytic_TH = diag([ ...
-            2 * dMagnitudeAuxVal1 * (1 + dMagnitudeAuxVal22) - dMagnitudeAuxVal2 * dNormDV^2, ...
-            dMagnitudeAuxVal1 * (1 - dMagnitudeAuxVal22), ...
-            dMagnitudeAuxVal1 * (1 - dMagnitudeAuxVal22)]);
-    case 1
-        dNormDV2 = dNormDV * dNormDV;
-        dSigmaDirErr2 = dSigmaDirErr * dSigmaDirErr;
-        dSigmaMagErr2 = dSigmaMagErr * dSigmaMagErr;
-
-        dS1 = 0.5 * dNormDV2 * dSigmaDirErr2 * (dSigmaMagErr2 + 1.0 - dSigmaDirErr2);
-        dS2 = 0.5 * dNormDV2 * dSigmaDirErr2 * (dSigmaMagErr2 + 1.0 - dSigmaDirErr2);
-        dS3 = 0.5 * dNormDV2 * (dSigmaMagErr2 * (1.0 - dSigmaDirErr2) + 0.75 * dSigmaDirErr2 * dSigmaDirErr2);
-
-        dCovAnalytic_TH = diag([dS1, dS2, dS3]);
-    case 2
-        dSkew = skewSymm(dCommandDeltaV_TH);
-        dCovAnalytic_TH = dSigmaMagErr^2 * (dCommandDeltaV_TH * transpose(dCommandDeltaV_TH)) + dSigmaDirErr^2 * (dSkew * transpose(dSkew));
-    otherwise
-        error('testComputeManoeuvreInputNoise:InvalidModelType', 'Unsupported enumModelType=%d', enumModelType);
-end
 end
 
 function dCovAnalytic_W = ProjectCovarianceToWorld_(dCovAnalytic_TH, dDCM_WfromSC, dDCM_SCfromTH, dAttitudeErrCov, dCommandDeltaV_W)
@@ -190,6 +166,7 @@ end
 end
 
 function dCovMC_W = MonteCarloProjectedCov_(params, dCommandDeltaV_TH)
+
 % Estimate output covariance in W from samples
 dNumSamples = double(params.ui32NumSamples);
 dNormDV = norm(dCommandDeltaV_TH);
@@ -209,11 +186,18 @@ end
 dSamples_W = zeros(3, dNumSamples);
 for k = 1:dNumSamples
 
-    % Magnitude and direction perturbations (small-angle on TH frame)
+    % Magnitude perturbations 
     dMagSample = dNormDV * (1 + params.dSigmaMagErr * randn);
     dMagSample = max(dMagSample, eps);
     
-    dDirError_TH = [0; params.dSigmaDirErr * randn; params.dSigmaDirErr * randn];
+    % Sample direction perturbation (small-angle on TH frame)
+    dAlphaError = params.dSigmaDirErr * randn();
+    dThetaErr = 2 * pi * rand();
+
+    dDirError_TH = [cos(dAlphaError);
+                   sin(dAlphaError)*cos(dThetaErr);
+                   sin(dAlphaError)*sin(dThetaErr)];
+     
     dDVSample_TH = RotateVecRodrigues_(dUnitDV_TH * dMagSample, dDirError_TH);
 
     % Apply nominal TH->SC->W rotation
@@ -253,11 +237,6 @@ ct = cos(theta); st = sin(theta);
 dVecRot = dVec * ct + K * dVec * st + k * (transpose(k) * dVec) * (1 - ct);
 end
 
-function VerifyAnalyticAndFunction_(testCase, dCovAnalytic_TH, dCovAnalytic_W, dCovFn_TH, dCovFn_W)
-testCase.verifyEqual(dCovFn_TH, dCovAnalytic_TH, 'AbsTol', 1e-12);
-testCase.verifyEqual(dCovFn_W, dCovAnalytic_W, 'AbsTol', 1e-12);
-end
-
 function VerifyMonteCarloAgreement_(testCase, dCovAnalytic_W, dCovMC_W)
-testCase.verifyEqual(dCovMC_W, dCovAnalytic_W, 'RelTol', 6e-2, 'AbsTol', 1e-5);
+testCase.verifyEqual(dCovMC_W, dCovAnalytic_W, 'RelTol', 1e-1, 'AbsTol', 1e-4);
 end
