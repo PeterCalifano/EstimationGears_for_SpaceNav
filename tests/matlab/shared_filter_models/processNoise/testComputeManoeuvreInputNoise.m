@@ -71,7 +71,7 @@ params.enumModelType = uint8(1);
 params.dCommandDeltaV_W = params.dDCM_WfromSC * params.dDCM_SCfromTH * [0.15; 0; 0];
 params.dSigmaMagErr = 0.025 * norm(params.dCommandDeltaV_W);
 params.dSigmaDirErr = deg2rad(2); % In [rad]
-params.dAttitudeErrCov = diag([1e-6, 4e-6, 9e-6]);
+params.dAttitudeErrCov = deg2rad(2) * eye(3);
 params.ui32NumSamples = uint32(2e5);
 params.ui32RngSeed = uint32(5);
 
