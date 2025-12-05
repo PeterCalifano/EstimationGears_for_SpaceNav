@@ -1,19 +1,19 @@
 function [dCovDeltaV_W, dCovDeltaV_TH, dCommandDeltaV_W] = ComputeManoeuvreInputNoise(dCommandDeltaV_W, ...
-                                                                                    dSigmaMagErr, ...
-                                                                                    dSigmaDirErr, ...
+                                                                                    dSigmaMagErrFrac, ...
+                                                                                    dSigmaDirErrInRad, ...
                                                                                     dDCM_WfromSC, ...
                                                                                     dDCM_SCfromTH, ...
                                                                                     dAttitudeErrCov, ...
                                                                                     enumManCovModel, ...
                                                                                     bUseAveragePerturbDeltaV)%#codegen
 arguments (Input)
-    dCommandDeltaV_W  (3,1) double {mustBeNumeric}
-    dSigmaMagErr    (1,1) double {mustBeNonnegative}
-    dSigmaDirErr    (1,1) double {mustBeNonnegative}
-    dDCM_WfromSC    (3,3) double {mustBeNumeric}
-    dDCM_SCfromTH   (3,3) double {mustBeNumeric} = [0, 0, 1; 0, 1, 0; -1, 0, 0]% Assumed -Z axis aligned with +X of thruster frame, Y unchanged
-    dAttitudeErrCov (3,3) double {mustBeNumeric} = zeros(3,3) % Optional attitude error covariance of spacecraft wrt thruster frame
-    enumManCovModel (1,1) EnumManCovModel {coder.mustBeConst, mustBeA(enumManCovModel, ["EnumManCovModel", "string"])} = "MAG_DIR_THR"
+    dCommandDeltaV_W    (3,1) double {mustBeNumeric}
+    dSigmaMagErrFrac    (1,1) double {mustBeNonnegative}
+    dSigmaDirErrInRad   (1,1) double {mustBeNonnegative}
+    dDCM_WfromSC        (3,3) double {mustBeNumeric}
+    dDCM_SCfromTH       (3,3) double {mustBeNumeric} = [0, 0, 1; 0, 1, 0; -1, 0, 0]% Assumed -Z axis aligned with +X of thruster frame, Y unchanged
+    dAttitudeErrCov     (3,3) double {mustBeNumeric} = zeros(3,3) % Optional attitude error covariance of spacecraft wrt thruster frame
+    enumManCovModel     (1,1) EnumManCovModel {coder.mustBeConst, mustBeA(enumManCovModel, ["EnumManCovModel", "string"])} = "MAG_DIR_THR"
     % 0: Gates-simplified THR covariance, 1: HERA GNC THR covariance, 2: Gates-simplified W covariance, 3: Full Gates model
     bUseAveragePerturbDeltaV (1,1) logical {coder.mustBeConst} = false % If true, use average perturbation delta-V model to prevent nominal state shift
 end
@@ -87,8 +87,8 @@ switch coder.const(enumManCovModel)
         %% General model for magnitude + arbitrary direction error
 
         % Compute auxiliary variables
-        dMagnitudeAuxVal1 = 0.25 * (1 + dSigmaMagErr^2) * dNormDV;
-        dMagnitudeAuxVal2 = exp(- dSigmaDirErr^2);
+        dMagnitudeAuxVal1 = 0.25 * (1 + dSigmaMagErrFrac^2) * dNormDV2;
+        dMagnitudeAuxVal2 = exp(- dSigmaDirErrInRad^2);
         dMagnitudeAuxVal22 = dMagnitudeAuxVal2 * dMagnitudeAuxVal2;
 
         % Compute diagonal elements of manoeuvre input noise covariance
@@ -100,8 +100,8 @@ switch coder.const(enumManCovModel)
         %% HERA GNC implementation (GMV)
 
         % Auxiliary variables
-        dSigmaDirErr2 = dSigmaDirErr * dSigmaDirErr;
-        dSigmaMagErr2 = dSigmaMagErr * dSigmaMagErr;
+        dSigmaDirErr2 = dSigmaDirErrInRad * dSigmaDirErrInRad;
+        dSigmaMagErr2 = dSigmaMagErrFrac * dSigmaMagErrFrac;
 
         % NOTE: Maneouvre covariance matrix is diagonal in the frame aligned with
         % the manoeuvring direction (X axis in the thrusting direction)
@@ -116,8 +116,8 @@ switch coder.const(enumManCovModel)
         dAuxCommandDeltaV_TH = transpose(dDCM_SCfromTH) * transpose(dDCM_WfromSC) * dCommandDeltaV_W;
 
         % NOTE: Covariance as sum of two gaussian uncertainty parallel and tangential to DeltaV direction
-        dCovDeltaV_TH(:,:) = dSigmaMagErr^2 * (dAuxCommandDeltaV_TH * transpose(dAuxCommandDeltaV_TH)) + ...
-                                dSigmaDirErr^2 * (skewSymm(dAuxCommandDeltaV_TH) * transpose(skewSymm(dAuxCommandDeltaV_TH)));
+        dCovDeltaV_TH(:,:) = dSigmaMagErrFrac^2 * (dAuxCommandDeltaV_TH * transpose(dAuxCommandDeltaV_TH)) + ...
+                                dSigmaDirErrInRad^2 * (skewSymm(dAuxCommandDeltaV_TH) * transpose(skewSymm(dAuxCommandDeltaV_TH)));
 
     case EnumManCovModel.GATES
         % Full Gates model
@@ -139,14 +139,15 @@ dCovDeltaV_W(:,:) = dDCM_WfromSC * dDCM_SCfromTH * dCovDeltaV_TH * transpose(dDC
 if any(abs(dAttitudeErrCov) > eps('double'), 'all')
 
     % Compute jacobian of delta-V wrt small attitude errors 
-    dJac_DV_AttErr = dDCM_WfromSC * skewSymm(dDCM_SCfromTH * dCommandDeltaV_W);
+    dCommandDeltaV_THR = transpose(dDCM_WfromSC * dDCM_SCfromTH) * dCommandDeltaV_W;
+    dJac_DV_AttErr = - dDCM_WfromSC * skewSymm(dDCM_SCfromTH * dCommandDeltaV_THR);
     dCovDeltaV_W(:,:) = dCovDeltaV_W + dJac_DV_AttErr * dAttitudeErrCov * transpose(dJac_DV_AttErr);
 end
 
 % Compute average perturbation delta-V if requested
 if bUseAveragePerturbDeltaV
     % Laurens, 2021, 8th ESA Space Debris Conference
-    dCommandDeltaV_W(:) = dDCM_WfromSC * dDCM_SCfromTH * [dNormDV * exp(-0.5 * dSigmaDirErr^2); 0; 0];
+    dCommandDeltaV_W(:) = dDCM_WfromSC * dDCM_SCfromTH * [dNormDV * exp(-0.5 * dSigmaDirErrInRad^2); 0; 0];
 end
 
 end
