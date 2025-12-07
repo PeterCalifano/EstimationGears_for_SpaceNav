@@ -147,8 +147,8 @@ dNormSunPositionFromSC = norm(dBodyEphemerides(1:3) - dxState(strStatesIdx.ui8po
 dInvNormSunPositionFromSC = 1 / dNormSunPositionFromSC;
 
 % Compute SRP value from SRP0 at 1AU
-[strDynParams.strSRPdata.dP_SRP, strDynParams.strSRPdata.dP_SRP0] = ComputeSolarRadPressure(dInvNormSunPositionFromSC, ...
-                                                                strFilterConstConfig.bUseKilometersScale);
+[strDynParams.strSRPdata.dP_SRP] = ComputeSolarRadPressure(dInvNormSunPositionFromSC, ...
+                                                            strFilterConstConfig.bUseKilometersScale);
 
 if strDynParams.bIsInEclipse
     dCoeffSRP = (strDynParams.strSRPdata.dP_SRP * strDynParams.strSCdata.dReflCoeff * ...
@@ -174,7 +174,7 @@ dPositionFromMain_W = dxState(strStatesIdx.ui8posVelIdx(1:3));
 strDynParams.bIsInEclipse = CheckForEclipseMainSphereBody(dSunPositionFromMain_W, ...
                                                             dPositionFromMain_W, ...
                                                             strDynParams.strMainData.dRefRadius, ...
-                                                            dNormSunPositionFromSC);
+                                                            norm(dSunPositionFromMain_W));
 
 %% Evaluate RHS 
 % Evaluate Position and Velocity states dynamics

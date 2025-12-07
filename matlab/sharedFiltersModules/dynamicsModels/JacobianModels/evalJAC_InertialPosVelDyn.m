@@ -106,8 +106,6 @@ end
 % dDynMatrix_PosVel(ui8PosVelIdx, ui8attBiasDeltaIdx) 
 
 %% Jacobian wrt residual acceleration (if any)
-% DEVNOTE TBC if need to bedisabled because in principle the stochastic process affecting the dynamics does not enter the
-% deterministic portion of it, but the stochastic input (hence in G, instead of STM).
 dDynMatrix_PosVel(ui8PosVelIdx(4:6), ui8ResidualAccelIdx) = dDynMatrix_PosVel(ui8PosVelIdx(4:6), ui8ResidualAccelIdx) + eye(3);
 
 if not(strDynParams.bIsInEclipse)
@@ -117,8 +115,6 @@ if not(strDynParams.bIsInEclipse)
                                         strFilterMutabConfig, ...
                                         strFilterConstConfig);
 
-    % DEVNOTE: derivative of velocity wrt delta C SRP has order of unit vector, but seems quite large with
-    % respect to other contributions?
     if coder.const(ui8CoeffSRPidx > 0)
         dDynMatrix_PosVel(ui8PosVelIdx, [ui8PosVelIdx(1:3); ui8CoeffSRPidx]) = dDynMatrix_PosVel(ui8PosVelIdx, [ui8PosVelIdx(1:3); ui8CoeffSRPidx]) ...
                                                                                                     + drvSRPwithBiasJac;
