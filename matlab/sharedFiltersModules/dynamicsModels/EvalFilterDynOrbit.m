@@ -34,6 +34,7 @@ end
 % 17-08-2024    Pietro Califano     Version adapted from FUTURE EKF to use general purpose evalRHS_DynOrbit
 % 17-03-2024    Pietro Califano     Updated version for use in MSKCF
 % 28-07-2025    Pietro Califano     Update version to recompute P_SRP and eclipse flag
+% 07-12-2025    Pietro Califano     Fix bugs related to SRP computation
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % evalAttQuatChbvPolyWithCoeffs()

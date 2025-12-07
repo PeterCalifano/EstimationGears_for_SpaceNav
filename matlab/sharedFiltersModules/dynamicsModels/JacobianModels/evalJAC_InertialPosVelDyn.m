@@ -95,21 +95,16 @@ dDCMmainAtt_INfromTF = zeros(3,3); % TODO (PC) TO REMOVE next
 dDynMatrix_PosVel(ui8PosVelIdx, ui8PosVelIdx) = dDynMatrix_PosVel(ui8PosVelIdx, ui8PosVelIdx) ...
                                                                 + drvMainBodyGravityJac;
 
+%% Jacobian wrt 3rd bodies
+[drv3rdBodyGravityJac] = evalJAC_3rdBodyGrav(dxState, ...
+                                             strDynParams, ...
+                                             strFilterConstConfig);
 
-% If no other state is estimated, return here
-if coder.const(strFilterConstConfig.bOrbitStateOnly)
-    return
-end
+dDynMatrix_PosVel(ui8PosVelIdx, ui8PosVelIdx) = dDynMatrix_PosVel(ui8PosVelIdx, ui8PosVelIdx) ...
+                                                                + drv3rdBodyGravityJac;
 
-%% Jacobian wrt main body attitude bias
-% NOTE: influences SH if any
-% dDynMatrix_PosVel(ui8PosVelIdx, ui8attBiasDeltaIdx) 
-
-%% Jacobian wrt residual acceleration (if any)
-dDynMatrix_PosVel(ui8PosVelIdx(4:6), ui8ResidualAccelIdx) = dDynMatrix_PosVel(ui8PosVelIdx(4:6), ui8ResidualAccelIdx) + eye(3);
-
+%% Jacobian wrt SRP + bias
 if not(strDynParams.bIsInEclipse)
-    %% Jacobian wrt SRP + bias
     [drvSRPwithBiasJac] = evalJAC_SRPwithBias(dxState, ...
                                         strDynParams, ...
                                         strFilterMutabConfig, ...
@@ -123,14 +118,17 @@ if not(strDynParams.bIsInEclipse)
     end
 end
 
-%% Jacobian wrt 3rd bodies
-[drv3rdBodyGravityJac] = evalJAC_3rdBodyGrav(dxState, ...
-                                             strDynParams, ...
-                                             strFilterConstConfig);
+% If no other state is estimated, return here
+if coder.const(strFilterConstConfig.bOrbitStateOnly)
+    return
+end
 
-dDynMatrix_PosVel(ui8PosVelIdx, ui8PosVelIdx) = dDynMatrix_PosVel(ui8PosVelIdx, ui8PosVelIdx) ...
-                                                                + drv3rdBodyGravityJac;
+%% Jacobian wrt main body attitude bias
+% NOTE: influences SH if any
+% dDynMatrix_PosVel(ui8PosVelIdx, ui8attBiasDeltaIdx) 
 
+%% Jacobian wrt residual acceleration (if any)
+dDynMatrix_PosVel(ui8PosVelIdx(4:6), ui8ResidualAccelIdx) = dDynMatrix_PosVel(ui8PosVelIdx(4:6), ui8ResidualAccelIdx) + eye(3);
 
 %% Jacobian wrt gravity parameter (central force only)
 if strFilterConstConfig.bEstimateGravParam
