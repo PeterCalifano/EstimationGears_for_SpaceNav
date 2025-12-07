@@ -93,7 +93,7 @@ elseif dStateTimetag >= strDynParams.strMainData.strAttData.dTimeUpBound
     dEvalPoint = strDynParams.strMainData.strAttData.dTimeUpBound;
 
 else
-    dEvalPoint = dStateTimetag;
+    dEvalPoint = dStateTimetag(1);
 end
 
 % Moon Position in ECI (World frame)
@@ -143,32 +143,16 @@ if isfield(strFilterConstConfig.strStatesIdx, "ui8CoeffSRPidx") && ...
 end
 
 % Compute distance from the Sun 
-dMainPosition_W = zeros(3,1);
-dDistToSun = norm(dBodyEphemerides(1:3) - dMainPosition_W);
-
-% TEMPORARY: selection of scale based on magnitude
-% S0   = 1361.0;                 % W/m^2 (solar constant at 1 AU; 1361–1367 often used)
-% c    = 299792458;              % m/s
-% AU_m = 1.495978707e11;         % m
-% AU_km= 1.495978707e8;          % km
-
-if dDistToSun <= 1e10
-    % Assumes km scale
-    dAU = coder.const(1.495978707E8);
-    strDynParams.strSRPdata.dP_SRP0 = coder.const(1E3 * 1367 / 299792458); 
-else
-    % Assumes m scale
-    dAU = coder.const(1.495978707E11);
-    strDynParams.strSRPdata.dP_SRP0 = coder.const(1367 / 299792458); % Approx. 4.54e-6 N/m^2
-end
+dNormSunPositionFromSC = norm(dBodyEphemerides(1:3) - dxState(strStatesIdx.ui8posVelIdx(1:3)));
+dInvNormSunPositionFromSC = 1 / dNormSunPositionFromSC;
 
 % Compute SRP value from SRP0 at 1AU
-dDistFromSunAU = dDistToSun / dAU;
-strDynParams.strSRPdata.dP_SRP = strDynParams.strSRPdata.dP_SRP0 * (1/(dDistFromSunAU)^2); % [N/m^2] or [N/km^2]
+[strDynParams.strSRPdata.dP_SRP, strDynParams.strSRPdata.dP_SRP0] = ComputeSolarRadPressure(dInvNormSunPositionFromSC, ...
+                                                                strFilterConstConfig.bUseKilometersScale);
 
 if strDynParams.bIsInEclipse
     dCoeffSRP = (strDynParams.strSRPdata.dP_SRP * strDynParams.strSCdata.dReflCoeff * ...
-        strDynParams.strSCdata.dA_SRP)/strDynParams.strSCdata.dSCmass; % Move to compute outside, since this
+                    strDynParams.strSCdata.dA_SRP)/strDynParams.strSCdata.dSCmass; 
 
     dCoeffSRP = dCoeffSRP + dBiasCoeffSRP;
 else
@@ -190,7 +174,7 @@ dPositionFromMain_W = dxState(strStatesIdx.ui8posVelIdx(1:3));
 strDynParams.bIsInEclipse = CheckForEclipseMainSphereBody(dSunPositionFromMain_W, ...
                                                             dPositionFromMain_W, ...
                                                             strDynParams.strMainData.dRefRadius, ...
-                                                            dDistToSun);
+                                                            dNormSunPositionFromSC);
 
 %% Evaluate RHS 
 % Evaluate Position and Velocity states dynamics

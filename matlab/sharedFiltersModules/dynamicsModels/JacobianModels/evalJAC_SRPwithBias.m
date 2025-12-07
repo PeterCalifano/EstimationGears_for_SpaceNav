@@ -51,7 +51,6 @@ else
     ui8CoeffSRPidx = coder.const(0);
 end
 
-
 if strFilterMutabConfig.bEnableBiasSRP && coder.const(ui8CoeffSRPidx > 0)
     % DEVNOTE: in principle this branching should force the coder to generate two different copies if needed
     % but only one will be instantiated as long as strFilterConstConfig.bEnableBiasSRP is hardcoded.
@@ -67,22 +66,9 @@ dSunPositionFromSC_IN       = strDynParams.dBodyEphemerides(1:3) - dxState(ui8Po
 dNormSunPositionFromSC_IN   = norm( dSunPositionFromSC_IN );
 dInvNormSunPositionFromSC   = 1/dNormSunPositionFromSC_IN;
 
-if dNormSunPositionFromSC_IN <= 1e10
-    % Assumes km scale
-    dAU = coder.const(1.495978707E8);
-    strDynParams.strSRPdata.dP_SRP0 = coder.const(1E3 * 1367 / 299792458);
-else
-    % Assumes m scale
-    dAU = coder.const(1.495978707E11);
-    
-    strDynParams.strSRPdata.dP_SRP0 = coder.const(1367 / 299792458); % Approx. 4.54e-6 N/m^2
-end
-
-% Compute AU^2 as coder constant
-dAU2 = coder.const(dAU * dAU);
-
 % Compute SRP value from SRP0 at 1AU
-strDynParams.strSRPdata.dP_SRP = strDynParams.strSRPdata.dP_SRP0 * (dAU2 * (dInvNormSunPositionFromSC^2)); % [N/m^2] or [N/km^2]
+[strDynParams.strSRPdata.dP_SRP, ~] = ComputeSolarRadPressure(dInvNormSunPositionFromSC, ...
+                                                              strFilterConstConfig.bUseKilometersScale);
 
 %% Compute jacobian wrt SRP acceleration
 % DEVNOTE this coefficient is recomputed here, instead of re-using calculation from propagateDyn
