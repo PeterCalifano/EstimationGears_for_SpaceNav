@@ -4,14 +4,14 @@ function [dDynMatrix_PosVel] = evalJAC_InertialPosVelDyn(dxState, ...
                                                         strFilterMutabConfig, ...
                                                         strFilterConstConfig)%#codegen
 arguments (Input)
-    dxState             (:,1) {isvector, isnumeric}
-    dStateTimetag       (:,1) {isvector, isnumeric}
-    strDynParams          {isstruct}
-    strFilterMutabConfig  {isstruct}
-    strFilterConstConfig  {isstruct}
+    dxState               (:,1) double 
+    dStateTimetag         (:,1) double 
+    strDynParams          (1,1) struct
+    strFilterMutabConfig  (1,1) struct
+    strFilterConstConfig  (1,1) struct {coder.mustBeConst}
 end
 arguments (Output)
-    dDynMatrix_PosVel (:,:) {ismatrix, isnumeric}
+    dDynMatrix_PosVel (:,:) double
 end
 %% PROTOTYPE
 % [dDynMatrix_PosVel] = evalJAC_InertialPosVelDyn(dxState, ...
@@ -28,14 +28,14 @@ end
 % Optional gravitational parameter estimation is implemented and added based on configuration (constexpr)
 % -------------------------------------------------------------------------------------------------------------
 %% INPUT
-% dxState             (:,1) {isvector, isnumeric}
-% dStateTimetag       (:,1) {isvector, isnumeric}
-% strDynParams          {isstruct}
-% strFilterMutabConfig  {isstruct}
-% strFilterConstConfig  {isstruct}
+% dxState               (:,1) double
+% dStateTimetag         (:,1) double
+% strDynParams          (1,1) struct
+% strFilterMutabConfig  (1,1) struct
+% strFilterConstConfig  (1,1) struct {coder.mustBeConst}
 % -------------------------------------------------------------------------------------------------------------
 %% OUTPUT
-% dDynMatrix_PosVel
+% dDynMatrix_PosVel (:,:) double
 % -------------------------------------------------------------------------------------------------------------
 %% CHANGELOG
 % 24-02-2025    Pietro Califano     First version implemented from legacy code.

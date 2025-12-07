@@ -154,12 +154,12 @@ dDistToSun = norm(dBodyEphemerides(1:3) - dMainPosition_W);
 
 if dDistToSun <= 1e10
     % Assumes km scale
-    dAU = 1.495978707E8;
-    strDynParams.strSRPdata.dP_SRP0 = 1367 / (299792458 * 1E-3); 
+    dAU = coder.const(1.495978707E8);
+    strDynParams.strSRPdata.dP_SRP0 = coder.const(1E3 * 1367 / 299792458); 
 else
     % Assumes m scale
-    dAU = 1.495978707E11;
-    strDynParams.strSRPdata.dP_SRP0 = 1367 / 299792458; % Approx. 4.54e-6 N/m^2
+    dAU = coder.const(1.495978707E11);
+    strDynParams.strSRPdata.dP_SRP0 = coder.const(1367 / 299792458); % Approx. 4.54e-6 N/m^2
 end
 
 % Compute SRP value from SRP0 at 1AU
