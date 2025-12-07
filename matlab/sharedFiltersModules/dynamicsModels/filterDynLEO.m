@@ -23,7 +23,7 @@ end
 % 1) Cannonball-like Drag (Exponential atm. model)
 % 2) Cannonball SRP model 
 % 3) Gravitational models: Earth (Main, J2), Moon
-% REFERENCES
+% REFERENCES: TODO
 % -------------------------------------------------------------------------------------------------------------
 %% INPUT
 % dStateTimetag           (:, 1) double
@@ -41,6 +41,7 @@ end
 % 08-05-2024        Pietro Califano         Fix of incorrect frame in computing SH acceleration. Added
 %                                           attitude ephemerides as evaluation of Chbv polynomials.
 % 23-07-2025        Pietro Califano         [MAJOR] Reworking for new filter standard architectures.
+% 07-12-2025        Pietro Califano     Fix minor bugs related to SRP
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % evalAttQuatChbvPolyWithCoeffs()
@@ -48,6 +49,7 @@ end
 % evalRHS_DynLEO()
 % evalRHS_DynFOGM()
 % -------------------------------------------------------------------------------------------------------------
+
 %% Function code
 % ui16StateSize = strFilterConstConfig.ui16StateSize;
 % ui32PolyMaxDeg = 20; 

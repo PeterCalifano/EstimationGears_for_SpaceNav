@@ -28,7 +28,7 @@ arguments
     d3rdBodiesGM            (:,1) double
     dCoeffSRP               (1,1) double
     dResidualAccel          (3,1) double {mustBeNumeric}
-    ui16StatesIdx           (:,2) uint16 {mustBeInteger, mustBeConst}
+    ui16StatesIdx           (:,2) uint16 {mustBeInteger, coder.mustBeConst}
 end
 %% PROTOTYPE
 % [dPosVeldt, strAccelInfo] = evalRHS_DynLEO(dxState, ...
@@ -64,17 +64,18 @@ end
 % d3rdBodiesGM            (:,1) double
 % dCoeffSRP               (1,1) double
 % dResidualAccel          (3,1) double {mustBeNumeric}
-% ui16StatesIdx           (:,2) uint16 {mustBeInteger, mustBeConst}
+% ui16StatesIdx           (:,2) uint16 {mustBeInteger, coder.mustBeConst}
 % -------------------------------------------------------------------------------------------------------------
 %% OUTPUT
 % dPosVeldt, strAccelInfo
 % -------------------------------------------------------------------------------------------------------------
 %% CHANGELOG
-% 19-02-2024        Pietro Califano         Preliminary prototype coded for evaluation and develop. iterations.
-% 22-02-2024        Pietro Califano         Added code to evaluate atmospheric density based on estimated
-%                                           state (exponential model)
-% 02-05-2024        Pietro Califano         Incorrect J2 acceleration fixed.
-% 22-07-2025        Pietro Califano         Update for integration in new filter architecture (future-nav)
+% 19-02-2024        Pietro Califano     Preliminary prototype coded for evaluation and develop. iterations.
+% 22-02-2024        Pietro Califano     Added code to evaluate atmospheric density based on estimated
+%                                       state (exponential model)
+% 02-05-2024        Pietro Califano     Incorrect J2 acceleration fixed.
+% 22-07-2025        Pietro Califano     Update for integration in new filter architecture (future-nav)
+% 07-12-2025        Pietro Califano     Fix minor bugs related to SRP
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % evalAtmExpDensity()
@@ -257,7 +258,7 @@ if ~isempty(dBodyEphemerides)
 end
 
 %% Cannonball SRP acceleration
-if ~isempty(dBodyEphemerides) % TODO: need a way to disable this --> factory pattern for classes?
+if coder.const(~isempty(dBodyEphemerides))
     dAccCannonBallSRP = dCoeffSRP * dPosSunToSC./dSCdistToSun;
 else
     dAccCannonBallSRP = zeros(3,1);
