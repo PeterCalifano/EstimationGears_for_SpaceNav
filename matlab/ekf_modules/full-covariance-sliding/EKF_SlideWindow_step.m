@@ -68,7 +68,7 @@ end
 % -------------------------------------------------------------------------------------------------------------
 
 % Coder directives
-coder.inline("auto");
+coder.inline("default");
 
 % Determine manoeuvre flag
 bNoManoeuvre = true;
