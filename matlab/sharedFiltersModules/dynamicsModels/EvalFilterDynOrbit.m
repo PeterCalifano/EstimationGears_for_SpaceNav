@@ -48,8 +48,7 @@ end
 % -------------------------------------------------------------------------------------------------------------
 %% Function code
 % ui16StateSize = strFilterConstConfig.ui16StateSize;
-
-dMainPosition_W = zeros(3,1); % DEVNOTE: hardcoded. Must come from ephemerides if necessary
+% dMainPosition_W = zeros(3,1); % DEVNOTE: hardcoded. Must come from ephemerides if necessary
 
 % Check for 3rd bodies
 if coder.target('MATLAB') || coder.target('MEX')
@@ -120,7 +119,6 @@ end
 
 % Compute SRP coefficient
 dBiasCoeffSRP = 0.0;
-
 if isfield(strFilterConstConfig.strStatesIdx, "ui8CoeffSRPidx") && ...
         all(strFilterMutabConfig.bConsiderStatesMode(strFilterConstConfig.strStatesIdx.ui8CoeffSRPidx) == false)
 
@@ -128,24 +126,14 @@ if isfield(strFilterConstConfig.strStatesIdx, "ui8CoeffSRPidx") && ...
 end
 
 % Update SRP value from SRP0 at 1AU
-dSunPositionFromSC_W = dBodyEphemerides(1:3) + dMainPosition_W -...
-                    dxState(strFilterConstConfig.strStatesIdx.ui8posVelIdx(1:3));
-dDistToSun = norm(dSunPositionFromSC_W);
+dSunPositionFromSC_W = dBodyEphemerides(1:3) - ...
+                        dxState(strFilterConstConfig.strStatesIdx.ui8posVelIdx(1:3));
 
-if dDistToSun <= 1e10
-    % Assumes km scale
-    dAU = 1.495978707E8;
-    strDynParams.strSRPdata.dP_SRP0 = coder.const(1E3 * 1367 / 299792458);
-else
-    % Assumes m scale
-    dAU = 1.495978707E11;
-    strDynParams.strSRPdata.dP_SRP0 = coder.const(1367 / 299792458); % Approx. 4.54e-6 N/m^2
-end
+% Compute SRP value from SRP0 at 1AU
+[strDynParams.strSRPdata.dP_SRP] = ComputeSolarRadPressure(1 / norm(dSunPositionFromSC_W), ...
+                                                            strFilterConstConfig.bUseKilometersScale);
 
-dDistFromSunAU = dDistToSun / dAU;
-
-strDynParams.strSRPdata.dP_SRP = strDynParams.strSRPdata.dP_SRP0 * (1/(dDistFromSunAU)^2); % [N/m^2] or [N/km^2]
-
+% Compute SRP coefficient
 dCoeffSRP = (strDynParams.strSRPdata.dP_SRP * strDynParams.strSCdata.dReflCoeff * ...
              strDynParams.strSCdata.dA_SRP)/strDynParams.strSCdata.dSCmass; % Move to compute outside, since this
 

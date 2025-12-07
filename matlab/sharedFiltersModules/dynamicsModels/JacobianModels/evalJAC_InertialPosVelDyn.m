@@ -76,7 +76,7 @@ end
 dDynMatrix_PosVel(ui8PosVelIdx(1:3), ui8PosVelIdx(4:6)) = eye(3);
 
 %% Jacobian of main body accelerations (position-velocity only)
-dBodyPosition_IN = zeros(3,1); % DEVNOTE: assumption of estimation frame attached to body CoM!
+dMainBodyPosition_IN = zeros(3,1); % DEVNOTE: assumption of estimation frame attached to body CoM!
 
 % if strFilterMutabConfig.bEnableNonSphericalGravity % DEVNOTE: this is intended NOT to change at runtime!
 %     dDCMmainAtt_INfromTF = eye(3); % TODO!
@@ -90,7 +90,7 @@ dDCMmainAtt_INfromTF = zeros(3,3); % TODO (PC) TO REMOVE next
                                                        dDCMmainAtt_INfromTF, ...
                                                        [], ...          % strDynParams.strMainData.dSHcoeff
                                                        uint16(0), ... % strDynParams.strMainData.ui16MaxSHdegree
-                                                       dBodyPosition_IN);
+                                                       dMainBodyPosition_IN);
 
 dDynMatrix_PosVel(ui8PosVelIdx, ui8PosVelIdx) = dDynMatrix_PosVel(ui8PosVelIdx, ui8PosVelIdx) ...
                                                                 + drvMainBodyGravityJac;
