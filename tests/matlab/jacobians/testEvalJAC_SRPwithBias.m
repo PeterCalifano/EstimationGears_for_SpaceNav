@@ -5,26 +5,34 @@ tests = functiontests(localfunctions);
 end
 
 function setupOnce(~)
+
 % Add repository paths for test discovery
 charThisDir = fileparts(mfilename('fullpath'));
 addpath(fullfile(charThisDir, "../../../"));
 SetupPaths_EstimationGears;
+
 end
 
+%% Test Jacobian without bias
 function testJacobianWithoutBias(testCase)
+
 cfg = buildSRPTestConfig_(false);
-verifySRPJacobianMatchesFiniteDiff_(testCase, cfg);
+VerifySRPJacobianMatchesFiniteDiff_(testCase, cfg);
+
 end
 
 function testJacobianWithBias(testCase)
 cfg = buildSRPTestConfig_(true);
-verifySRPJacobianMatchesFiniteDiff_(testCase, cfg);
+VerifySRPJacobianMatchesFiniteDiff_(testCase, cfg)
 end
 
 %% Helpers
 function cfg = buildSRPTestConfig_(bEnableBiasSRP)
+
+% Construct minimal configuration structs
 cfg = struct();
 
+% strFilterConstConfig
 cfg.strFilterConstConfig = struct();
 cfg.strFilterConstConfig.ui16StateSize = uint16(7);
 cfg.strFilterConstConfig.bOrbitStateOnly = true;
@@ -34,20 +42,22 @@ cfg.strFilterConstConfig.strStatesIdx.ui8CoeffSRPidx = uint16(7);
 
 ui16StateSize = double(cfg.strFilterConstConfig.ui16StateSize);
 
+% strFilterMutabConfig
 cfg.strFilterMutabConfig = struct();
 cfg.strFilterMutabConfig.bEnableBiasSRP = bEnableBiasSRP;
 cfg.strFilterMutabConfig.bConsiderStatesMode = false(ui16StateSize, 1);
 
 % Geometry: Earth at origin, SC in LEO-like position, Sun far along +X (scaled Earth-Sun distance
 % for numerically meaningful Jacobian entries while preserving the reference geometry).
-dAU_m = 1.495978707e11;
-cfg.dSunPosition_IN = [1e-3 * dAU_m; 0.0; 0.0];
+dAU = 1.495978707e11;
+cfg.dSunPosition_IN = [1e-3 * dAU; 0.0; 0.0];
 
 cfg.dxState = zeros(ui16StateSize, 1);
 cfg.dxState(cfg.strFilterConstConfig.strStatesIdx.ui8posVelIdx(1:3)) = [7.2e6; -1.1e6; 9.0e5];
 cfg.dxState(cfg.strFilterConstConfig.strStatesIdx.ui8posVelIdx(4:6)) = [10.0; 7.5e3; -25.0];
 cfg.dxState(cfg.strFilterConstConfig.strStatesIdx.ui8CoeffSRPidx) = 1.0e-6;
 
+% strDynParams
 cfg.strDynParams = struct();
 cfg.strDynParams.bIsInEclipse = false;
 cfg.strDynParams.dBodyEphemerides = cfg.dSunPosition_IN;
@@ -63,46 +73,58 @@ cfg.dFiniteDiffStepCoeff = 1.0e-6; % [m/s^2] (additive SRP coefficient bias)
 cfg.dAbsTol = 5e-12;
 cfg.dRelTol = 2e-6;
 cfg.dZeroJacTol = 1e-12;
+
 end
 
-function verifySRPJacobianMatchesFiniteDiff_(testCase, cfg)
+function VerifySRPJacobianMatchesFiniteDiff_(testCase, cfg)
+
+% Evaluate acceleration jacobian
 drvSRPwithBiasJac = evalJAC_SRPwithBias(cfg.dxState, ...
                                         cfg.strDynParams, ...
                                         cfg.strFilterMutabConfig, ...
                                         cfg.strFilterConstConfig);
 
 if cfg.strFilterMutabConfig.bEnableBiasSRP
-    expectedSize = [6, 4];
-    fdColumns = double([cfg.strFilterConstConfig.strStatesIdx.ui8posVelIdx(1:3), ...
-                        cfg.strFilterConstConfig.strStatesIdx.ui8CoeffSRPidx]);
-    analyticJacAcc = drvSRPwithBiasJac(cfg.strFilterConstConfig.strStatesIdx.ui8posVelIdx(4:6), 1:4);
+    % Jacobian with bias
+    dExpectedSize = [6, 4];
+    dStatesColumns = double([cfg.strFilterConstConfig.strStatesIdx.ui8posVelIdx(1:3), ...
+                            cfg.strFilterConstConfig.strStatesIdx.ui8CoeffSRPidx]);
+
+    % Extract jacobian
+    dAnalyticJacAcc = drvSRPwithBiasJac(cfg.strFilterConstConfig.strStatesIdx.ui8posVelIdx(4:6), 1:4);
+
 else
-    expectedSize = [6, 3];
-    fdColumns = double(cfg.strFilterConstConfig.strStatesIdx.ui8posVelIdx(1:3));
-    analyticJacAcc = drvSRPwithBiasJac(cfg.strFilterConstConfig.strStatesIdx.ui8posVelIdx(4:6), 1:3);
+    % Jacobian with bias
+    dExpectedSize = [6, 3];
+    dStatesColumns = double(cfg.strFilterConstConfig.strStatesIdx.ui8posVelIdx(1:3));
+
+    % Extract jacobian
+    dAnalyticJacAcc = drvSRPwithBiasJac(cfg.strFilterConstConfig.strStatesIdx.ui8posVelIdx(4:6), 1:3);
+
 end
 
-testCase.verifySize(drvSRPwithBiasJac, expectedSize);
+testCase.verifySize(drvSRPwithBiasJac, dExpectedSize);
 
-fdSteps = zeros(size(cfg.dxState));
-fdSteps(cfg.strFilterConstConfig.strStatesIdx.ui8posVelIdx(1:3)) = cfg.dFiniteDiffStepPos;
-fdSteps(cfg.strFilterConstConfig.strStatesIdx.ui8posVelIdx(4:6)) = cfg.dFiniteDiffStepVel;
-fdSteps(cfg.strFilterConstConfig.strStatesIdx.ui8CoeffSRPidx) = cfg.dFiniteDiffStepCoeff;
+% Evaluate Jacobian using Central differences
+dFiniteDiffSteps = zeros(size(cfg.dxState));
+dFiniteDiffSteps(cfg.strFilterConstConfig.strStatesIdx.ui8posVelIdx(1:3)) = cfg.dFiniteDiffStepPos;
+dFiniteDiffSteps(cfg.strFilterConstConfig.strStatesIdx.ui8posVelIdx(4:6)) = cfg.dFiniteDiffStepVel;
+dFiniteDiffSteps(cfg.strFilterConstConfig.strStatesIdx.ui8CoeffSRPidx) = cfg.dFiniteDiffStepCoeff;
 
-fdJacFull = centralDiffJacobian_( ...
-    @(state) evalSRPAccelFromState_(state, cfg), ...
-    cfg.dxState, ...
-    fdSteps);
+dFiniteDiffJacFull = EvalCentralDiffJacobian_(@(state) EvalSRPAccelFromStateHelper_(state, cfg), ...
+                                                                        cfg.dxState, ...
+                                                                        dFiniteDiffSteps);
 
-fdJacSelected = fdJacFull(:, fdColumns);
+dFdJacSelected = dFiniteDiffJacFull(:, dStatesColumns);
 
-testCase.verifyEqual(analyticJacAcc, fdJacSelected, 'AbsTol', cfg.dAbsTol, 'RelTol', cfg.dRelTol);
+testCase.verifyEqual(dAnalyticJacAcc, dFdJacSelected, 'AbsTol', cfg.dAbsTol, 'RelTol', cfg.dRelTol);
 
-zeroColumns = setdiff(1:length(cfg.dxState), fdColumns);
-testCase.verifyLessThanOrEqual(abs(fdJacFull(:, zeroColumns)), cfg.dZeroJacTol + zeros(size(fdJacFull, 1), length(zeroColumns)));
+zeroColumns = setdiff(1:length(cfg.dxState), dStatesColumns);
+testCase.verifyLessThanOrEqual(abs(dFiniteDiffJacFull(:, zeroColumns)), cfg.dZeroJacTol + zeros(size(dFiniteDiffJacFull, 1), length(zeroColumns)));
 end
 
-function dAccel = evalSRPAccelFromState_(dxState, cfg)
+function dAccel = EvalSRPAccelFromStateHelper_(dxState, cfg)
+
 ui8PosVelIdx = cfg.strFilterConstConfig.strStatesIdx.ui8posVelIdx;
 
 % Sun position is provided directly in inertial frame (no ephemerides evaluation).
@@ -119,6 +141,7 @@ dCoeffSRP = (dP_SRP * cfg.strDynParams.strSCdata.dReflCoeff * cfg.strDynParams.s
 
 % Optional additive coefficient bias
 dBiasCoeff = 0.0;
+
 if cfg.strFilterMutabConfig.bEnableBiasSRP
     dBiasCoeff = dxState(cfg.strFilterConstConfig.strStatesIdx.ui8CoeffSRPidx);
 end
@@ -127,11 +150,11 @@ end
 dAccel = - (dCoeffSRP + dBiasCoeff) * (dInvNormSunPositionFromSC * dSunPositionFromSC_IN);
 end
 
-function dJac = centralDiffJacobian_(objFcnHandle, dX0, dSteps)
+function dJac = EvalCentralDiffJacobian_(objFcnHandle, dX0, dSteps)
 arguments
     objFcnHandle (1,1) {mustBeA(objFcnHandle, ["function_handle", "string", "char"])}
-    dX0          (:,1) double {isvector, mustBeNumeric}
-    dSteps       (:,1) double {isvector, mustBeNumeric}
+    dX0          (:,1) double {mustBeNumeric}
+    dSteps       (:,1) double {mustBeNumeric}
 end
 
 dF0 = objFcnHandle(dX0);
