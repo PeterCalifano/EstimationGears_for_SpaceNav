@@ -62,8 +62,8 @@ else
 end
 
 %% Compute distance from the Sun and P_SRP
-dSunPositionFromSC_IN       = strDynParams.dBodyEphemerides(1:3) - dxState(ui8PosVelIdx(1:3));
-dNormSunPositionFromSC_IN   = norm( dSunPositionFromSC_IN );
+dSunPositionToSC_IN         = dxState(ui8PosVelIdx(1:3)) - strDynParams.dBodyEphemerides(1:3);
+dNormSunPositionFromSC_IN   = norm( dSunPositionToSC_IN );
 dInvNormSunPositionFromSC   = 1/dNormSunPositionFromSC_IN;
 
 % Compute SRP value from SRP0 at 1AU
@@ -77,7 +77,7 @@ dCoeffSRP = (strDynParams.strSRPdata.dP_SRP * strDynParams.strSCdata.dReflCoeff 
 
 %%% Compute Jacobian of position and velocity
 % Jacobian neglecting dependence of P_SRP due to position
-% drvSRPwithBiasJac(ui8PosVelIdx(4:6), 1:3) = - ( dCoeffSRP + dBiasCoeff ) * ( (1 / dNormSunPositionFromSC_IN) * eye(3)  ...
+% drvSRPwithBiasJac(ui8PosVelIdx(4:6), 1:3) = - ( dCoeffSRP + dBiasCoeffSRP ) * ( (1 / dNormSunPositionFromSC_IN) * eye(3)  ...
 %                                                                              - (1 /( dNormSunPositionFromSC_IN^3 )) ...
 %                                                                                  * (dSunPositionFromSC_IN * dSunPositionFromSC_IN') ) ; % [6x3]
 
@@ -86,9 +86,9 @@ dInvNormSunPositionFromSC3 = dInvNormSunPositionFromSC^3;
 
 % Complete jacobian including dependence of P_SRP from spacecraft position
 % Bias is assumed independent of position
-drvSRPwithBiasJac(ui8PosVelIdx(4:6), 1:3) = - ( ( (dCoeffSRP + dBiasCoeffSRP)*dInvNormSunPositionFromSC * eye(3)  ...
+drvSRPwithBiasJac(ui8PosVelIdx(4:6), 1:3) = (dCoeffSRP + dBiasCoeffSRP)*dInvNormSunPositionFromSC * eye(3)  ...
                                                       - (3*dCoeffSRP + dBiasCoeffSRP)*( dInvNormSunPositionFromSC3 * ...
-                                                                (dSunPositionFromSC_IN * transpose(dSunPositionFromSC_IN)) ) ) ); % [3x3]
+                                                                (dSunPositionToSC_IN * transpose(dSunPositionToSC_IN)) ); % [3x3]
 
 
 
@@ -97,7 +97,7 @@ drvSRPwithBiasJac(ui8PosVelIdx(4:6), 1:3) = - ( ( (dCoeffSRP + dBiasCoeffSRP)*dI
 if strFilterMutabConfig.bEnableBiasSRP && coder.const(ui8CoeffSRPidx > 0)
     % DEVNOTE not sure if need to be disabled because in principle the stochastic process affecting the C_SRP
     % coefficient does not enter the deterministic part of the dynamics (hence in A).
-    dJacCoeffSRP = - (dCoeffSRP + 1.0) * (dInvNormSunPositionFromSC * dSunPositionFromSC_IN);
+    dJacCoeffSRP = 1.0 * (dInvNormSunPositionFromSC * dSunPositionToSC_IN);
     drvSRPwithBiasJac(4:6, 4) = dJacCoeffSRP; % [6x1]
 end
 

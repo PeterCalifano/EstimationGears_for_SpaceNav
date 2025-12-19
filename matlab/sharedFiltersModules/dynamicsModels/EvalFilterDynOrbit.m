@@ -4,8 +4,8 @@ function dDrvDt = EvalFilterDynOrbit(dStateTimetag, ...
                                 strFilterMutabConfig, ...
                                 strFilterConstConfig) %#codegen
 arguments
-    dStateTimetag           (1, 1) double
-    dxState                 (:, 1) double
+    dStateTimetag           (1,1) double
+    dxState                 (:,1) double
     strDynParams            (1,1) struct 
     strFilterMutabConfig    (1,1) struct 
     strFilterConstConfig    (1,1) struct {coder.mustBeConst}
