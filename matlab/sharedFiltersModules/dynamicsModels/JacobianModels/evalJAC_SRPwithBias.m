@@ -54,11 +54,11 @@ end
 if strFilterMutabConfig.bEnableBiasSRP && coder.const(ui8CoeffSRPidx > 0)
     % DEVNOTE: in principle this branching should force the coder to generate two different copies if needed
     % but only one will be instantiated as long as strFilterConstConfig.bEnableBiasSRP is hardcoded.
-    dBiasCoeff = dxState(ui8CoeffSRPidx);
-    drvSRPwithBiasJac = zeros(6, 4);
+    dBiasCoeffSRP = dxState(ui8CoeffSRPidx);
+    drvSRPwithBiasJac = zeros(6,4);
 else
-    dBiasCoeff = 0.0;
-    drvSRPwithBiasJac = zeros(6, 3);
+    dBiasCoeffSRP = 0.0;
+    drvSRPwithBiasJac = zeros(6,3);
 end
 
 %% Compute distance from the Sun and P_SRP
@@ -86,8 +86,8 @@ dInvNormSunPositionFromSC3 = dInvNormSunPositionFromSC^3;
 
 % Complete jacobian including dependence of P_SRP from spacecraft position
 % Bias is assumed independent of position
-drvSRPwithBiasJac(ui8PosVelIdx(4:6), 1:3) = - ( ( (dCoeffSRP + dBiasCoeff)*dInvNormSunPositionFromSC * eye(3)  ...
-                                                      - (3*dCoeffSRP + dBiasCoeff)*( dInvNormSunPositionFromSC3 * ...
+drvSRPwithBiasJac(ui8PosVelIdx(4:6), 1:3) = - ( ( (dCoeffSRP + dBiasCoeffSRP)*dInvNormSunPositionFromSC * eye(3)  ...
+                                                      - (3*dCoeffSRP + dBiasCoeffSRP)*( dInvNormSunPositionFromSC3 * ...
                                                                 (dSunPositionFromSC_IN * transpose(dSunPositionFromSC_IN)) ) ) ); % [3x3]
 
 
