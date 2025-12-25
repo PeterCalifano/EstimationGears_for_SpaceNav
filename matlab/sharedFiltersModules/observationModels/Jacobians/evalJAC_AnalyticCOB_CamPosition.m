@@ -27,21 +27,21 @@ end
 %% DESCRIPTION
 % Computes the Jacobian of the centre of brightness correction (CoB) with respect to the camera position.
 % The correction applied to the CoB estimate follows an analytical law:
-%   dCorrection = alpha * R_app_pix * phase_angle_deg * unitVec(sunDir_Cam)
+%   dCorrection = alpha * R_app_pix * phase_angle_deg * unitVec(sunDirToSC_Cam)
 % where the magnitude scales with the apparent radius of the target and the phase angle, while the
-% direction is aligned with the projected sun vector in camera coordinates. This function returns
-% partial derivatives of the 2-D correction vector with respect to the 3-D camera position expressed
-% in the world frame.
+% direction is aligned with the projected sun vector to Camera in camera coordinates. 
+% This function returns partial derivatives of the 2-D correction vector with respect to the 3-D camera 
+% position expressed in the world frame.
 % -------------------------------------------------------------------------------------------------------------
 %% INPUT
-% dCamPosition_W          (3,1) Camera position in world frame [m].
-% dPhaseAngleInRad        (1,1) Phase angle between camera position and sun direction [rad].
-% dSunPosition_W          (3,1) Sun position in world frame [m].
-% dDCM_CamFromW           (3,3) Direction cosine matrix from world to camera frame.
-% dReferenceMetricRadius  (1,1) Target physical radius used to compute apparent size [m].
-% dMeanInstFOV            (1,1) Mean instrument instantaneous FOV [rad/px].
-% dCorrectionScalingCoeff (1,1) Analytic CoB scaling coefficient (default 0.0062).
-% bAssumeDirectionIndependent (1,1) If true, assumes correction direction does not depend on camera position.
+% dCamPosition_W                (3,1) Camera position in world frame [m].
+% dPhaseAngleInRad              (1,1) Phase angle between camera position and sun direction [rad].
+% dSunPosition_W                (3,1) Sun position in world frame [m].
+% dDCM_CamFromW                 (3,3) Direction cosine matrix from world to camera frame.
+% dReferenceMetricRadius        (1,1) Target physical radius used to compute apparent size [m].
+% dMeanInstFOV                  (1,1) Mean instrument instantaneous FOV [rad/px].
+% dCorrectionScalingCoeff       (1,1) Analytic CoB scaling coefficient (default 0.0062).
+% bAssumeDirectionIndependent   (1,1) If true, assumes correction direction does not depend on camera position.
 % -------------------------------------------------------------------------------------------------------------
 %% OUTPUT
 % dJac_CorrectionXY_CamPos (2,3) Jacobian of the image-plane correction vector wrt camera position.
