@@ -71,9 +71,9 @@ end
 coder.inline("default");
 
 % Determine manoeuvre flag
-bNoManoeuvre = true;
+bFiringManoeuvre = false;
 if coder.const(isfield(strDynParams, "bFiringManoeuvre"))
-    bNoManoeuvre = strDynParams.bFiringManoeuvre; % Skips observation update if true
+    bFiringManoeuvre = strDynParams.bFiringManoeuvre; % Skips observation update if true
 end
 
 % Enforce constraint on constness of struct;
@@ -153,7 +153,7 @@ dxState(:)       = dxStatePrior;
 dxStateCov(:,:)  = dxStateCovPrior;
 
 %% OBSERVATION UPDATE
-if strFilterMutabConfig.bNewMeasAvailable && bNoManoeuvre % TODO, this may go inside the function rather than here
+if strFilterMutabConfig.bNewMeasAvailable && not(bFiringManoeuvre) % TODO, this may go inside the function rather than here
 
     % Update STM and process noise in measurement model parameters (from last step
     strMeasModelParams.dFlowSTM                = dFlowSTM;
