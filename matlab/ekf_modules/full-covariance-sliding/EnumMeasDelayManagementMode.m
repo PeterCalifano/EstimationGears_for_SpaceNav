@@ -1,7 +1,7 @@
-classdef EnumMeasDelayManagementMode
+classdef EnumMeasDelayManagementMode < uint32
   enumeration
-      NONE
-      BACKWARD_PROP
-      ADJUST_DELTASTATE
+      NONE (0)
+      BACKWARD_PROP (1)
+      ADJUST_DELTASTATE (2)
   end
 end

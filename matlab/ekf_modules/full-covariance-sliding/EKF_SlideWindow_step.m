@@ -212,7 +212,7 @@ end
 
 
 %% TIME UPDATE (state 2 to target time)
-if strFilterConstConfig.enumMeasDelayManagementMode == EnumMeasDelayManagementMode.BACKWARD_PROP && ...
+if coder.const(strFilterConstConfig.enumMeasDelayManagementMode == EnumMeasDelayManagementMode.BACKWARD_PROP) && ...
                             dStateTimetag(1) < dTargetTimetag2ndStage
 
     %%% Run only if current state time tag is < dTargetTimetag2ndStage
