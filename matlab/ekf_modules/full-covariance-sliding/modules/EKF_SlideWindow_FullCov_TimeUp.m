@@ -129,7 +129,7 @@ end
 dSignDeltaTime = sign(dDeltaTime);
 
 %% PROPAGATION
-if abs(dDeltaTime) > eps
+if abs(dDeltaTime) > eps('single')
 
     % Get current mean state to propagate
     ui16CurrentStatePtrs = 1:ui16StateSize;
