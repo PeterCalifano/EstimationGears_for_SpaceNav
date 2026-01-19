@@ -90,16 +90,11 @@ end
 % -------------------------------------------------------------------------------------------------------------
 
 % Coder directives
-coder.inline("always");
+coder.inline("default");
 
 % Enforce constraint on constness of struct;
 strFilterConstConfig = coder.const(strFilterConstConfig);
 
-if coder.target('MATLAB') || coder.target('MEX')
-    % Assert checks
-    assert(dTargetTimetag >= dStateTimetag(1))
-
-end
 
 % Input pre-processing
 % Get size of input variables
