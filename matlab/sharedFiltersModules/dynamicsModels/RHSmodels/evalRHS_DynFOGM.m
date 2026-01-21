@@ -1,8 +1,8 @@
 function dStateFOGMdot = evalRHS_DynFOGM(dStateFOGM, dTimeConst, bBetaVariant) %#codegen
 arguments
-    dStateFOGM      (:,1) double {ismatrix, isnumeric}
-    dTimeConst      (:,1) double {isvector, isnumeric}
-    bBetaVariant    (1,1) logical {islogical, isscalar} = false
+    dStateFOGM      (:,1) double
+    dTimeConst      (:,1) double
+    bBetaVariant    (1,1) logical = false
 end
 %% PROTOTYPE
 % dStateFOGMdot = evalRHS_DynFOGM(dStateFOGM, dTimeConst) %#codegen
@@ -12,9 +12,9 @@ end
 % numerical integration (not analytical).
 % -------------------------------------------------------------------------------------------------------------
 %% INPUT
-% dStateFOGM      (:,1) double {ismatrix, isnumeric}
-% dTimeConst      (:,1) double {isvector, isnumeric}
-% bBetaVariant    (1,1) logical {islogical, isscalar} = false
+% dStateFOGM      (:,1) double  
+% dTimeConst      (:,1) double  
+% bBetaVariant    (1,1) logical  = false
 % -------------------------------------------------------------------------------------------------------------
 %% OUTPUT
 % dStateFOGMdot
