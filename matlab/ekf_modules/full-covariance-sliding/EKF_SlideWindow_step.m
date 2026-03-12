@@ -1,0 +1,229 @@
+function [strFilterOutputData, dxState, dxStateCov, dStateTimetag, ...
+          strDynParams, strFilterMutabConfig, strMeasModelParams] = EKF_SlideWindow_step(dxState, ...
+                                                                                        dxStateCov, ...
+                                                                                        dStateTimetag, ...
+                                                                                        dTargetTimetag, ...
+                                                                                        strMeasBus, ...
+                                                                                        strMeasModelParams, ...
+                                                                                        strDynParams, ...
+                                                                                        strFilterMutabConfig, ...
+                                                                                        strFilterConstConfig)%#codegen
+arguments
+    dxState                 (:,1) double {mustBeNumeric}
+    dxStateCov              (:,:) double {mustBeNumeric}
+    dStateTimetag           (:,1) double {mustBeNumeric}
+    dTargetTimetag          (1,1) double {mustBeNumeric}
+    strMeasBus              (1,1) struct
+    strMeasModelParams      (1,1) struct
+    strDynParams            (1,1) struct
+    strFilterMutabConfig    (1,1) struct
+    strFilterConstConfig    (1,1) struct {coder.mustBeConst}
+end
+%% SIGNATURE
+% [strOutBus, dxState, dxStateCov, dStateTimetag, ...
+%  strDynParams, strFilterMutabConfig, strMeasModelParams] = EKF_SlideWindow_step(dxState, ...
+%                                                                               dxStateCov, ...
+%                                                                               dStateTimetag, ...
+%                                                                               dTargetTimetag, ...
+%                                                                               strMeasBus, ...
+%                                                                               strMeasModelParams, ...
+%                                                                               strDynParams, ...
+%                                                                               strFilterMutabConfig, ...
+%                                                                               strFilterConstConfig)%#codegen
+% -------------------------------------------------------------------------------------------------------------
+%% DESCRIPTION
+% Function performing one EKF SlideWindow Time-Measurement update step from current timestamp to timestamp 
+% determined by variable "dTargetTimetag". Measurement are processed only if available as determined by 
+% strMeasBus data. Sliding window is automatically managed according to feature tracking mode.
+% -------------------------------------------------------------------------------------------------------------
+%% INPUT
+% dxState                 (:,1) double {mustBeNumeric}
+% dxStateCov              (:,:) double {mustBeNumeric}
+% dStateTimetag           (:,1) double {mustBeNumeric}
+% dTargetTimetag          (1,1) double {mustBeNumeric}
+% strMeasBus              (1,1) struct
+% strMeasModelParams      (1,1) struct
+% strDynParams            (1,1) struct
+% strFilterMutabConfig    (1,1) struct
+% strFilterConstConfig    (1,1) struct {coder.mustBeConst}
+% -------------------------------------------------------------------------------------------------------------
+%% OUTPUT
+% strOutBus
+% dxState
+% dxStateCov
+% dStateTimetag
+% strDynParams
+% strFilterMutabConfig
+% strMeasModelParams
+% -------------------------------------------------------------------------------------------------------------
+%% CHANGELOG
+% 21-05-2025    Pietro Califano     Implementation deriving from MSCKF_step
+% 30-05-2025    Pietro Califano     Upgrade with adaptive logic for consider and underweighting mode
+% 21-07-2025    Pietro Califano     Remove adaptivity module code and add new function call
+% 29-09-2025    Pietro Califano     Update implementation to better support code generation and integration
+%                                   in C/C++ programs; improve validation of inputs
+% -------------------------------------------------------------------------------------------------------------
+%% DEPENDENCIES
+% [-]
+% -------------------------------------------------------------------------------------------------------------
+
+% Coder directives
+coder.inline("default");
+
+% Determine manoeuvre flag
+bFiringManoeuvre = false;
+if coder.const(isfield(strDynParams, "bFiringManoeuvre"))
+    bFiringManoeuvre = strDynParams.bFiringManoeuvre; % Skips observation update if true
+end
+
+% Enforce constraint on constness of struct;
+strFilterConstConfig = coder.const(strFilterConstConfig);
+
+% Assert checks and runtime definitions (for backward compatibility!)
+if coder.target('MATLAB')
+    if not(isfield(strFilterConstConfig, "bIncludeAdaptivityStep"))
+        strFilterConstConfig.bIncludeAdaptivityStep = true;
+    end
+    
+    if not(isfield(strFilterMutabConfig, "bEnableAdaptivity"))
+        strFilterMutabConfig.bEnableAdaptivity = false;
+    end
+end
+
+% Output initialization
+% Initialize optional outputs to zero
+ui32FullCovSize             = coder.const(strFilterConstConfig.ui32FullCovSize);
+ui16MaxResidualsVecSize     = coder.const(strFilterConstConfig.ui16MaxResidualsVecSize);
+
+strFilterOutputData.dKalmanGain           = zeros(ui32FullCovSize, ui16MaxResidualsVecSize);
+strFilterOutputData.dxErrState            = zeros(ui32FullCovSize, 1);
+strFilterOutputData.dPyyResCov            = zeros(ui16MaxResidualsVecSize, ui16MaxResidualsVecSize);
+strFilterOutputData.dAllPriorResVector    = zeros(ui16MaxResidualsVecSize, 1);
+strFilterOutputData.dAllObservJac         = zeros(ui16MaxResidualsVecSize, ui32FullCovSize);
+
+%% ADAPTIVITY MANAGEMENT
+bConsiderModePreCall    = strFilterMutabConfig.bConsiderStatesMode;
+dUnderweightPreCall     = strFilterMutabConfig.dMeasUnderweightCoeff;
+
+%%%% EXPERIMENTAL
+if coder.const(strFilterConstConfig.bIncludeAdaptivityStep) && strFilterMutabConfig.bEnableAdaptivity
+   [dxState, strFilterMutabConfig] = EKF_SlideWindow_AdaptivityManagementStep(dxState, ...
+                                                                            strMeasBus, ...
+                                                                            strFilterMutabConfig, ...
+                                                                            strFilterConstConfig);
+end
+
+
+
+
+%% STATE MANAGEMENT
+if coder.const(strFilterConstConfig.ui16NumWindowPoses > 0)
+
+    % Sliding window management
+    [dxState, dxStateCov, dStateTimetag, strDynParams, strFilterMutabConfig] = EKF_SlideWindow_StateManagementStep(dxState, ...
+                                                                                                                dxStateCov, ...
+                                                                                                                dStateTimetag, ...
+                                                                                                                dTargetTimetag, ...
+                                                                                                                strMeasModelParams, ...
+                                                                                                                strDynParams, ...
+                                                                                                                strFilterMutabConfig, ...
+                                                                                                                strFilterConstConfig);
+    
+end
+
+%% TIME UPDATE
+[dxStatePrior, ...
+ dxStateCovPrior, ...
+ dStateTimetag,...
+ strDynParams, ...
+ dFlowSTM,...
+ dDynMatrix,...
+ dDynMatrixNext, ...
+ strFilterMutabConfig, ...
+ dIntegrProcessNoiseCovQ] = EKF_SlideWindow_FullCov_TimeUp(dxState, ...
+                                                        dxStateCov, ...
+                                                        dStateTimetag, ...
+                                                        dTargetTimetag, ...
+                                                        strDynParams, ...
+                                                        strFilterMutabConfig, ...
+                                                        strFilterConstConfig);
+
+% Temporary assignment
+dxState(:)       = dxStatePrior;
+dxStateCov(:,:)  = dxStateCovPrior;
+
+%% OBSERVATION UPDATE
+if strFilterMutabConfig.bNewMeasAvailable && not(bFiringManoeuvre) % TODO, this may go inside the function rather than here
+
+    % Update STM and process noise in measurement model parameters (from last step
+    strMeasModelParams.dFlowSTM                = dFlowSTM;
+    strMeasModelParams.dIntegrProcessNoiseCovQ = dIntegrProcessNoiseCovQ;
+
+    [dxStatePost, ...
+     dxStateCovPost, ...
+     dStateTimetag, ...
+     strFilterMutabConfig, ...
+     strDynParams, ...
+     dAllPriorResVector, ...
+     dAllObservJac, ...
+     dKalmanGain, ...
+     dxErrState, ...
+     dPyyResCov]  = EKF_SlideWindow_FullCov_ObsUp(dxState, ...
+                                                dxStateCov, ...
+                                                dStateTimetag, ...
+                                                strMeasBus, ...
+                                                strDynParams, ...
+                                                strMeasModelParams, ...
+                                                strFilterMutabConfig, ...
+                                                strFilterConstConfig);
+
+
+
+    strFilterOutputData.dKalmanGain(:,:)        = dKalmanGain;
+    strFilterOutputData.dxErrState(:)           = dxErrState;
+    strFilterOutputData.dPyyResCov(:,:)         = dPyyResCov;
+    strFilterOutputData.dAllPriorResVector(:,:) = dAllPriorResVector;
+    strFilterOutputData.dAllObservJac(:,:)      = dAllObservJac;
+
+    % Temporary assignment
+    dxState(:)       = dxStatePost;
+    dxStateCov(:,:)  = dxStateCovPost;
+end
+
+%% MANOEUVRE HANDLING
+if coder.const( isfield(strDynParams, "bFiringManoeuvre") && ...
+            isfield(strFilterConstConfig, "enumManCovModelType") )
+
+    if strDynParams.bFiringManoeuvre
+        %% Impulsive manoeuvres handling
+        [dxState(:), dxStateCov(:,:), ...
+            dCovDeltaV_W, dCovDeltaV_TH, dCommandDeltaV_W] = ApplyManoeuvreDeltaV(dxStatePrior, ...
+                                                                            dxStateCovPrior, ...
+                                                                            dStateTimetag, ...
+                                                                            strDynParams.dManDeltaV_IN, ...
+                                                                            strDynParams.dManTimestamp, ...
+                                                                            transpose(strMeasModelParams.dDCM_SCBiFromIN(:,:,1)), ...
+                                                                            strFilterConstConfig.enumManCovModelType, ...
+                                                                            strFilterMutabConfig.dManSigmaMagErrFrac * norm(strDynParams.dManDeltaV_IN), ...
+                                                                            strFilterMutabConfig.dManSigmaDirErrInRad, ...
+                                                                            strFilterMutabConfig.dAttitudeManErrCov); %#ok<ASGLU>
+    end
+
+end
+
+%% EXPERIMENTAL
+% Restore parameters as pre-call state
+strFilterMutabConfig.bConsiderStatesMode   = bConsiderModePreCall;
+strFilterMutabConfig.dMeasUnderweightCoeff = dUnderweightPreCall;
+%%%%
+
+%% Conveniency output interface
+% Write all data to output
+strFilterOutputData.dxStatePrior              = dxStatePrior;
+strFilterOutputData.dxStateCovPrior           = dxStateCovPrior;
+strFilterOutputData.dFlowSTM                  = dFlowSTM;
+strFilterOutputData.dDynMatrix                = dDynMatrix;
+strFilterOutputData.dDynMatrixNext            = dDynMatrixNext;
+strFilterOutputData.dIntegrProcessNoiseCovQ   = dIntegrProcessNoiseCovQ;
+
+end

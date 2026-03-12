@@ -14,4 +14,4 @@ CMakeUserPresets.json
 
 # File formats
 *.asv
-*slprj*/*
+**/slprj*/*

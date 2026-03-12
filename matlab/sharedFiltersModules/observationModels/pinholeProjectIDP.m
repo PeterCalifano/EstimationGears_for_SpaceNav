@@ -1,32 +1,44 @@
-function  [dPointPixCoord, dPosVec] = pinholeProjectIDP(dInvDepParams, ...
-                                                        dQuatC2fromC1, ...
-                                                        dPosC1fromC2_C2, ...
-                                                        dOptCentreCoord, ...
-                                                        bIs_VSRPplus) %#codegen
+function [dPosVec_Ci, dPointPix_UVi] = pinholeProjectIDP(dDCM_CkfromCi, ...
+                                                        dDeltaPos_CkfromCi_Ci, ...
+                                                        dPosInvDepParams_Ck, ...
+                                                        dPrincipalPoint_UV, ...
+                                                        dFocalLength_UV) %#codegen
 arguments
-    dInvDepParams
-    dQuatC2fromC1
-    dPosC1fromC2_C2
-    dOptCentreCoord
-    bIs_VSRPplus
+    dDCM_CkfromCi           (3,3) double {ismatrix, isnumeric}
+    dDeltaPos_CkfromCi_Ci   (3,1) double {ismatrix, isnumeric}
+    dPosInvDepParams_Ck     (3,1) double {ismatrix, isnumeric}
+    dPrincipalPoint_UV      (2,1) double {ismatrix, isnumeric}
+    dFocalLength_UV         (2,1) double {ismatrix, isnumeric}
 end
-%% PROTOTYPE
+%% SIGNATURE
+% [dPosVec_Ci, dPointPix_UVi] = pinholeProjectIDP(dDCM_CkfromCi, ...
+%                                                 dDeltaPos_CkfromCi_Ci, ...
+%                                                 dPosInvDepParams_Ck, ...
+%                                                 dPrincipalPoint_UV) %#codegen
 % -------------------------------------------------------------------------------------------------------------
 %% DESCRIPTION
-% What the function does
+% Function computing the projection of a 3D point from IDP representation in a camera Ck to pixel
+% coordinates given a camera matrix as seen by a camera Ci given its relative pose wrt Ck. 
+% Set the relative pose to identity to obtain the normalized coordinates in camera Ck. 
+% The function operates on a single point per call.
+% REFERENCE:
+% 1) High-precision, consistent EKF-based visual-inertial odometry, Li, Mourikis, 2023
+% 2) Vision-Aided Inertial Navigation for Spacecraft Entry, Descent, and Landing, Mourikis, 2009
+% 3) Hartley, R. and Zisserman, A., 2003. Multiple view geometry in computer vision. Cambridge university press.
 % -------------------------------------------------------------------------------------------------------------
 %% INPUT
-% i_dInvDepParams:   [3, 1]       
-% i_dqC1wrtC2:       [4, 1]     
-% i_drC1wrtC2_C2:    [3, 1]        
-% i_dOptCentreCoord: [2, 1]           
-% i_bIS_JPL_CONV:    [1]      Boolean flag indicating if JPL convetion is used for quaternions  
+% dDCM_CkfromCi           (3,3) double {ismatrix, isnumeric}
+% dDeltaPos_CkfromCi_Ci   (3,1) double {ismatrix, isnumeric}
+% dPosInvDepParams_Ck     (3,1) double {ismatrix, isnumeric}
+% dPrincipalPoint_UV      (2,1) double {ismatrix, isnumeric}
+% dFocalLength_UV         (2,1) double {ismatrix, isnumeric}
 % -------------------------------------------------------------------------------------------------------------
 %% OUTPUT
-% o_dPointPixCoord:  [2, 1]
+% dPosVec_Ci
+% dPointPix_UVi
 % -------------------------------------------------------------------------------------------------------------
 %% CHANGELOG
-% 14-12-2023        Pietro Califano         First prototype using quaternions.
+% 04-02-2025    Pietro Califano     Implement moving code from TriangulateFeaturesFromMotion.m
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % [-]
@@ -34,16 +46,19 @@ end
 %% Future upgrades
 % [-]
 % -------------------------------------------------------------------------------------------------------------
-%% Function code
-% o_dAlpha = i_dPosVec(1)/i_dPosVec(3); i_dInvDepParams(1)
-% o_dBeta  = i_dPosVec(2)/i_dPosVec(3); i_dInvDepParams(2)
-% o_dRho   = 1/i_dPosVec(3); i_dInvDepParams(3)
 
-% Inverse depth model 
-% TODO check dPosVec calculation and determine which frame!
-dPosVec = Quat2DCM(dQuatC2fromC1, bIs_VSRPplus) * [dInvDepParams(1:2); 1] + dInvDepParams(3) * dPosC1fromC2_C2;
+% dAlpha = dPosVec(1)/dPosVec(3); --> dInvDepParams(1)
+% dBeta  = dPosVec(2)/dPosVec(3); --> dInvDepParams(2)
+% dRho   = 1/i_dPosVec(3);        --> dInvDepParams(3)
+
+% TODO modify for optimization: the first two components of the IDP are already the x/z, y/z normalized
+% components to project. Is there a way to conv
+
+% Inverse depth model: predict position of feature in Ci pose frame as function of IDP in Ck
+dPosVec_Ci = ( transpose(dDCM_CkfromCi) * [dPosInvDepParams_Ck(1:2); 1.0] - dPosInvDepParams_Ck(3)) * dDeltaPos_CkfromCi_Ci; 
+
 % Compute pixel coordinates
-dPointPixCoord = 1/dPosVec(3) * [dPosVec(1); dPosVec(2)] + dOptCentreCoord;
-
+dPointPix_UVi = ( ( 1/dPosVec_Ci(3) ) .* dFocalLength_UV .* [dPosVec_Ci(1); dPosVec_Ci(2)] ) + dPrincipalPoint_UV;
 
 end
+
