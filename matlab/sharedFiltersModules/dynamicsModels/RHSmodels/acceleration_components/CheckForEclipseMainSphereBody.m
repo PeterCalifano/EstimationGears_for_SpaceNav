@@ -1,12 +1,12 @@
 function [bIsInEclipse] = CheckForEclipseMainSphereBody(dSunPositionFromMain_W, ...
                                                         dPositionFromMain_W, ...
                                                         dMainBodyRadius, ...
-                                                        dDistToSun) %#codegen
+                                                        dDistSunFromMain) %#codegen
 arguments
-    dSunPositionFromMain_W  (3,1) {isvector, isnumeric}
-    dPositionFromMain_W     (3,1) {isvector, isnumeric}
-    dMainBodyRadius         (1,1) {isscalar, isnumeric} 
-    dDistToSun              (1,1) {isscalar, isnumeric} = 0.0
+    dSunPositionFromMain_W  (3,1) double {mustBeNumeric}
+    dPositionFromMain_W     (3,1) double {mustBeNumeric}
+    dMainBodyRadius         (1,1) double {mustBeNumeric} 
+    dDistSunFromMain        (1,1) double {mustBeNumeric} = 0.0
 end
 %% SIGNATURE
 % [bIsInEclipse] = CheckForEclipseMainSphereBody(dSunPositionFromMain_W, ...
@@ -15,16 +15,16 @@ end
 %                                                         dDistToSun) %#codegen
 % -------------------------------------------------------------------------------------------------------------
 %% DESCRIPTION
-% Function checking for eclipse occurrence 
+% Function checking for eclipse occurrence using spherical body model
 % -------------------------------------------------------------------------------------------------------------
 %% INPUT
-% dSunPositionFromMain_W  (3,1) {isvector, isnumeric}
-% dPositionFromMain_W     (3,1) {isvector, isnumeric}
-% dMainBodyRadius         (1,1) {isscalar, isnumeric}
-% dDistToSun              (1,1) {isscalar, isnumeric} = 0.0
+% dSunPositionFromMain_W  (3,1) double {mustBeNumeric}
+% dPositionFromMain_W     (3,1) double {mustBeNumeric}
+% dMainBodyRadius         (1,1) double {mustBeNumeric}
+% dDistSunFromMain        (1,1) double {mustBeNumeric} = 0.0
 % -------------------------------------------------------------------------------------------------------------
 %% OUTPUT
-% bIsInEclipse
+% bIsInEclipse (1,1) logical
 % -------------------------------------------------------------------------------------------------------------
 %% CHANGELOG
 % 07-07-2025    Omar Regantini, Pietro Califano     Function implemented.
@@ -34,12 +34,12 @@ end
 % -------------------------------------------------------------------------------------------------------------
 
 % Compute Sun distance
-if (dDistToSun - 10 * eps) < 0
-    dDistToSun = norm(dSunPositionFromMain_W);
+if (dDistSunFromMain - 10 * eps) < 0
+    dDistSunFromMain = norm(dSunPositionFromMain_W);
 end
 
 % Compute direction to Sun from Main
-dDirSunFromMain_W = dSunPositionFromMain_W / dDistToSun;
+dDirSunFromMain_W = dSunPositionFromMain_W / dDistSunFromMain;
 
 % Compute direction to SC
 dDistanceFromMain_W = norm(dPositionFromMain_W);
@@ -52,7 +52,7 @@ dThetaAngle = acos(dot(dDirSunFromMain_W, dDirFromMain_W));
 dAngSizeMainFromSC = acos(dMainBodyRadius / dDistanceFromMain_W);
 
 % Compute angular radius of body as seen from Sun
-dAngSizeMainFromSun = acos(dMainBodyRadius / dDistToSun);
+dAngSizeMainFromSun = acos(dMainBodyRadius / dDistSunFromMain);
 
 % Determine if in eclipse
 bIsInEclipse = dThetaAngle < (dAngSizeMainFromSC + dAngSizeMainFromSun);

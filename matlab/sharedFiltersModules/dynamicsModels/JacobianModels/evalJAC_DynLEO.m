@@ -7,14 +7,14 @@ function [dDynMatrix] = evalJAC_DynLEO(dxState_IN, ...
                                     strFilterMutabConfig, ... 
                                     strFilterConstConfig ) %#codegen
 arguments
-    dxState_IN              (:,1) double {isvector,isnumeric}
-    dStateTimetag           (:,1) double {isscalar, isnumeric}
-    dAtmCoeffsData        
-    dBodyEphemerides        (:,1) double {isvector, isnumeric}
-    dDCMmainAtt_INfromTF    (3,3) double {isnumeric, ismatrix}
-    strDynParams            (1,1) {isstruct}
-    strFilterMutabConfig    (1,1) {isstruct}
-    strFilterConstConfig    (1,1) {isstruct}
+    dxState_IN              (:,1) double {mustBeNumeric}
+    dStateTimetag           (:,1) double {mustBeNumeric}
+    dAtmCoeffsData          (:,:) double
+    dBodyEphemerides        (:,1) double {mustBeNumeric}
+    dDCMmainAtt_INfromTF    (3,3) double {mustBeNumeric}
+    strDynParams            (1,1) struct
+    strFilterMutabConfig    (1,1) struct
+    strFilterConstConfig    (1,1) struct {coder.mustBeConst}
 end
 %% PROTOTYPE
 % [dDynMatrix] = evalJAC_DynLEO(dxState_IN, ...           
@@ -31,14 +31,14 @@ end
 % this function implementation: [Pos, Vel]
 % -------------------------------------------------------------------------------------------------------------
 %% INPUT
-% dxState_IN              (:,1) double {isvector,isnumeric}
-% dStateTimetag           (:,1) double {isscalar, isnumeric}
+% dxState_IN              (:,1) double {mustBeNumeric}
+% dStateTimetag           (:,1) double {mustBeNumeric}
 % dAtmCoeffsData
-% dBodyEphemerides        (:,1) double {isvector, isnumeric}
-% dDCMmainAtt_INfromTF    (3,3) double {isnumeric, ismatrix}
-% strDynParams            (1,1) {isstruct}
-% strFilterMutabConfig    (1,1) {isstruct}
-% strFilterConstConfig    (1,1) {isstruct}
+% dBodyEphemerides        (:,1) double {mustBeNumeric}
+% dDCMmainAtt_INfromTF    (3,3) double {mustBeNumeric}
+% strDynParams            (1,1) struct
+% strFilterMutabConfig    (1,1) struct
+% strFilterConstConfig    (1,1) struct {coder.mustBeConst}
 % -------------------------------------------------------------------------------------------------------------
 %% OUTPUT
 % dDynMatrix
@@ -53,12 +53,8 @@ end
 %% DEPENDENCIES
 % evalAtmExpDensity()
 % -------------------------------------------------------------------------------------------------------------
-%% Future upgrades
-% TODO Review of drag acceleration jacobian
-% TODO Memory and code optimization
-% TODO Conversion of code lines to functions
-% -------------------------------------------------------------------------------------------------------------
 
+%% Function code
 ui8PosVelIdx        = strFilterConstConfig.strStatesIdx.ui8posVelIdx; % [1 to 6]
 % ui8ResidualAccelIdx  = uint8( ui16StatesIdx(2, 1):ui16StatesIdx(2, 2) ); % [7 t0 9]
 % AImeasBiasIdx  = uint8( ui16StatesIdx(3, 1):ui16StatesIdx(3, 2) ); % [10 to 12]
@@ -112,10 +108,10 @@ dEarthSpinRate  = strDynParams.strMainData.dEarthSpinRate;
 
 % Compute jacobian matrix wrt to common perturbations (inertial frame)
 dDynMatrix_PosVel = evalJAC_InertialPosVelDyn(dxState_IN, ...
-                                                dStateTimetag, ...
-                                                strDynParams, ...
-                                                strFilterMutabConfig, ...
-                                                strFilterConstConfig);
+                                              dStateTimetag, ...
+                                              strDynParams, ...
+                                              strFilterMutabConfig, ...
+                                              strFilterConstConfig);
 
 dDynMatrix(ui8PosVelIdx, :) = dDynMatrix_PosVel;
 

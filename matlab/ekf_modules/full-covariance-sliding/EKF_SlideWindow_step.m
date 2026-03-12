@@ -68,7 +68,13 @@ end
 % -------------------------------------------------------------------------------------------------------------
 
 % Coder directives
-coder.inline("always");
+coder.inline("default");
+
+% Determine manoeuvre flag
+bFiringManoeuvre = false;
+if coder.const(isfield(strDynParams, "bFiringManoeuvre"))
+    bFiringManoeuvre = strDynParams.bFiringManoeuvre; % Skips observation update if true
+end
 
 % Enforce constraint on constness of struct;
 strFilterConstConfig = coder.const(strFilterConstConfig);
@@ -143,11 +149,11 @@ end
                                                         strFilterConstConfig);
 
 % Temporary assignment
-dxState     = dxStatePrior;
-dxStateCov  = dxStateCovPrior;
+dxState(:)       = dxStatePrior;
+dxStateCov(:,:)  = dxStateCovPrior;
 
 %% OBSERVATION UPDATE
-if strFilterMutabConfig.bNewMeasAvailable % TODO, this may go inside the function rather than here
+if strFilterMutabConfig.bNewMeasAvailable && not(bFiringManoeuvre) % TODO, this may go inside the function rather than here
 
     % Update STM and process noise in measurement model parameters (from last step
     strMeasModelParams.dFlowSTM                = dFlowSTM;
@@ -184,8 +190,28 @@ if strFilterMutabConfig.bNewMeasAvailable % TODO, this may go inside the functio
     dxStateCov(:,:)  = dxStateCovPost;
 end
 
+%% MANOEUVRE HANDLING
+if coder.const( isfield(strDynParams, "bFiringManoeuvre") && ...
+            isfield(strFilterConstConfig, "enumManCovModelType") )
 
-%%%% EXPERIMENTAL
+    if strDynParams.bFiringManoeuvre
+        %% Impulsive manoeuvres handling
+        [dxState(:), dxStateCov(:,:), ...
+            dCovDeltaV_W, dCovDeltaV_TH, dCommandDeltaV_W] = ApplyManoeuvreDeltaV(dxStatePrior, ...
+                                                                            dxStateCovPrior, ...
+                                                                            dStateTimetag, ...
+                                                                            strDynParams.dManDeltaV_IN, ...
+                                                                            strDynParams.dManTimestamp, ...
+                                                                            transpose(strMeasModelParams.dDCM_SCBiFromIN(:,:,1)), ...
+                                                                            strFilterConstConfig.enumManCovModelType, ...
+                                                                            strFilterMutabConfig.dManSigmaMagErrFrac * norm(strDynParams.dManDeltaV_IN), ...
+                                                                            strFilterMutabConfig.dManSigmaDirErrInRad, ...
+                                                                            strFilterMutabConfig.dAttitudeManErrCov); %#ok<ASGLU>
+    end
+
+end
+
+%% EXPERIMENTAL
 % Restore parameters as pre-call state
 strFilterMutabConfig.bConsiderStatesMode   = bConsiderModePreCall;
 strFilterMutabConfig.dMeasUnderweightCoeff = dUnderweightPreCall;

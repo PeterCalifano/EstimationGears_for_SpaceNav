@@ -14,74 +14,73 @@ function [dPosVeldt, strAccelInfo] = evalRHS_DynLEO(dxState_IN, ...
                                                     dResidualAccel, ...
                                                     ui16StatesIdx) %#codegen
 arguments
-    dxState_IN              (:,1) double {isvector, isnumeric}
-    dBodyEphemerides        (:,1) double {isvector, isnumeric}
-    dDCMmainAtt_INfromTF    (3,3) double {ismatrix, isnumeric}
-    dAtmCoeffsData          (:,3) double {ismatrix, isnumeric}
-    dMainGM                 (1,1) double {isscalar}
-    dCoeffJ2                (1,1) double {isscalar}
-    dRearth                 (1,1) double {isscalar}
-    dDragCoeff              (1,1) double {isscalar} 
-    dDragCrossArea          (1,1) double {isscalar}
-    dEarthSpinRate          (1,1) double {isscalar}
-    dMassSC                 (1,1) double {isscalar}
-    d3rdBodiesGM            (:,1) double {isscalar}
-    dCoeffSRP               (1,1) double {isscalar}
-    dResidualAccel          (3,1) double {isvector, isnumeric}
-    ui16StatesIdx           (:,2) uint16 {ismatrix, isnumeric, mustBeInteger}
+    dxState_IN              (:,1) double {mustBeNumeric}
+    dBodyEphemerides        (:,1) double {mustBeNumeric}
+    dDCMmainAtt_INfromTF    (3,3) double {mustBeNumeric}
+    dAtmCoeffsData          (:,3) double {mustBeNumeric}
+    dMainGM                 (1,1) double
+    dCoeffJ2                (1,1) double
+    dRearth                 (1,1) double
+    dDragCoeff              (1,1) double
+    dDragCrossArea          (1,1) double
+    dEarthSpinRate          (1,1) double
+    dMassSC                 (1,1) double
+    d3rdBodiesGM            (:,1) double
+    dCoeffSRP               (1,1) double
+    dResidualAccel          (3,1) double {mustBeNumeric}
+    ui16StatesIdx           (:,2) uint16 {mustBeInteger, coder.mustBeConst}
 end
 %% PROTOTYPE
 % [dPosVeldt, strAccelInfo] = evalRHS_DynLEO(dxState, ...
-%                                                     dBodyEphemerides, ...
-%                                                     dDCMmainAtt_INfromTF, ...
-%                                                     dAtmCoeffsData, ...
-%                                                     dMainGM, ...
-%                                                     dCoeffJ2, ...
-%                                                     dRearth, ...
-%                                                     dDragCoeff, ...
-%                                                     dDragCrossArea, ...
-%                                                     dEarthSpinRate, ...
-%                                                     dMassSC, ...
-%                                                     d3rdBodiesGM, ...
-%                                                     dCoeffSRP, ...
-%                                                     dResidualAccel, ...
-%                                                     ui16StatesIdx) %#codegen
+%                                            dBodyEphemerides, ...
+%                                            dDCMmainAtt_INfromTF, ...
+%                                            dAtmCoeffsData, ...
+%                                            dMainGM, ...
+%                                            dCoeffJ2, ...
+%                                            dRearth, ...
+%                                            dDragCoeff, ...
+%                                            dDragCrossArea, ...
+%                                            dEarthSpinRate, ...
+%                                            dMassSC, ...
+%                                            d3rdBodiesGM, ...
+%                                            dCoeffSRP, ...
+%                                            dResidualAccel, ...
+%                                            ui16StatesIdx) %#codegen
 % -------------------------------------------------------------------------------------------------------------
 %% DESCRIPTION
 % -------------------------------------------------------------------------------------------------------------
 %% INPUT
-% dxState_IN              (:,1) double {isvector, isnumeric}
-% dBodyEphemerides        (:,1) double {isvector, isnumeric}
-% dDCMmainAtt_INfromTF    (3,3) double {ismatrix, isnumeric}
-% dAtmCoeffsData          (:,3) double {ismatrix, isnumeric}
-% dMainGM                 (1,1) double {isscalar}
-% dCoeffJ2                (1,1) double {isscalar}
-% dRearth                 (1,1) double {isscalar}
-% dDragCoeff              (1,1) double {isscalar}
-% dDragCrossArea          (1,1) double {isscalar}
-% dEarthSpinRate          (1,1) double {isscalar}
-% dMassSC                 (1,1) double {isscalar}
-% d3rdBodiesGM            (:,1) double {isscalar}
-% dCoeffSRP               (1,1) double {isscalar}
-% dResidualAccel          (3,1) double {isvector, isnumeric}
-% ui16StatesIdx           (:,2) uint16 {ismatrix, isnumeric, mustBeInteger}
+% dxState_IN              (:,1) double {mustBeNumeric}
+% dBodyEphemerides        (:,1) double {mustBeNumeric}
+% dDCMmainAtt_INfromTF    (3,3) double {mustBeNumeric}
+% dAtmCoeffsData          (:,3) double {mustBeNumeric}
+% dMainGM                 (1,1) double
+% dCoeffJ2                (1,1) double
+% dRearth                 (1,1) double
+% dDragCoeff              (1,1) double
+% dDragCrossArea          (1,1) double
+% dEarthSpinRate          (1,1) double
+% dMassSC                 (1,1) double
+% d3rdBodiesGM            (:,1) double
+% dCoeffSRP               (1,1) double
+% dResidualAccel          (3,1) double {mustBeNumeric}
+% ui16StatesIdx           (:,2) uint16 {mustBeInteger, coder.mustBeConst}
 % -------------------------------------------------------------------------------------------------------------
 %% OUTPUT
 % dPosVeldt, strAccelInfo
 % -------------------------------------------------------------------------------------------------------------
 %% CHANGELOG
-% 19-02-2024        Pietro Califano         Preliminary prototype coded for evaluation and develop. iterations.
-% 22-02-2024        Pietro Califano         Added code to evaluate atmospheric density based on estimated
-%                                           state (exponential model)
-% 02-05-2024        Pietro Califano         Incorrect J2 acceleration fixed.
-% 22-07-2025        Pietro Califano         Update for integration in new filter architecture (future-nav)
+% 19-02-2024        Pietro Califano     Preliminary prototype coded for evaluation and develop. iterations.
+% 22-02-2024        Pietro Califano     Added code to evaluate atmospheric density based on estimated
+%                                       state (exponential model)
+% 02-05-2024        Pietro Califano     Incorrect J2 acceleration fixed.
+% 22-07-2025        Pietro Califano     Update for integration in new filter architecture (future-nav)
+% 07-12-2025        Pietro Califano     Fix minor bugs related to SRP
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % evalAtmExpDensity()
 % -------------------------------------------------------------------------------------------------------------
-%% Future upgrades
-% [-]
-% -------------------------------------------------------------------------------------------------------------
+
 
 %% INPUT MANAGEMENT
 if coder.target('MATLAB') || coder.target('MEX')
@@ -137,9 +136,9 @@ dPosNorm3 = dPosNorm2 * dPosNorm;
 dPosNorm4 = dPosNorm3 * dPosNorm;
 
 % Assign auxiliary variables
-drx_TF = dDCMmainAtt_INfromTF(:, 1)' * dxState_IN(ui16posVelIdx(1:3));
-dry_TF = dDCMmainAtt_INfromTF(:, 2)' * dxState_IN(ui16posVelIdx(1:3));
-drz_TF = dDCMmainAtt_INfromTF(:, 3)' * dxState_IN(ui16posVelIdx(1:3));
+% drx_TF = dDCMmainAtt_INfromTF(:, 1)' * dxState_IN(ui16posVelIdx(1:3));
+% dry_TF = dDCMmainAtt_INfromTF(:, 2)' * dxState_IN(ui16posVelIdx(1:3));
+% drz_TF = dDCMmainAtt_INfromTF(:, 3)' * dxState_IN(ui16posVelIdx(1:3));
 
 %% Gravity Main acceleration
 dAccTot(1:3) = - (dMainGM/dPosNorm3) * dxState_IN(ui16posVelIdx(1:3));
@@ -259,7 +258,7 @@ if ~isempty(dBodyEphemerides)
 end
 
 %% Cannonball SRP acceleration
-if ~isempty(dBodyEphemerides) % TODO: need a way to disable this --> factory pattern for classes?
+if coder.const(~isempty(dBodyEphemerides))
     dAccCannonBallSRP = dCoeffSRP * dPosSunToSC./dSCdistToSun;
 else
     dAccCannonBallSRP = zeros(3,1);

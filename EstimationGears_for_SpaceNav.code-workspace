@@ -11,6 +11,15 @@
 		},
 		{
 			"path": "../nav-backend"
+		},
+		{
+			"path": "../dev-tools/cpp_cuda_template_project"
+		},
+		{
+			"path": "../projects-DART/rcs-1-gnc-simulator"
+		},
+		{
+			"path": "../nav-frontend"
 		}
 	],
 	"settings": {}

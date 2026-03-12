@@ -4,14 +4,14 @@ function [dDynMatrix_PosVel] = evalJAC_InertialPosVelDyn(dxState, ...
                                                         strFilterMutabConfig, ...
                                                         strFilterConstConfig)%#codegen
 arguments (Input)
-    dxState             (:,1) {isvector, isnumeric}
-    dStateTimetag       (:,1) {isvector, isnumeric}
-    strDynParams          {isstruct}
-    strFilterMutabConfig  {isstruct}
-    strFilterConstConfig  {isstruct}
+    dxState               (:,1) double 
+    dStateTimetag         (:,1) double 
+    strDynParams          (1,1) struct
+    strFilterMutabConfig  (1,1) struct
+    strFilterConstConfig  (1,1) struct {coder.mustBeConst}
 end
 arguments (Output)
-    dDynMatrix_PosVel (:,:) {ismatrix, isnumeric}
+    dDynMatrix_PosVel (:,:) double
 end
 %% PROTOTYPE
 % [dDynMatrix_PosVel] = evalJAC_InertialPosVelDyn(dxState, ...
@@ -28,14 +28,14 @@ end
 % Optional gravitational parameter estimation is implemented and added based on configuration (constexpr)
 % -------------------------------------------------------------------------------------------------------------
 %% INPUT
-% dxState             (:,1) {isvector, isnumeric}
-% dStateTimetag       (:,1) {isvector, isnumeric}
-% strDynParams          {isstruct}
-% strFilterMutabConfig  {isstruct}
-% strFilterConstConfig  {isstruct}
+% dxState               (:,1) double
+% dStateTimetag         (:,1) double
+% strDynParams          (1,1) struct
+% strFilterMutabConfig  (1,1) struct
+% strFilterConstConfig  (1,1) struct {coder.mustBeConst}
 % -------------------------------------------------------------------------------------------------------------
 %% OUTPUT
-% dDynMatrix_PosVel
+% dDynMatrix_PosVel (:,:) double
 % -------------------------------------------------------------------------------------------------------------
 %% CHANGELOG
 % 24-02-2025    Pietro Califano     First version implemented from legacy code.
@@ -76,7 +76,7 @@ end
 dDynMatrix_PosVel(ui8PosVelIdx(1:3), ui8PosVelIdx(4:6)) = eye(3);
 
 %% Jacobian of main body accelerations (position-velocity only)
-dBodyPosition_IN = zeros(3,1); % DEVNOTE: assumption of estimation frame attached to body CoM!
+dMainBodyPosition_IN = zeros(3,1); % DEVNOTE: assumption of estimation frame attached to body CoM!
 
 % if strFilterMutabConfig.bEnableNonSphericalGravity % DEVNOTE: this is intended NOT to change at runtime!
 %     dDCMmainAtt_INfromTF = eye(3); % TODO!
@@ -90,11 +90,33 @@ dDCMmainAtt_INfromTF = zeros(3,3); % TODO (PC) TO REMOVE next
                                                        dDCMmainAtt_INfromTF, ...
                                                        [], ...          % strDynParams.strMainData.dSHcoeff
                                                        uint16(0), ... % strDynParams.strMainData.ui16MaxSHdegree
-                                                       dBodyPosition_IN);
+                                                       dMainBodyPosition_IN);
 
 dDynMatrix_PosVel(ui8PosVelIdx, ui8PosVelIdx) = dDynMatrix_PosVel(ui8PosVelIdx, ui8PosVelIdx) ...
                                                                 + drvMainBodyGravityJac;
 
+%% Jacobian wrt 3rd bodies
+[drv3rdBodyGravityJac] = evalJAC_3rdBodyGrav(dxState, ...
+                                             strDynParams, ...
+                                             strFilterConstConfig);
+
+dDynMatrix_PosVel(ui8PosVelIdx, ui8PosVelIdx) = dDynMatrix_PosVel(ui8PosVelIdx, ui8PosVelIdx) ...
+                                                                + drv3rdBodyGravityJac;
+
+%% Jacobian wrt SRP + bias
+if not(strDynParams.bIsInEclipse)
+    [drvSRPwithBiasJac] = evalJAC_SRPwithBias(dxState, ...
+                                        strDynParams, ...
+                                        strFilterMutabConfig, ...
+                                        strFilterConstConfig);
+
+    if coder.const(ui8CoeffSRPidx > 0)
+        dDynMatrix_PosVel(ui8PosVelIdx, [ui8PosVelIdx(1:3); ui8CoeffSRPidx]) = dDynMatrix_PosVel(ui8PosVelIdx, [ui8PosVelIdx(1:3); ui8CoeffSRPidx]) ...
+                                                                                                    + drvSRPwithBiasJac;
+    else
+        dDynMatrix_PosVel(ui8PosVelIdx, ui8PosVelIdx(1:3)) = dDynMatrix_PosVel(ui8PosVelIdx, ui8PosVelIdx(1:3)) + drvSRPwithBiasJac;
+    end
+end
 
 % If no other state is estimated, return here
 if coder.const(strFilterConstConfig.bOrbitStateOnly)
@@ -106,35 +128,7 @@ end
 % dDynMatrix_PosVel(ui8PosVelIdx, ui8attBiasDeltaIdx) 
 
 %% Jacobian wrt residual acceleration (if any)
-% DEVNOTE TBC if need to bedisabled because in principle the stochastic process affecting the dynamics does not enter the
-% deterministic portion of it, but the stochastic input (hence in G, instead of STM).
 dDynMatrix_PosVel(ui8PosVelIdx(4:6), ui8ResidualAccelIdx) = dDynMatrix_PosVel(ui8PosVelIdx(4:6), ui8ResidualAccelIdx) + eye(3);
-
-if not(strDynParams.bIsInEclipse)
-    %% Jacobian wrt SRP + bias
-    [drvSRPwithBiasJac] = evalJAC_SRPwithBias(dxState, ...
-                                        strDynParams, ...
-                                        strFilterMutabConfig, ...
-                                        strFilterConstConfig);
-
-    % DEVNOTE: derivative of velocity wrt delta C SRP has order of unit vector, but seems quite large with
-    % respect to other contributions?
-    if coder.const(ui8CoeffSRPidx > 0)
-        dDynMatrix_PosVel(ui8PosVelIdx, [ui8PosVelIdx(1:3); ui8CoeffSRPidx]) = dDynMatrix_PosVel(ui8PosVelIdx, [ui8PosVelIdx(1:3); ui8CoeffSRPidx]) ...
-                                                                                                    + drvSRPwithBiasJac;
-    else
-        dDynMatrix_PosVel(ui8PosVelIdx, ui8PosVelIdx(1:3)) = dDynMatrix_PosVel(ui8PosVelIdx, ui8PosVelIdx(1:3)) + drvSRPwithBiasJac;
-    end
-end
-
-%% Jacobian wrt 3rd bodies
-[drv3rdBodyGravityJac] = evalJAC_3rdBodyGrav(dxState, ...
-                                             strDynParams, ...
-                                             strFilterConstConfig);
-
-dDynMatrix_PosVel(ui8PosVelIdx, ui8PosVelIdx) = dDynMatrix_PosVel(ui8PosVelIdx, ui8PosVelIdx) ...
-                                                                + drv3rdBodyGravityJac;
-
 
 %% Jacobian wrt gravity parameter (central force only)
 if strFilterConstConfig.bEstimateGravParam

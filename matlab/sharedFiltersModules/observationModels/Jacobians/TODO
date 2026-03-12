@@ -1,0 +1,4 @@
+# TODO list
+
+- [ ] Rework implementation of jacobian functions to simplify interfaces
+- [ ] Make functions more standalone! Do not tie implementation to filter inputs.

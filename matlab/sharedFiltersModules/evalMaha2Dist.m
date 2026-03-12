@@ -1,4 +1,9 @@
 function [dM2dist] = evalMaha2Dist(dyRes, dyResCov, bINFO_MATRIX) %#codegen
+arguments
+    dyRes        (:,1) double {mustBeReal}
+    dyResCov     (:,:) double {mustBeReal}
+    bINFO_MATRIX (1,1) logical {coder.mustBeConst} = false
+end
 %% PROTOTYPE
 % [dM2dist] = evalMaha2Dist(dyRes, dyResCov, bINFO_MATRIX) %#codegen
 % -------------------------------------------------------------------------------------------------------------
@@ -17,7 +22,7 @@ function [dM2dist] = evalMaha2Dist(dyRes, dyResCov, bINFO_MATRIX) %#codegen
 %              Information form (true)
 % -------------------------------------------------------------------------------------------------------------
 %% OUTPUT
-% dM2dist: [1] Value of the Squared Mahalanobis distance
+% dM2dist: [1,1] Value of the Squared Mahalanobis distance
 % -------------------------------------------------------------------------------------------------------------
 %% CHANGELOG
 % 21-09-2023    Pietro Califano     Function coded.
@@ -26,16 +31,18 @@ function [dM2dist] = evalMaha2Dist(dyRes, dyResCov, bINFO_MATRIX) %#codegen
 %% DEPENDENCIES
 % [-]
 % -------------------------------------------------------------------------------------------------------------
+
 %% Function code
-if bINFO_MATRIX == false
+if coder.const(bINFO_MATRIX == false)
+
     % Evaluate squared Mahalanobis distance
     if istriu(dyResCov)
         % Square Root form: UPPER
-        dM2dist = ((dyRes'/dyResCov)/dyResCov') * dyRes;
+        dM2dist = ( (dyRes'/dyResCov) / dyResCov' ) * dyRes;
 
     elseif istril(dyResCov)
         % Square Root form: LOWER
-        dM2dist = ((dyRes'/dyResCov')/dyResCov) * dyRes;
+        dM2dist = ( (dyRes'/dyResCov') / dyResCov ) * dyRes;
     else
         % Full Covariance
         % Evaluate Mahalanobis distance

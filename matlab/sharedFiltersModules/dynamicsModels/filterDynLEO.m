@@ -6,9 +6,9 @@ function dDrvDt = filterDynLEO(dStateTimetag, ...
 arguments
     dStateTimetag           (:, 1) double
     dxState                 (:, 1) double
-    strDynParams            {isstruct}
-    strFilterMutabConfig    {isstruct}
-    strFilterConstConfig    {isstruct}
+    strDynParams            (1,1) struct
+    strFilterMutabConfig    (1,1) struct
+    strFilterConstConfig    (1,1) struct {coder.mustBeConst}
 end
 %% SIGNATURE
 % dDrvDt = filterDynLEO(dStateTimetag, ...
@@ -23,14 +23,14 @@ end
 % 1) Cannonball-like Drag (Exponential atm. model)
 % 2) Cannonball SRP model 
 % 3) Gravitational models: Earth (Main, J2), Moon
-% REFERENCES
+% REFERENCES: TODO
 % -------------------------------------------------------------------------------------------------------------
 %% INPUT
 % dStateTimetag           (:, 1) double
 % dxState                 (:, 1) double
-% strDynParams            {isstruct}
-% strFilterMutabConfig    {isstruct}
-% strFilterConstConfig    {isstruct}
+% strDynParams            (1,1) struct
+% strFilterMutabConfig    (1,1) struct
+% strFilterConstConfig    (1,1) struct {coder.mustBeConst}
 % -------------------------------------------------------------------------------------------------------------
 %% OUTPUT
 % dDrvDt
@@ -41,6 +41,7 @@ end
 % 08-05-2024        Pietro Califano         Fix of incorrect frame in computing SH acceleration. Added
 %                                           attitude ephemerides as evaluation of Chbv polynomials.
 % 23-07-2025        Pietro Califano         [MAJOR] Reworking for new filter standard architectures.
+% 07-12-2025        Pietro Califano     Fix minor bugs related to SRP
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % evalAttQuatChbvPolyWithCoeffs()
@@ -48,9 +49,10 @@ end
 % evalRHS_DynLEO()
 % evalRHS_DynFOGM()
 % -------------------------------------------------------------------------------------------------------------
+
 %% Function code
 % ui16StateSize = strFilterConstConfig.ui16StateSize;
-ui32PolyMaxDeg = 20; 
+% ui32PolyMaxDeg = 20; 
 strStatesIdx = strFilterConstConfig.strStatesIdx;
 
 % DEVNOTE
@@ -93,7 +95,7 @@ elseif dStateTimetag >= strDynParams.strMainData.strAttData.dTimeUpBound
     dEvalPoint = strDynParams.strMainData.strAttData.dTimeUpBound;
 
 else
-    dEvalPoint = dStateTimetag;
+    dEvalPoint = dStateTimetag(1);
 end
 
 % Moon Position in ECI (World frame)
@@ -143,32 +145,16 @@ if isfield(strFilterConstConfig.strStatesIdx, "ui8CoeffSRPidx") && ...
 end
 
 % Compute distance from the Sun 
-dMainPosition_W = zeros(3,1);
-dDistToSun = norm(dBodyEphemerides(1:3) - dMainPosition_W);
-
-% TEMPORARY: selection of scale based on magnitude
-% S0   = 1361.0;                 % W/m^2 (solar constant at 1 AU; 1361–1367 often used)
-% c    = 299792458;              % m/s
-% AU_m = 1.495978707e11;         % m
-% AU_km= 1.495978707e8;          % km
-
-if dDistToSun <= 1e10
-    % Assumes km scale
-    dAU = 1.495978707E8;
-    strDynParams.strSRPdata.dP_SRP0 = 1367 / (299792458 * 1E-3); 
-else
-    % Assumes m scale
-    dAU = 1.495978707E11;
-    strDynParams.strSRPdata.dP_SRP0 = 1367 / 299792458; % Approx. 4.54e-6 N/m^2
-end
+dNormSunPositionFromSC = norm(dBodyEphemerides(1:3) - dxState(strStatesIdx.ui8posVelIdx(1:3)));
+dInvNormSunPositionFromSC = 1 / dNormSunPositionFromSC;
 
 % Compute SRP value from SRP0 at 1AU
-dDistFromSunAU = dDistToSun / dAU;
-strDynParams.strSRPdata.dP_SRP = strDynParams.strSRPdata.dP_SRP0 * (1/(dDistFromSunAU)^2); % [N/m^2] or [N/km^2]
+[strDynParams.strSRPdata.dP_SRP] = ComputeSolarRadPressure(dInvNormSunPositionFromSC, ...
+                                                            strFilterConstConfig.bUseKilometersScale);
 
 if strDynParams.bIsInEclipse
     dCoeffSRP = (strDynParams.strSRPdata.dP_SRP * strDynParams.strSCdata.dReflCoeff * ...
-        strDynParams.strSCdata.dA_SRP)/strDynParams.strSCdata.dSCmass; % Move to compute outside, since this
+                    strDynParams.strSCdata.dA_SRP)/strDynParams.strSCdata.dSCmass; 
 
     dCoeffSRP = dCoeffSRP + dBiasCoeffSRP;
 else
@@ -190,7 +176,7 @@ dPositionFromMain_W = dxState(strStatesIdx.ui8posVelIdx(1:3));
 strDynParams.bIsInEclipse = CheckForEclipseMainSphereBody(dSunPositionFromMain_W, ...
                                                             dPositionFromMain_W, ...
                                                             strDynParams.strMainData.dRefRadius, ...
-                                                            dDistToSun);
+                                                            norm(dSunPositionFromMain_W));
 
 %% Evaluate RHS 
 % Evaluate Position and Velocity states dynamics
