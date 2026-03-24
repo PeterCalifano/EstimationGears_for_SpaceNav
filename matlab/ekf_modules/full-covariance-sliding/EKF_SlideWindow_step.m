@@ -62,6 +62,8 @@ end
 % 21-07-2025    Pietro Califano     Remove adaptivity module code and add new function call
 % 29-09-2025    Pietro Califano     Update implementation to better support code generation and integration
 %                                   in C/C++ programs; improve validation of inputs
+% 19-01-2026    Pietro Califano     [MAJOR] Upgrade to handle delay of measurements using backward
+%                                   integration of state and covariance (double staged time update)
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % [-]
@@ -100,6 +102,7 @@ strFilterOutputData.dxErrState            = zeros(ui32FullCovSize, 1);
 strFilterOutputData.dPyyResCov            = zeros(ui16MaxResidualsVecSize, ui16MaxResidualsVecSize);
 strFilterOutputData.dAllPriorResVector    = zeros(ui16MaxResidualsVecSize, 1);
 strFilterOutputData.dAllObservJac         = zeros(ui16MaxResidualsVecSize, ui32FullCovSize);
+strFilterOutputData.dMeasUpdateTimetag    = 0.0;
 
 %% ADAPTIVITY MANAGEMENT
 bConsiderModePreCall    = strFilterMutabConfig.bConsiderStatesMode;
@@ -131,7 +134,23 @@ if coder.const(strFilterConstConfig.ui16NumWindowPoses > 0)
     
 end
 
-%% TIME UPDATE
+%% TIME UPDATE (stage 1 to target or measurement time)
+dTargetTimetag1stStage = dTargetTimetag;
+dTargetTimetag2ndStage = dTargetTimetag;
+
+if coder.const(strFilterConstConfig.enumMeasDelayManagementMode == ...
+            EnumMeasDelayManagementMode.BACKWARD_PROP) 
+    % ACHTUNG DEVNOTE: current limitation of backward propagation: can handle 1 delay only!
+    % Target timestamp is assumed if no measurement timetag is given. Now it considers the oldest.
+
+    % Set 1st state time target based on measurement timetags
+    bValidMeasTimetags = strMeasBus.dMeasTimetags > 0.0;
+    if any( bValidMeasTimetags )
+        dTargetTimetag1stStage = min( strMeasBus.dMeasTimetags( bValidMeasTimetags ));
+    end
+    
+end
+
 [dxStatePrior, ...
  dxStateCovPrior, ...
  dStateTimetag,...
@@ -143,7 +162,7 @@ end
  dIntegrProcessNoiseCovQ] = EKF_SlideWindow_FullCov_TimeUp(dxState, ...
                                                         dxStateCov, ...
                                                         dStateTimetag, ...
-                                                        dTargetTimetag, ...
+                                                        dTargetTimetag1stStage, ...
                                                         strDynParams, ...
                                                         strFilterMutabConfig, ...
                                                         strFilterConstConfig);
@@ -184,17 +203,51 @@ if strFilterMutabConfig.bNewMeasAvailable && not(bFiringManoeuvre) % TODO, this 
     strFilterOutputData.dPyyResCov(:,:)         = dPyyResCov;
     strFilterOutputData.dAllPriorResVector(:,:) = dAllPriorResVector;
     strFilterOutputData.dAllObservJac(:,:)      = dAllObservJac;
+    strFilterOutputData.dMeasUpdateTimetag      = dStateTimetag(1);
 
     % Temporary assignment
     dxState(:)       = dxStatePost;
     dxStateCov(:,:)  = dxStateCovPost;
 end
 
+
+%% TIME UPDATE (state 2 to target time)
+if coder.const(strFilterConstConfig.enumMeasDelayManagementMode == EnumMeasDelayManagementMode.BACKWARD_PROP) && ...
+                            dStateTimetag(1) < dTargetTimetag2ndStage
+
+    %%% Run only if current state time tag is < dTargetTimetag2ndStage
+    [dxStatePrior, ...
+        dxStateCovPrior, ...
+        dStateTimetag,...
+        strDynParams, ...
+        dFlowSTM,...
+        dDynMatrix,...
+        dDynMatrixNext, ...
+        strFilterMutabConfig, ...
+        dIntegrProcessNoiseCovQ] = EKF_SlideWindow_FullCov_TimeUp(dxState, ...
+                                                                    dxStateCov, ...
+                                                                    dStateTimetag, ...
+                                                                    dTargetTimetag2ndStage, ...
+                                                                    strDynParams, ...
+                                                                    strFilterMutabConfig, ...
+                                                                    strFilterConstConfig);
+
+    % DEVNOTE: as of now flow STM and dynamics matrices are from dStateTimetag to dTargetTimetag2ndStage!
+
+    % Temporary assignment
+    dxState(:)       = dxStatePrior;
+    dxStateCov(:,:)  = dxStateCovPrior;
+end
+
+
+
 %% MANOEUVRE HANDLING
 if coder.const( isfield(strDynParams, "bFiringManoeuvre") && ...
             isfield(strFilterConstConfig, "enumManCovModelType") )
 
     if strDynParams.bFiringManoeuvre
+        % TODO must properly consider the timestamp! For backward propagation, the filter must consider that
+        % a manoeuvre happened in the past? --> better not to process any measurements if manoeuvred recently
         %% Impulsive manoeuvres handling
         [dxState(:), dxStateCov(:,:), ...
             dCovDeltaV_W, dCovDeltaV_TH, dCommandDeltaV_W] = ApplyManoeuvreDeltaV(dxStatePrior, ...

@@ -90,16 +90,11 @@ end
 % -------------------------------------------------------------------------------------------------------------
 
 % Coder directives
-coder.inline("always");
+coder.inline("default");
 
 % Enforce constraint on constness of struct;
 strFilterConstConfig = coder.const(strFilterConstConfig);
 
-if coder.target('MATLAB') || coder.target('MEX')
-    % Assert checks
-    assert(dTargetTimetag >= dStateTimetag(1))
-
-end
 
 % Input pre-processing
 % Get size of input variables
@@ -130,8 +125,11 @@ if abs(dDeltaTime) < eps
     dDeltaTime = 0.0;
 end
 
+% Store initial sign of delta time
+dSignDeltaTime = sign(dDeltaTime);
+
 %% PROPAGATION
-if abs(dDeltaTime) > eps
+if abs(dDeltaTime) > eps('single')
 
     % Get current mean state to propagate
     ui16CurrentStatePtrs = 1:ui16StateSize;
@@ -139,10 +137,10 @@ if abs(dDeltaTime) > eps
     dCurrentTimetag     = dStateTimetag(1); % Store current time tag for Jacobian evaluation
 
     % Propagate mean state forward to target timestamp (solution flow) in N-piece-wise steps
-    while dStateTimetag(1) < dTargetTimetag
+    while abs(dStateTimetag(1) - dTargetTimetag) > eps('single')
 
         if strFilterMutabConfig.bEnablePieceWisePropagation
-            dDeltaTime = min(dDeltaTime, strFilterMutabConfig.dMaxPiecewiseTimestep);
+            dDeltaTime = dSignDeltaTime * min(abs(dDeltaTime), strFilterMutabConfig.dMaxPiecewiseTimestep);
         end
 
         % Propagate step
@@ -179,8 +177,8 @@ if abs(dDeltaTime) > eps
         dxCurrentStateCov = dxStateCovPrior ( ui16CurrentStatePtrs, ui16CurrentStatePtrs);
 
         % Compute process noise covariance matrix approximation
-        if abs(dDeltaTime) > eps && strFilterMutabConfig.bEnableProcessNoise
-
+        if dDeltaTime > eps && strFilterMutabConfig.bEnableProcessNoise
+            % DEVNOTE: process noise is considered zero when integrating backward
             [dDeltaProcessNoiseCov(:,:)] = ComputeLinearizedMappedQcov(dDeltaTime, ...
                                                                     strDynParams,...
                                                                     strFilterMutabConfig, ...
