@@ -1,6 +1,6 @@
 # VERSION CONTROL
 cmake_minimum_required(VERSION 3.15 FATAL_ERROR)
-set(PROJECT_PYTHON_VERSION 3.11)
+set(PROJECT_PYTHON_VERSION 3.12)
 set(MATLAB_DEFAULT_RELEASE "R2023b")
 
 # PROJECT DEFINITION
@@ -67,6 +67,7 @@ set(CUDA_COMPILE_TARGET "${LIB_NAMESPACE}_cuda_compile_interface")
 set(OPTIX_COMPILE_TARGET "${LIB_NAMESPACE}_optix_compile_interface")
 set(OPENGL_COMPILE_TARGET "${LIB_NAMESPACE}_opengl_compile_interface")
 set(LIB_COMPILE_TARGET "${LIB_NAMESPACE}_lib_compile_interface")
+set(SPDLOG_COMPILE_TARGET "${LIB_NAMESPACE}_spdlog_interface")
 set(SANITIZER_TARGET "${LIB_NAMESPACE}_sanitizer_target_interface")
 
 # Handle toolchain settings (after project so compiler/system vars are populated)
@@ -106,6 +107,8 @@ endif()
 # OPTIONS
 option(ENABLE_TESTS "Build and run tests" ON)
 option(ENABLE_FETCH_CATCH2 "Fetch Catch2 from GitHub if not found" ON)
+option(ENABLE_SPDLOG "Enable spdlog logging support" ON)
+option(ENABLE_FETCH_SPDLOG "Fetch spdlog from GitHub if not found" ON)
 option(VERBOSE "Verbose output" OFF)
 
 if (NOT DEFINED GTWRAP_BUILD_PYTHON_DEFAULT)
@@ -260,6 +263,7 @@ handle_sanitizers()
 
 # Handle profiling support
 include(cmake/HandleProfiling.cmake)
+option(PROFILING_PROPAGATES_TO_CONSUMERS "Propagate profiling interface flags/definitions to targets consuming the project library" OFF)
 set(PROFILING_COMPILE_TARGET "${LIB_NAMESPACE}_profiling_interface")
 handle_profiling(TARGET ${PROFILING_COMPILE_TARGET})
 
@@ -272,14 +276,38 @@ message(STATUS "==============================================================")
 message(STATUS "====================  Dependencies ===========================")
 
 # LIBRARY DEPENDENCIES DEFINITION
-find_package(Eigen3 3.3 REQUIRED)
+find_package(Eigen3 3.4 REQUIRED)
 find_package(Doxygen QUIET)
 
 # Handle Catch2 tools
 include(cmake/HandleCatch2.cmake)
+include(cmake/HandleSpdlog.cmake)
+handle_spdlog(TARGET ${SPDLOG_COMPILE_TARGET})
 
 # Include cmake tools (depends on Catch2)
 include(cmake/cmake_utils.cmake)
+
+collect_project_source_inventory(
+  ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src"
+  COMPILED_SOURCES_OUT PROJECT_LIBRARY_COMPILED_SOURCES
+  PTX_SOURCES_OUT PROJECT_LIBRARY_PTX_SOURCES
+  HAS_COMPILED_SOURCES_OUT PROJECT_HAS_COMPILED_SOURCES
+  HAS_PTX_SOURCES_OUT PROJECT_HAS_PTX_SOURCES)
+
+if(ENABLE_OPTIX)
+  if(NOT PROJECT_HAS_COMPILED_SOURCES)
+    message(FATAL_ERROR
+      "ENABLE_OPTIX=ON is not supported for header-only library layouts. "
+      "No compilable library sources (*.cpp or *.cu excluding *.ptx.cu) were found under src/ outside src/bin. "
+      "Add a compiled source file or disable ENABLE_OPTIX.")
+  endif()
+
+  if(NOT PROJECT_HAS_PTX_SOURCES)
+    message(FATAL_ERROR
+      "ENABLE_OPTIX=ON requires at least one PTX kernel source (*.ptx.cu) under src/ outside src/bin. "
+      "Add a PTX kernel file or disable ENABLE_OPTIX.")
+  endif()
+endif()
 
 # Configure CUDA/OptiX (creates interface targets even when disabled)
 handle_cuda(TARGET ${CUDA_COMPILE_TARGET}
@@ -305,10 +333,13 @@ if(ENABLE_CUDA)
   list(APPEND EXPORT_TARGET_DEPS CUDAToolkit)
 endif()
 if (ENABLE_OPENGL)
-  list(APPEND EXPORT_TARGET_DEPS OpenGL::GL)
+  list(APPEND EXPORT_TARGET_DEPS OpenGL)
 endif()
 if(ENABLE_TBB)
   list(APPEND EXPORT_TARGET_DEPS TBB)
+endif()
+if(SPDLOG_ENABLED AND SPDLOG_EXTERNAL_PACKAGE)
+  list(APPEND EXPORT_TARGET_DEPS spdlog)
 endif()
 message(STATUS "Target dependencies: ${EXPORT_TARGET_DEPS}")
 
