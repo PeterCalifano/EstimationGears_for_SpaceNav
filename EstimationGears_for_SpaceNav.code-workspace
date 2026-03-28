@@ -20,6 +20,9 @@
 		},
 		{
 			"path": "../dev-tools/cpp_cuda_template_project"
+		},
+		{
+			"path": "../simulationUtils"
 		}
 	],
 	"settings": {
