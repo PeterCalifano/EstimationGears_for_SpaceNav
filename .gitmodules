@@ -6,3 +6,6 @@
 	path = lib/SimulationGears_for_SpaceNav
 	url = git@github.com:PeterCalifano/SimulationGears_for_SpaceNav.git
 	branch = dev_main
+[submodule "lib/wrap"]
+	path = lib/wrap
+	url = git@github.com:PeterCalifano/wrap.git

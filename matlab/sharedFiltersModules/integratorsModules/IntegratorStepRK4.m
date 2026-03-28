@@ -51,14 +51,14 @@ end
 %                                           RHS call; multistep management; forward/back propagation.
 % 30-03-2024        Pietro Califano         New interface function computeDynFcn. Use of struct() as inputs.
 % 24-02-2025        Pietro Califano         Compatibility breaking change: state index struct replaced by
-%                                           filter const configuration struct
+%                                           filter const configuration struct.
+% 19-01-2026        Pietro Califano         Improve robustness of function; change uint16 to uint32 for number of
+%                                           steps to prevent overflow entirely.
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % [-]
 % -------------------------------------------------------------------------------------------------------------
-%% Future upgrades
-% 1) Evaluate modification to make integrator work from 0 to DeltaTime 
-% -------------------------------------------------------------------------------------------------------------
+
 %% Function code
 
 % Input checks
@@ -74,24 +74,28 @@ end
 % Add validate attributes to filterDynRHS template
 % Add attributes validation to integrator?
 
+if coder.target('MATLAB') || coder.target('MEX')
+    % Check that time step is positive
+    assert( dIntegrTimeStep > 0.0, 'ERROR: integrator time step must be positive.');
+end
 
 %% Integrator routine manager
 
 % Compute minimum number of integrator steps
 bSTEP_ADDED = false;
-if not(abs(dDeltaTime) == dIntegrTimeStep)
+if not( abs(abs(dDeltaTime) - dIntegrTimeStep) < eps('single') )
 
-    ui16IntegrStepsNum = uint16( floor(abs(dDeltaTime) / dIntegrTimeStep) );
+    ui32IntegrStepsNum = uint32( floor(abs(dDeltaTime) / dIntegrTimeStep) );
 
     % Add 1 step if i_dDeltaTime not multiple of i_dIntegTimeStep
-    dResidualTime = abs(dDeltaTime) - double(ui16IntegrStepsNum) * dIntegrTimeStep;
+    dResidualTime = abs(dDeltaTime) - double(ui32IntegrStepsNum) * dIntegrTimeStep;
 
     if dResidualTime > 0.0
         bSTEP_ADDED = true;
-        ui16IntegrStepsNum = ui16IntegrStepsNum + uint16(1);
+        ui32IntegrStepsNum = ui32IntegrStepsNum + uint32(1);
     end
 else
-    ui16IntegrStepsNum = uint16(1);
+    ui32IntegrStepsNum = uint32(1);
     dResidualTime = 0.0;
 end
 
@@ -102,10 +106,10 @@ dIntegrTimeStep = sign(dDeltaTime) * dIntegrTimeStep;
 dTmpStateNext  = dxState; % State variable at current integration time
 dIntegrAbsTime = dStateTimetag; % Current integration time variable
 
-for idStep = 1:ui16IntegrStepsNum
+for idStep = 1:ui32IntegrStepsNum
 
     % Handle STEP_ADDED case adjusting integrator timestep
-    if bSTEP_ADDED == true && idStep == ui16IntegrStepsNum 
+    if bSTEP_ADDED == true && idStep == ui32IntegrStepsNum 
         dIntegrTimeStep = sign(dDeltaTime) * dResidualTime;
     end
 
