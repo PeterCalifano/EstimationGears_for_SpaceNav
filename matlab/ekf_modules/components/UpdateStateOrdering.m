@@ -39,9 +39,6 @@ end
 %% DEPENDENCIES
 % [-]
 % -------------------------------------------------------------------------------------------------------------
-%% Future upgrades
-% [-]
-% -------------------------------------------------------------------------------------------------------------
 if coder.target('MATLAB') || coder.target('MEX')
     assert(strFilterMutabConfig.ui16WindowStateCounter < strFilterConstConfig.ui16NumWindowPoses, ...
         'FATAL ERROR: state vector sliding cannot be performed before marginalization of last block.')

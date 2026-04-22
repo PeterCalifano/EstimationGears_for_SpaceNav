@@ -37,10 +37,6 @@ end
 %% DEPENDENCIES
 % [-]
 % -------------------------------------------------------------------------------------------------------------
-%% Future upgrades
-% [-]
-% -------------------------------------------------------------------------------------------------------------
-
 % persistent schemeCoeffs;
 % TODO: improve efficiency by pre-computing (only once) scheme matrices (the ratios)! 
 

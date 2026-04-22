@@ -40,11 +40,6 @@ function [o_dUVpixCoord, o_dDCM_fromINtoCAM] = pinholeProjectSymHP(i_dKcam, i_dq
 %% DEPENDENCIES
 % casadi package
 % -------------------------------------------------------------------------------------------------------------
-%% Future upgrades
-% [-]
-% -------------------------------------------------------------------------------------------------------------
-
-
 %% Function code
 
 % Compute DCM

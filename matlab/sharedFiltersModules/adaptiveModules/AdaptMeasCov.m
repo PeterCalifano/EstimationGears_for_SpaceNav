@@ -35,9 +35,6 @@ function [i_dMeasCovNew] = adaptMeasCov(i_dMeasCov, ...
 %% DEPENDENCIES
 % [-]
 % -------------------------------------------------------------------------------------------------------------
-%% Future upgrades
-% [-]
-% -------------------------------------------------------------------------------------------------------------
 %% Function code
 dPyy_noRcov = coder.nullcopy(zeros(size(i_dPredYobs, 1)));
 

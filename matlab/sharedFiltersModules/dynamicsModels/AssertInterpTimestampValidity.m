@@ -22,9 +22,6 @@ function [dEvalPoint, bOutOfBoundFlag, dOutOfBoundDelta] = AssertInterpTimestamp
 %% DEPENDENCIES
 % [-]
 % -------------------------------------------------------------------------------------------------------------
-%% Future upgrades
-% [-]
-% -------------------------------------------------------------------------------------------------------------
 %% Function code
 
 bOutOfBoundFlag = false;

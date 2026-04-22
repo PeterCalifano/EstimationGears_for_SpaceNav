@@ -31,10 +31,6 @@ end
 %% DEPENDENCIES
 % skewSymm()
 % -------------------------------------------------------------------------------------------------------------
-%% Future upgrades
-% [-]
-% -------------------------------------------------------------------------------------------------------------
-
 % Compute acceleration as seen in rotating frame (with non-inertial terms)
 drvStateDot_RotFrame = [drvState_RotFrame(4:6); dInertialAccel_RotFrame]; % Inertial acceleration only
 

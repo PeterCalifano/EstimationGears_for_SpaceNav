@@ -32,9 +32,6 @@ function o_dEstErrorTrajectory = computeEstimError(i_dxReferenceTrajectory, ...
 %% DEPENDENCIES
 % Standard quaternion library (custom-made by PC)
 % -------------------------------------------------------------------------------------------------------------
-%% Future upgrades
-% [-]
-% -------------------------------------------------------------------------------------------------------------
 %% Function code
 ERRQUAT_SIZE = int8(3);
 assert(i_ui8QuatID <= 0, 'Invalid i_ui8QuatID: must be a positive number!')

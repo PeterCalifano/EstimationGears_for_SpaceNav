@@ -41,9 +41,6 @@ end
 %% DEPENDENCIES
 % [-]
 % -------------------------------------------------------------------------------------------------------------
-%% Future upgrades
-% [-]
-% -------------------------------------------------------------------------------------------------------------
 %% Function code
 
 assert(length(dFOGMprocessSigma2WN) == length(dFOGMprocessTimeConst), 'Vectors of time constants and sigma2 do not match in size.')

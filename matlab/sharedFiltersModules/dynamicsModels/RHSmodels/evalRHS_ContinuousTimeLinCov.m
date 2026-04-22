@@ -30,10 +30,6 @@ end
 %% DEPENDENCIES
 % skewSymm()
 % -------------------------------------------------------------------------------------------------------------
-%% Future upgrades
-% [-]
-% -------------------------------------------------------------------------------------------------------------
-
 % Size asserts
 ui32RHSsize = uint32(size(dCovariance, 1) * size(dCovariance, 2));
 assert( all(size(dDynMatrix) == size(dCovariance), 'all') );

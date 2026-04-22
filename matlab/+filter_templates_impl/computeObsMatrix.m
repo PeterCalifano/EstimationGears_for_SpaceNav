@@ -49,9 +49,6 @@ function dHobsMatrix = computeObsMatrix(~, ...
 % 1) evalJAC_AbsPosInTargetFrame
 % 2) evalJAC_RelVisNavPosition
 % ----------------------------------------------------------------------------------------------------------
-%% Future upgrades
-% [-]
-% ----------------------------------------------------------------------------------------------------------
 %% Function code
 
 % TEMPORARY COMMENT

@@ -32,10 +32,6 @@ end
 %% DEPENDENCIES
 % [-]
 % -------------------------------------------------------------------------------------------------------------
-%% Future upgrades
-% [-]
-% -------------------------------------------------------------------------------------------------------------
-
 % Build Omega matrix (from Quaternion Time derivative)
 if bIsQuatVSRPplus
     % Vector First Scalar Last Right Chain

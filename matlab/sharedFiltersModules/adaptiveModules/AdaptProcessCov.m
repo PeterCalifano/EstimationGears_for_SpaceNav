@@ -32,9 +32,6 @@ function o_dProcessCov = adaptProcessCov(i_dProcessCov, ...
 %% DEPENDENCIES
 % [-]
 % -------------------------------------------------------------------------------------------------------------
-%% Future upgrades
-% [-]
-% -------------------------------------------------------------------------------------------------------------
 %% Function code
 
 o_dProcessCov = i_dAlphaFactor * i_dProcessCov + ...        
