@@ -128,16 +128,26 @@ end
 % Update SRP value from SRP0 at 1AU
 dSunPositionFromSC_W = dBodyEphemerides(1:3) - ...
                         dxState(strFilterConstConfig.strStatesIdx.ui8posVelIdx(1:3));
+                        
+bSunPosValid = all(isfinite(dBodyEphemerides(1:3))) && any(abs(dBodyEphemerides(1:3)) > eps('single'));
 
-% Compute SRP value from SRP0 at 1AU
-[strDynParams.strSRPdata.dP_SRP] = ComputeSolarRadPressure( 1.0 / norm(dSunPositionFromSC_W), ...
-                                                            strFilterConstConfig.bUseKilometersScale);
+if bSunPosValid && isfinite(norm(dSunPositionFromSC_W)) && norm(dSunPositionFromSC_W) > eps('single')
+    % Compute SRP value from SRP0 at 1AU
+    [strDynParams.strSRPdata.dP_SRP] = ComputeSolarRadPressure(1.0 / norm(dSunPositionFromSC_W), ...
+                                                               strFilterConstConfig.bUseKilometersScale);
+else
+    strDynParams.strSRPdata.dP_SRP = 0.0;
+end
 
 % Compute SRP coefficient
 dCoeffSRP = (strDynParams.strSRPdata.dP_SRP * strDynParams.strSCdata.dReflCoeff * ...
              strDynParams.strSCdata.dA_SRP)/strDynParams.strSCdata.dSCmass; % Move to compute outside, since this
 
-dCoeffSRP = dCoeffSRP + dBiasCoeffSRP;
+if strDynParams.strSRPdata.dP_SRP > 0.0
+    dCoeffSRP = dCoeffSRP + dBiasCoeffSRP;
+else
+    dCoeffSRP = 0.0;
+end
 
 % Get residual acceleration if any
 if isfield(strFilterConstConfig.strStatesIdx, "ui8ResidualAccelIdx") && ...
