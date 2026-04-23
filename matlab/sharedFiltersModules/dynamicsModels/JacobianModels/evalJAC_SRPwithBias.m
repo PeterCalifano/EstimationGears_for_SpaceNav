@@ -60,16 +60,29 @@ else
 end
 
 %% Compute distance from the Sun and P_SRP
-dSunPositionToSC_IN         = dxState(ui8PosVelIdx(1:3)) - strDynParams.dBodyEphemerides(1:3);
-dNormSunPositionFromSC_IN   = norm( dSunPositionToSC_IN );
-dInvNormSunPositionFromSC   = 1/dNormSunPositionFromSC_IN;
+dSunPositionFromMain_IN = strDynParams.dBodyEphemerides(1:3);
+
+bSunPosValid = all(isfinite(dSunPositionFromMain_IN)) && any(abs(dSunPositionFromMain_IN) > eps('single'));
+
+if ~bSunPosValid
+    return;
+end
+
+dSunPositionToSC_IN = dxState(ui8PosVelIdx(1:3)) - dSunPositionFromMain_IN;
+dNormSunPositionFromSC_IN = norm(dSunPositionToSC_IN);
+
+if ~(isfinite(dNormSunPositionFromSC_IN) && dNormSunPositionFromSC_IN > eps('single'))
+    return;
+end
+
+dInvNormSunPositionFromSC = 1/dNormSunPositionFromSC_IN;
 
 % Compute SRP value from SRP0 at 1AU
 [strDynParams.strSRPdata.dP_SRP, ~] = ComputeSolarRadPressure(dInvNormSunPositionFromSC, ...
                                                               strFilterConstConfig.bUseKilometersScale);
 
 %% Compute jacobian wrt SRP acceleration
-% DEVNOTE this coefficient is recomputed here, instead of re-using calculation from propagateDyn
+% DEVNOTE this coefficient is recomputed here, instead of re-using calculation from PropagateDyn
 dCoeffSRP = (strDynParams.strSRPdata.dP_SRP * strDynParams.strSCdata.dReflCoeff * ...
              strDynParams.strSCdata.dA_SRP)/strDynParams.strSCdata.dSCmass; % Move to compute outside, since this
 
