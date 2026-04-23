@@ -25,8 +25,8 @@ end
 %% DESCRIPTION
 % What the function does
 %
-% ACHTUNG: the integrator function strictly depends on "computeDynFcn" with standard interface:
-%       computeDynFcn(dCurrentTime, dxState, strDynParams, strFilterConstConfig).
+% ACHTUNG: the integrator function strictly depends on "ComputeDynFcn" with standard interface:
+%       ComputeDynFcn(dCurrentTime, dxState, strDynParams, strFilterMutabConfig, strFilterConstConfig).
 % The structure maps to the dynamic parameters of the dynamics model function and must be properly matched.
 % filterStepRK4() is agnostic with respect to the output returned by the RHS, provided that it is of the
 % correct size.
@@ -49,7 +49,7 @@ end
 %                                           and interfaces.
 % 13-02-2024        Pietro Califano         Prototype for filter implementation v1.0: standard interface for
 %                                           RHS call; multistep management; forward/back propagation.
-% 30-03-2024        Pietro Califano         New interface function computeDynFcn. Use of struct() as inputs.
+% 30-03-2024        Pietro Califano         New interface function ComputeDynFcn. Use of struct() as inputs.
 % 24-02-2025        Pietro Califano         Compatibility breaking change: state index struct replaced by
 %                                           filter const configuration struct.
 % 19-01-2026        Pietro Califano         Improve robustness of function; change uint16 to uint32 for number of

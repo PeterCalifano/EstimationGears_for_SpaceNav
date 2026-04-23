@@ -1,19 +1,27 @@
-function dDeltaState = IntegratorStepRK8(dxState, ...
-                                        dStateTimetag, ...
-                                        dDeltaTime, ...
-                                        dIntegrTimeStep, ...
-                                        strDynParams, ...
-                                        strStatesIdx) %#codegen
+function [dxStateNext, dStateTimetag] = IntegratorStepRK8(dxState, ...
+                                                          dStateTimetag, ...
+                                                          dDeltaTime, ...
+                                                          dIntegrTimeStep, ...
+                                                          strDynParams, ...
+                                                          strFilterMutabConfig, ...
+                                                          strFilterConstConfig) %#codegen
 arguments
-    dxState         (:, 1) double {isnumeric, isvector}
-    dStateTimetag   (1, 1) double {isnumeric, isscalar}
-    dDeltaTime      (1, 1) double {isnumeric, isscalar}
-    dIntegrTimeStep  (1, 1) double {isnumeric, isscalar} 
-    strDynParams    (1, 1) {isstruct}
-    strStatesIdx    (1, 1) {isstruct}
+    dxState                 (:,1) double {mustBeNumeric}
+    dStateTimetag           (1,1) double {mustBeNumeric}
+    dDeltaTime              (1,1) double {mustBeNumeric}
+    dIntegrTimeStep         (1,1) double {mustBeNumeric}
+    strDynParams            (1,1) struct
+    strFilterMutabConfig    (1,1) struct
+    strFilterConstConfig    (1,1) struct {coder.mustBeConst}
 end
 %% SIGNATURE
-% dDeltaState = IntegratorStepRK8(dTimestamp, dxState, dIntegrTimestep) %#codegen
+% [dxStateNext, dStateTimetag] = IntegratorStepRK8(dxState, ...
+%                                                  dStateTimetag, ...
+%                                                  dDeltaTime, ...
+%                                                  dIntegrTimeStep, ...
+%                                                  strDynParams, ...
+%                                                  strFilterMutabConfig, ...
+%                                                  strFilterConstConfig) %#codegen
 % -------------------------------------------------------------------------------------------------------------
 %% DESCRIPTION
 % What the function does
@@ -37,31 +45,29 @@ end
 %% DEPENDENCIES
 % [-]
 % -------------------------------------------------------------------------------------------------------------
-% persistent schemeCoeffs;
-% TODO: improve efficiency by pre-computing (only once) scheme matrices (the ratios)! 
+% TODO: improve efficiency by pre-computing (only once) scheme matrices (the ratios)!
+
+if coder.target('MATLAB') || coder.target('MEX')
+    assert(dIntegrTimeStep > 0.0, 'ERROR: integrator time step must be positive.');
+end
+
+dIntegrTimeStep = sign(dDeltaTime) * dIntegrTimeStep;
+dIntegrAbsTime = dStateTimetag;
 
 % Compute scheme stages
-dk_1  = computeDynFcn(dStateTimetag, dxState);
+dk_1  = ComputeDynFcn(dIntegrAbsTime, dxState, strDynParams, strFilterMutabConfig, strFilterConstConfig);
+dk_2  = ComputeDynFcn(dIntegrAbsTime + dIntegrTimeStep*(4/27),   dxState + (dIntegrTimeStep*4/27)*dk_1, strDynParams, strFilterMutabConfig, strFilterConstConfig);
+dk_3  = ComputeDynFcn(dIntegrAbsTime + dIntegrTimeStep*(2/9),    dxState + (dIntegrTimeStep/18)*(dk_1+3*dk_2), strDynParams, strFilterMutabConfig, strFilterConstConfig);
+dk_4  = ComputeDynFcn(dIntegrAbsTime + dIntegrTimeStep*(1/3),    dxState + (dIntegrTimeStep/12)*(dk_1+3*dk_3), strDynParams, strFilterMutabConfig, strFilterConstConfig);
+dk_5  = ComputeDynFcn(dIntegrAbsTime + dIntegrTimeStep*(1/2),    dxState + (dIntegrTimeStep/8)*(dk_1+3*dk_4), strDynParams, strFilterMutabConfig, strFilterConstConfig);
+dk_6  = ComputeDynFcn(dIntegrAbsTime + dIntegrTimeStep*(2/3),    dxState + (dIntegrTimeStep/54)*(13*dk_1-27*dk_3+42*dk_4+8*dk_5), strDynParams, strFilterMutabConfig, strFilterConstConfig);
+dk_7  = ComputeDynFcn(dIntegrAbsTime + dIntegrTimeStep*(1/6),    dxState + (dIntegrTimeStep/4320)*(389*dk_1-54*dk_3+966*dk_4-824*dk_5+243*dk_6), strDynParams, strFilterMutabConfig, strFilterConstConfig);
+dk_8  = ComputeDynFcn(dIntegrAbsTime + dIntegrTimeStep,          dxState + (dIntegrTimeStep/20)*(-234*dk_1+81*dk_3-1164*dk_4+656*dk_5-122*dk_6+800*dk_7), strDynParams, strFilterMutabConfig, strFilterConstConfig);
+dk_9  = ComputeDynFcn(dIntegrAbsTime + dIntegrTimeStep*(5/6),    dxState + (dIntegrTimeStep/288)*(-127*dk_1+18*dk_3-678*dk_4+456*dk_5-9*dk_6+576*dk_7+4*dk_8), strDynParams, strFilterMutabConfig, strFilterConstConfig);
+dk_10 = ComputeDynFcn(dIntegrAbsTime + dIntegrTimeStep,          dxState + (dIntegrTimeStep/820)*(1481*dk_1-81*dk_3+7104*dk_4-3376*dk_5+72*dk_6-5040*dk_7-60*dk_8+720*dk_9), strDynParams, strFilterMutabConfig, strFilterConstConfig);
 
-dk_2  = computeDynFcn(dStateTimetag + dIntegrTimestep*(4/27)  , dxState + (dIntegrTimestep*4/27)*dk_1);
-
-dk_3  = computeDynFcn(dStateTimetag + dIntegrTimestep*(2/9)   , dxState + (dIntegrTimestep/18)*(dk_1+3*dk_2));
-
-dk_4  = computeDynFcn(dStateTimetag + dIntegrTimestep*(1/3)   , dxState + (dIntegrTimestep/12)*(dk_1+3*dk_3));
-
-dk_5  = computeDynFcn(dStateTimetag + dIntegrTimestep*(1/2)   , dxState + (dIntegrTimestep/8)*(dk_1+3*dk_4));
-
-dk_6  = computeDynFcn(dStateTimetag + dIntegrTimestep*(2/3)   , dxState + (dIntegrTimestep/54)*(13*dk_1-27*dk_3+42*dk_4+8*dk_5));
-
-dk_7  = computeDynFcn(dStateTimetag + dIntegrTimestep*(1/6)   , dxState + (dIntegrTimestep/4320)*(389*dk_1-54*dk_3+966*dk_4-824*dk_5+243*dk_6));
-
-dk_8  = computeDynFcn(dStateTimetag + dIntegrTimestep         , dxState + (dIntegrTimestep/20)*(-234*dk_1+81*dk_3-1164*dk_4+656*dk_5-122*dk_6+800*dk_7));
-
-dk_9  = computeDynFcn(dStateTimetag + dIntegrTimestep*(5/6)   , dxState + (dIntegrTimestep/288)*(-127*dk_1+18*dk_3-678*dk_4+456*dk_5-9*dk_6+576*dk_7+4*dk_8));
-
-dk_10 = computeDynFcn(dStateTimetag + dIntegrTimestep         , dxState + (dIntegrTimestep/820)*(1481*dk_1-81*dk_3+7104*dk_4-3376*dk_5+72*dk_6-5040*dk_7-60*dk_8+720*dk_9));
-
-% Compute state Delta
-dDeltaState = dIntegrTimestep/840*(41*dk_1+27*dk_4+272*dk_5+27*dk_6+216*dk_7+216*dk_9+41*dk_10);
+% Compute propagated state
+dxStateNext = dxState + dIntegrTimeStep/840*(41*dk_1+27*dk_4+272*dk_5+27*dk_6+216*dk_7+216*dk_9+41*dk_10);
+dStateTimetag = dIntegrAbsTime + dIntegrTimeStep;
 
 end
