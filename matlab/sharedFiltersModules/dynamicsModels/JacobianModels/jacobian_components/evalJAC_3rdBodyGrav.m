@@ -46,7 +46,22 @@ if ui32NumOf3rdBodies > 0
     for idB = 1:ui32NumOf3rdBodies
 
         d3rdBodiesGM = strDynParams.strBody3rdData(idB).dGM;
-        dBodyPosToSC = dSCposition_IN - strDynParams.dBodyEphemerides(dAllocPtr : dAllocPtr + 2);
+        dBodyEphemeris = strDynParams.dBodyEphemerides(dAllocPtr : dAllocPtr + 2);
+
+        if d3rdBodiesGM <= 0.0
+            dAllocPtr = dAllocPtr + 3;
+            continue;
+        end
+
+        if ~(all(isfinite(dBodyEphemeris)) && any(abs(dBodyEphemeris) > eps('single')))
+            if coder.target('MATLAB')
+                warning('Failed to add 3rd body jacobian to total jacobian! Invalid inputs!')
+            end
+            dAllocPtr = dAllocPtr + 3;
+            continue;
+        end
+
+        dBodyPosToSC = dSCposition_IN - dBodyEphemeris;
 
         dNormBodyPosToSC = norm(dBodyPosToSC);
         dNormBodyPosToSC3 = dNormBodyPosToSC * dNormBodyPosToSC * dNormBodyPosToSC;
