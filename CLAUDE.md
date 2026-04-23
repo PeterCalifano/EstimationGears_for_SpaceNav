@@ -57,9 +57,9 @@ MATLAB tests live in `tests/matlab/` with subdirs per module (ekf_modules, jacob
 
 ### MATLAB Module Map (`matlab/`)
 
-- **`+filter_templates_impl/`** — Standard filter interface functions (MATLAB package namespace). All filters call into this package for modularity. The 6 core interface functions are: `computeDynFcn`, `computeDynMatrix`, `computeMeasPred`, `computeObsMatrix`, `computeMeasResiduals`, `computeProcessNoiseCov`. Also includes `ManageMeasLatency` for backward propagation to measurement timestamps. Tailoring is done via config structs, not by changing filter mechanization code. This function-based approach (vs OOP) maintains MATLAB Coder/Simulink compatibility.
+- **`+filter_tailoring/`** — Mission-specific tailoring layer. This package is intended to contain all and only the functions that a user is expected to edit manually to adapt the generic filter implementations: `BuildArchitectureTemplate`, `BuildInputStructsTemplate`, `ComputeMeasPred`, `ComputeObsMatrix`, `ComputeMeasResiduals`, and `ComputeProcessNoiseCov`. Shared/public filter entrypoints such as `ComputeDynFcn`, `ComputeDynMatrix`, `PropagateDyn`, and `ManageMeasLatency` live outside this package.
 - **`ekf_modules/`** — EKF implementations (see detailed breakdown below)
-- **`sigma_points_filters_modules/`** — Square-root UKF (`SR_UKF_kernel_SGNexe3`) and adaptive SR-USKF (`adaptiveSRUSKF_ObsUp`); common subfolder has `computeFactorProcessNoiseCov`
+- **`sigma_points_filters_modules/`** — Square-root UKF (`SR_UKF_kernel_SGNexe3`) and adaptive SR-UKF observation update (`SR_UKF_Adaptive_ObsUp`); common subfolder has `computeFactorProcessNoiseCov`
 - **`srif_modules/`** — Square Root Information Filter via Givens rotations (`GivensRotSRIF`). Information form avoids explicit covariance inversion. Reference: Tapley 2004 ch5, Mourikis MSCKF 2007
 - **`batch_least_squares_modules/`** — `WeightedLS`, `RecursiveWeightedLS`, `solveNonlinLS` (Gauss-Newton), `SolveTLS` (total LS), `Regress1DLpNorm`, `POLRLSstep`, `LOESS`
 - **`sharedFiltersModules/`** — Shared building blocks (see detailed breakdown below)
@@ -90,7 +90,7 @@ Organized into subdirectories:
   - `STMmodels/`: `getDiscreteTimeSTM`
 - **`observationModels/`** — `AnalyticalCoBMeasModel` (center-of-brightness with pinhole camera), `ComputeCamRelPoses`, `Pixel2LoS_NoDistorsion`, `normalizedProjectIDP`/`pinholeProjectIDP`/`pinholeProjectSymHP` (projection models), IDP<->EP transforms. Subfolder `Jacobians/` has corresponding measurement Jacobians.
 - **`processNoise/`** — `GetDiscreteQforPosVelSNC` (SNC for pos/vel), `evalProcessNoiseResidualAccel`, `computeProcessNoiseCovGMresAccel` (Gauss-Markov), `evalMappedProcessNoiseFOGM`, `ComputeManoeuvreInputNoise`
-- **`integratorsModules/`** — `IntegratorStepRK4` (fixed-step RK4), `IntegratorStepRK8`, `ADIntegratorStepRK45` (adaptive RK45), `ADPropagationFcn`
+- **`integratorsModules/`** — `IntegratorStepRK4` (fixed-step RK4), `IntegratorStepRK8`, `ADIntegratorStepRK45` (adaptive RK45), `ADPropagationFcn`, `PropagateDyn`
 - **`adaptiveModules/`** — `AdaptMeasCov` (R adaptation via forgetting factor), `AdaptProcessCov` (Q adaptation), `AdaptQCovASNC`, `AdaptRQcovs` (joint R+Q)
 
 ### C++ (`src/`)
