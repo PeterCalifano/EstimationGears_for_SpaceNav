@@ -196,10 +196,8 @@ These are configured through `-D/--define` and live in CMake (not dedicated `bui
   adds `--extra-device-vectorization`.
 * `CUDA_USE_FAST_MATH=ON|OFF`:
   applies `--use_fast_math` to regular CUDA compilation.
-* `CUDA_PTX_USE_FAST_MATH=ON|OFF`:
-  applies `--use_fast_math` to PTX generation path.
 * `CUDA_NVCC_EXTRA_FLAGS="..."`:
-  appends extra NVCC flags to CUDA/PTX compilation.
+  appends extra NVCC flags to CUDA compilation.
 
 ### CUDA architecture detection
 
@@ -211,15 +209,6 @@ These are configured through `-D/--define` and live in CMake (not dedicated `bui
   * Orin / `tegra234` -> `87`
   * Thor / `tegra264` -> `101`
 * If auto-detection is unavailable or ambiguous, configure fails with guidance to set `CUDA_ARCHITECTURES` or `CMAKE_CUDA_ARCHITECTURES` explicitly.
-
-### OptiX preflight
-
-When `ENABLE_OPTIX=ON`, configure now fails before CUDA/OptiX SDK setup unless both of these are true under `src/` outside `src/bin/`:
-
-* at least one compilable library source exists (`*.cpp` or `*.cu`, excluding `*.ptx.cu`)
-* at least one PTX kernel exists (`*.ptx.cu`)
-
-This keeps the template strict and avoids misleading downstream OptiX/CUDA errors for header-only layouts or missing PTX kernels.
 
 ### TBB support
 

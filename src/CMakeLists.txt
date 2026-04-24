@@ -6,7 +6,6 @@ configure_file(config.h.in config.h)
 # Add src files to library
 set(SRC_PATTERN "*.cpp; *.cu")
 file(GLOB srcLibFiles RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} ${SRC_PATTERN})
-file(GLOB srcCudaFilesToPTX "*.ptx.cu")
 
 # Define INCLUDE_DIRECTORIES (subdirectories append to this)
 set(lib_name_INCLUDE_DIRS ${lib_name_INCLUDE_DIRS} ${CMAKE_CURRENT_SOURCE_DIR})
@@ -88,35 +87,6 @@ if (ENABLE_CUDA)
   target_link_libraries(${lib_name} ${lib_link_scope} ${CUDA_COMPILE_TARGET})
 endif()
 
-if(ENABLE_OPTIX)
-  if (lib_is_header_only)
-    message(FATAL_ERROR
-      "Internal configuration error: ENABLE_OPTIX passed the root preflight, "
-      "but ${lib_name} resolved to a header-only target in src/CMakeLists.txt.")
-  endif()
-
-  if (NOT srcCudaFilesToPTX)
-    message(FATAL_ERROR
-      "Internal configuration error: ENABLE_OPTIX passed the root preflight, "
-      "but no PTX kernel sources reached src/CMakeLists.txt.")
-  endif()
-
-  message("Library .cu kernels files to compile as PTX: ${srcCudaFilesToPTX}")
-  get_target_property(project_interface_INCLUDE_DIRS ${project_name}_include INTERFACE_INCLUDE_DIRECTORIES)
-  if (NOT project_interface_INCLUDE_DIRS)
-    set(project_interface_INCLUDE_DIRS "")
-  endif()
-
-  set(PTX_INCLUDE_DIRS
-      ${CUDAToolkit_INCLUDE_DIRS}
-      ${OptiX_INCLUDE_DIRS}
-      ${project_interface_INCLUDE_DIRS})
-
-  cuda_compile_and_embed(embedded_ptx_code ${sm_version} "${PTX_INCLUDE_DIRS}" ${srcCudaFilesToPTX})
-  target_sources(${lib_name} PRIVATE ${embedded_ptx_code})
-  target_link_libraries(${lib_name} ${lib_link_scope} ${OPTIX_COMPILE_TARGET})
-endif()
-
 if (ENABLE_OPENGL)
   target_link_libraries(${lib_name} ${lib_link_scope} ${OPENGL_COMPILE_TARGET})
 endif()
@@ -143,9 +113,6 @@ if (TARGET ${PROFILING_COMPILE_TARGET})
 endif()
 if (ENABLE_CUDA)
   list(APPEND installable_targets ${CUDA_COMPILE_TARGET})
-  if (ENABLE_OPTIX)
-    list(APPEND installable_targets ${OPTIX_COMPILE_TARGET})
-  endif()
 endif()
 if (ENABLE_OPENGL)
   list(APPEND installable_targets ${OPENGL_COMPILE_TARGET})

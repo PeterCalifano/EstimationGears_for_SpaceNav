@@ -19,22 +19,14 @@ if(NOT DEFINED CMAKE_INSTALL_PREFIX)
 endif()
 
 # Major options
-option(ENABLE_OPTIX "Enable OptiX" OFF)
 option(ENABLE_CUDA "Enable CUDA" OFF)
 option(BUILD_SHARED_LIBS "Build libraries as shared" ON)
 include(cmake/HandleOpenMP.cmake)
 
-set(languages CXX) # ACHTUNG: PTX code requires C language!
-
-if (ENABLE_OPTIX)
-  set(ENABLE_CUDA ON)
-endif()
+set(languages CXX)
 
 if (ENABLE_CUDA)
     list(APPEND languages CUDA)
-    if (ENABLE_OPTIX)
-      list(APPEND languages C)
-    endif()
 endif()
 
 # Add cmake folder to path
@@ -74,7 +66,6 @@ if (DEFINED LIB_NAMESPACE_OVERRIDE)
   set(LIB_NAMESPACE "${LIB_NAMESPACE_OVERRIDE}")
 endif()
 set(CUDA_COMPILE_TARGET "${LIB_NAMESPACE}_cuda_compile_interface")
-set(OPTIX_COMPILE_TARGET "${LIB_NAMESPACE}_optix_compile_interface")
 set(OPENGL_COMPILE_TARGET "${LIB_NAMESPACE}_opengl_compile_interface")
 set(LIB_COMPILE_TARGET "${LIB_NAMESPACE}_lib_compile_interface")
 set(SPDLOG_COMPILE_TARGET "${LIB_NAMESPACE}_spdlog_interface")
@@ -103,9 +94,8 @@ include(GNUInstallDirs)
 # Add cmake modules
 include(ExternalProject)
 
-# Add CUDA/OptiX tools
+# Add CUDA tools
 include(cmake/HandleCUDA.cmake)
-include(cmake/HandleOptiX.cmake)
 include(cmake/HandleTBB.cmake)
 
 # Add handle of python
@@ -172,7 +162,6 @@ endif()
 
 option(NO_OPTIMIZATION "Disable optimization flags" OFF)
 option(WARNINGS_ARE_ERRORS "Treat warnings as errors" OFF)
-option(USE_SYS_OPTIX_SDK "Use Optix system folder if specified" OFF)
 option(SANITIZE_BUILD "Enable sanitizers in build" OFF)
 set(SANITIZERS "address,undefined,leak" CACHE STRING "Sanitizers to enable when SANITIZE_BUILD is ON (comma-separated)")
 option(ENABLE_TBB "Enable Intel oneTBB support" OFF)
@@ -185,8 +174,7 @@ set(CPU_EXTRA_OPT_FLAGS "" CACHE STRING "Extra CPU optimization flags for GNU/Cl
 option(CUDA_ENABLE_FMAD "Enable fused multiply-add contraction in NVCC (--fmad=true)" ON)
 option(CUDA_ENABLE_EXTRA_DEVICE_VECTORIZATION "Enable NVCC extra device vectorization" OFF)
 option(CUDA_USE_FAST_MATH "Enable NVCC fast math in regular CUDA compilation" OFF)
-option(CUDA_PTX_USE_FAST_MATH "Enable NVCC fast math when compiling PTX kernels" ON)
-set(CUDA_NVCC_EXTRA_FLAGS "" CACHE STRING "Extra flags passed to NVCC for CUDA/PTX compilation")
+set(CUDA_NVCC_EXTRA_FLAGS "" CACHE STRING "Extra flags passed to NVCC for CUDA compilation")
 set(EXTRA_C_FLAGS "" CACHE STRING "Extra C compiler flags appended to project-managed flags")
 set(EXTRA_CXX_FLAGS "" CACHE STRING "Extra C++ compiler flags appended to project-managed flags")
 set(PYTHON_EXECUTABLE "python3") # Specify the Python executable to use
@@ -340,40 +328,9 @@ handle_spdlog(TARGET ${SPDLOG_COMPILE_TARGET})
 # Include cmake tools (depends on Catch2)
 include(cmake/cmake_utils.cmake)
 
-if(BUILD_AS_MAIN_PROJECT)
-  collect_project_source_inventory(
-    ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src"
-    COMPILED_SOURCES_OUT PROJECT_LIBRARY_COMPILED_SOURCES
-    PTX_SOURCES_OUT PROJECT_LIBRARY_PTX_SOURCES
-    HAS_COMPILED_SOURCES_OUT PROJECT_HAS_COMPILED_SOURCES
-    HAS_PTX_SOURCES_OUT PROJECT_HAS_PTX_SOURCES)
-
-  if(ENABLE_OPTIX)
-    if(NOT PROJECT_HAS_COMPILED_SOURCES)
-      message(FATAL_ERROR
-        "ENABLE_OPTIX=ON is not supported for header-only library layouts. "
-        "No compilable library sources (*.cpp or *.cu excluding *.ptx.cu) were found under src/ outside src/bin. "
-        "Add a compiled source file or disable ENABLE_OPTIX.")
-    endif()
-
-    if(NOT PROJECT_HAS_PTX_SOURCES)
-      message(FATAL_ERROR
-        "ENABLE_OPTIX=ON requires at least one PTX kernel source (*.ptx.cu) under src/ outside src/bin. "
-        "Add a PTX kernel file or disable ENABLE_OPTIX.")
-    endif()
-  endif()
-endif()
-
-# Configure CUDA/OptiX (creates interface targets even when disabled)
+# Configure CUDA (creates interface target even when disabled)
 handle_cuda(TARGET ${CUDA_COMPILE_TARGET} 
             MIN_VERSION 12.0)
-handle_optix(TARGET ${OPTIX_COMPILE_TARGET} 
-            CUDA_TARGET ${CUDA_COMPILE_TARGET})
-
-if (ENABLE_CUDA)
-  # Add tools to manage cuda and ptx
-  include(cmake/cmake_cuda_ptx_tools.cmake)
-endif()
 
 # Handle OpenGL (creates interface targets even when disabled)
 include(cmake/HandleOpenGL.cmake)
@@ -550,13 +507,6 @@ message(STATUS "CMAKE_CXX_COMPILER                        : ${CMAKE_CXX_COMPILER
 message(STATUS "CMAKE_CXX_COMPILER_ID type                : ${CMAKE_CXX_COMPILER_ID}")
 message(STATUS "CMAKE_CXX_COMPILER_VERSION                : ${CMAKE_CXX_COMPILER_VERSION}")
 
-if (ENABLE_OPTIX)
-  # C compiler
-  message(STATUS "CMAKE_C_COMPILER                          : ${CMAKE_C_COMPILER}")
-  message(STATUS "CMAKE_C_COMPILER_ID type                  : ${CMAKE_C_COMPILER_ID}")
-  message(STATUS "CMAKE_C_COMPILER_VERSION                  : ${CMAKE_C_COMPILER_VERSION}")
-endif()
-
 # CUDA arch and compiler
 if (ENABLE_CUDA)
   message(STATUS "CUDA enabled                             : ${ENABLE_CUDA}")
@@ -568,7 +518,6 @@ if (ENABLE_CUDA)
   message(STATUS "CUDA FMAD                                : ${CUDA_ENABLE_FMAD}")
   message(STATUS "CUDA extra device vectorization          : ${CUDA_ENABLE_EXTRA_DEVICE_VECTORIZATION}")
   message(STATUS "CUDA fast math (regular compile)         : ${CUDA_USE_FAST_MATH}")
-  message(STATUS "CUDA fast math (PTX compile)             : ${CUDA_PTX_USE_FAST_MATH}")
   message(STATUS "CUDA extra NVCC flags                    : ${CUDA_NVCC_EXTRA_FLAGS}")
 endif()
 message(STATUS "TBB enabled                              : ${ENABLE_TBB}")

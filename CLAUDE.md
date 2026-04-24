@@ -59,7 +59,7 @@ MATLAB tests live in `tests/matlab/` with subdirs per module (ekf_modules, jacob
 
 - **`+filter_tailoring/`** — Mission-specific tailoring layer. This package is intended to contain all and only the functions that a user is expected to edit manually to adapt the generic filter implementations: `BuildArchitectureTemplate`, `BuildInputStructsTemplate`, `ComputeMeasPred`, `ComputeObsMatrix`, `ComputeMeasResiduals`, and `ComputeProcessNoiseCov`. Shared/public filter entrypoints such as `ComputeDynFcn`, `ComputeDynMatrix`, `PropagateDyn`, and `ManageMeasLatency` live outside this package.
 - **`ekf_modules/`** — EKF implementations (see detailed breakdown below)
-- **`sigma_points_filters_modules/`** — Square-root UKF (`SR_UKF_kernel_SGNexe3`) and adaptive SR-UKF observation update (`SR_UKF_Adaptive_ObsUp`); common subfolder has `computeFactorProcessNoiseCov`
+- **`sigma_points_filters_modules/`** — Adaptive square-root UKF observation update (`SR_UKF_Adaptive_ObsUp`) plus the UD-form observation-update wrapper (`SRUSKF_UDcov_ObsUpDT`); common subfolder has `ComputeFactorProcessNoiseCov`
 - **`srif_modules/`** — Square Root Information Filter via Givens rotations (`GivensRotSRIF`). Information form avoids explicit covariance inversion. Reference: Tapley 2004 ch5, Mourikis MSCKF 2007
 - **`batch_least_squares_modules/`** — `WeightedLS`, `RecursiveWeightedLS`, `solveNonlinLS` (Gauss-Newton), `SolveTLS` (total LS), `Regress1DLpNorm`, `POLRLSstep`, `LOESS`
 - **`sharedFiltersModules/`** — Shared building blocks (see detailed breakdown below)
