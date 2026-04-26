@@ -587,7 +587,7 @@ if any(bMeasTypeFlags) % Run update step if measurements are available
     %%% Residual, Innovation and Cross covariance computation
     
     % Perform Least Squares problem squeeze
-    % [dTriangularObsMatrix] = GivensEliminateQR(dAllObservJac, true);
+    % [dTriangularObsMatrix, dOrthogonalQ] = GivensEliminateQR(dAllObservJac);
     % ui16ResAllocIdx % TODO, indexing should be prior this point, i.e. all measurements here are already in
     % place and only a 1:lastPtr should be needed.
 
