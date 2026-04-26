@@ -112,10 +112,8 @@ function dFogmRhs = EvalRHS_FOGM_(dxState, ui16StatesIdx, dTimeConst, strFilterM
 
 dTimeConst = ExpandTimeConst_(dTimeConst, numel(ui16StatesIdx));
 
-if isfield(strFilterMutabConfig, "bConsiderStatesMode")
-    bConsiderMask = strFilterMutabConfig.bConsiderStatesMode(ui16StatesIdx);
-    dTimeConst(bConsiderMask) = 0.0;
-end
+bConsiderMask = strFilterMutabConfig.bConsiderStatesMode(ui16StatesIdx);
+dTimeConst(bConsiderMask) = 0.0;
 
 dFogmRhs = evalRHS_DynFOGM(dxState(ui16StatesIdx), dTimeConst, bBetaVariant);
 

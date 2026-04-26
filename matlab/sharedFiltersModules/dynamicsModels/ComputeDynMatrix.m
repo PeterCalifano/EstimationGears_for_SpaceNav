@@ -117,10 +117,8 @@ end
 function dFogmJac = EvalJAc_FOGM_(dxState, ui16StatesIdx, dTimeConst, strFilterMutabConfig, bBetaVariant)
 dTimeConst = ExpandTimeConst_(dTimeConst, numel(ui16StatesIdx));
 
-if isfield(strFilterMutabConfig, "bConsiderStatesMode")
-    bConsiderMask = strFilterMutabConfig.bConsiderStatesMode(ui16StatesIdx);
-    dTimeConst(bConsiderMask) = 0.0;
-end
+bConsiderMask = strFilterMutabConfig.bConsiderStatesMode(ui16StatesIdx);
+dTimeConst(bConsiderMask) = 0.0;
 
 dFogmJac = evalJAC_DynFOGM(dxState, dTimeConst, ui16StatesIdx, bBetaVariant);
 
