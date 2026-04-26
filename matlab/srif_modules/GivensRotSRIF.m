@@ -10,17 +10,17 @@ function [dxPost, dSRInfoMatPost, dInfoVecPost, dErrorVec, dSqrtPxPost, dJcost] 
                                                                                                 ui32MaxStateSize, ...
                                                                                                 ui32MaxMeasSize) %#codegen
 arguments
-    dxPrior             (:,1) double {isvector}
-    dSRInfoMatPrior     (:,:) double {ismatrix, is}
-    dYobs               double
-    dHobsMatrix         double
-    bNPRIOR_INFO        (1,1) logical {isscalar, islogical} 
-    bRUN_WHITENING      (1,1) logical {isscalar, islogical} 
-    dMeasCovSR          double
-    ui32StateSize       uint32  = size(dxPrior, 1); 
-    ui32MeasSize        uint32  = size(dYobs, 1);
-    ui32MaxStateSize    uint32  = ui32StateSize;
-    ui32MaxMeasSize     uint32  = ui32MeasSize;
+    dxPrior             (:,1) double
+    dSRInfoMatPrior     (:,:) double
+    dYobs               (:,1) double
+    dHobsMatrix         (:,:) double
+    bNPRIOR_INFO        (1,1) logical
+    bRUN_WHITENING      (1,1) logical
+    dMeasCovSR          (:,:) double
+    ui32StateSize       (1,1) uint32 = uint32(size(dxPrior, 1))
+    ui32MeasSize        (1,1) uint32 = uint32(size(dYobs, 1))
+    ui32MaxStateSize    (1,1) uint32 = ui32StateSize
+    ui32MaxMeasSize     (1,1) uint32 = ui32MeasSize
 end
 %% PROTOTYPE
 % [dxPost, dSRInfoMatPost, dInfoVecPost, dErrorVec, dSqrtPxPost, dJcost] = GivensRotSRIF(dxPrior, ...
@@ -32,185 +32,133 @@ end
 %                                                                                        dMeasCovSR) %#codegen
 % -------------------------------------------------------------------------------------------------------------
 %% DESCRIPTION
-% Function providing the Least Squares solution for the Observation update in Square Root Information 
-% filtering via Givens Rotations. The algorithm exploits square root free varchol(iant (UD decomposition of the 
-% Information matrix and of the Information vector). Interface code is added in this version to enable use 
-% in Full covariance Square root covariance EKF. The SRIF code is then called. Prior information in input 
-% is used by default. Boolean flag "bNPRIOR_INFO" can be set to TRUE to ignore it and initialize the 
-% Information matrix and vector equal to (eps-machine) zeros.
-% NOTE: The function requires PRE-WHITENED inputs if bRUN_WHITENING is
-% false. Else, it is executed before Givens rotations.
-% REFERENCES:
-% 1) Statistical Orbit Determination, chapter 5, Tapley 2004, page 307
-%    Note: Tapley uselessly initializes matrices for temporary scalar
-%    variables. This is NOT done here.
-% 2) Example application 1: Square-Root Extended Information Filter for
-%    Visual-Inertial Odometry for Planetary Landing, Givens 2023
-% 3) Example application 2: A Multi-State Constraint Kalman Filter for
-%    Vision-aided Inertial Navigation, Mourikis 2007
-% -------------------------------------------------------------------------------------------------------------
-%% INPUT
-% dxPrior:         [Nx, 1]    State vector prior observation update
-% dSRInfoMatPrior: [Nx, Nx]   Square Root Information matrix prior 
-%                               observation update
-% dYobs:           [Ny, 1]    ("Actual") Observations to process
-% dHobsMatrix:     [Ny, Nx]   Observation matrix at measurement timetags
-% bNPRIOR_INFO:  [1]        Boolean flag to select if prior information is used
-% bRUN_WHITENING:  [1]        Boolean flag to enable pre-whitening 
-% dMeasCovSR:      [Ny, Ny]   Measurement noise covariance Square Root
+% Performs the SRIF observation update by stacking prior information and whitened measurement rows in the
+% augmented system [R z; H y], then triangularizing the measurement block with explicit Givens row
+% rotations. The pair-wise rotation application is delegated to the shared MathCore primitive
+% `ApplyGivensRot`.
+%
+% If `bNPRIOR_INFO` is true, the prior is replaced by a numerically safe `sqrt(eps) * I` initialization.
+% If `bRUN_WHITENING` is true, `dYobs` and `dHobsMatrix` are pre-whitened with `dMeasCovSR`.
 % -------------------------------------------------------------------------------------------------------------
 %% OUTPUT
-% dxPost:          [Nx, 1]    State vector post observation update
-% dSRInfoMatPost:  [Nx, Nx]   Square Root Information matrix post 
-%                               observation update
-% dInfoVecPost:    [Nx, 1]    Information vector post observation update
-% dErrorVec:       [Ny, 1]    Error vector post observation update (prior
-%                               information error + residuals) 
-% dSqrtPxPost:     [Nx, Nx]   Square Root covariance (if requested)
-% dJcost:          [1]        Square Sum of the errors (cost value)
+% dxPost          [Nx, 1]    State vector post observation update
+% dSRInfoMatPost  [Nx, Nx]   Upper-triangular square-root information matrix post observation update
+% dInfoVecPost    [Nx, 1]    Information vector post observation update, i.e. dSRInfoMatPost * dxPost
+% dErrorVec       [Ny, 1]    Post-fit residual/error vector stored in the eliminated measurement rows
+% dSqrtPxPost     [Nx, Nx]   Upper-triangular square-root covariance matrix
+% dJcost          [1]        Sum of squared post-fit residuals
 % -------------------------------------------------------------------------------------------------------------
 %% CHANGELOG
 % 02-12-2023    Pietro Califano     First prototype, basic functionality.
-%                                   Unit test with example from Tapley,
-%                                   chapter 5.6.6 (with prior info). Added
-%                                   pre-whitening functionality.
 % 05-12-2023    Pietro Califano     Added SR Covariance as output.
 % 24-02-2025    Pietro Califano     Update using new convention and static-sized operations
-% -------------------------------------------------------------------------------------------------------------
-%% DEPENDENCIES
-% [-]
-% -------------------------------------------------------------------------------------------------------------
-%% Future upgrades
-% 1) Rework for improved memory and computation speed
+% 24-04-2026    Pietro Califano     Reworked around explicit stacked SRIF triangularization and shared
+%                                   MathCore Givens-application primitive.
 % -------------------------------------------------------------------------------------------------------------
 
 %% Function code
-
-% TODO modify to use indexing for operations!
-
-% INPUT INTERFACE
-% Get sizes of arrays and checks
-% ui32StateSize = uint32(size(dxPrior, 1)); % TODO modify this
-% ui32MeasSize = uint32(size(dYobs, 1));
-
+% Validate active sizes against provided arrays.
 if coder.target("MATLAB") || coder.target("MEX")
-    assert(ui32MaxStateSize >= size(dSRInfoMatPrior, 1) && ui32MaxStateSize >= size(dSRInfoMatPrior, 2), 'Mean estimate and Covariance beyond maximum size!');
-    assert(ui32MaxStateSize >= size(dHobsMatrix, 2) && ui32MaxMeasSize >= size(dHobsMatrix, 1), 'State, residual vectors, Observation matrix sizes are not consistent!')
-    assert( size(dMeasCovSR,2) == size(dYobs, 1) );
- 
+    assert(ui32StateSize <= ui32MaxStateSize, 'ERROR: active SRIF state size exceeds declared maximum state size.');
+    assert(ui32MeasSize <= ui32MaxMeasSize, 'ERROR: active SRIF measurement size exceeds declared maximum measurement size.');
+    assert(size(dSRInfoMatPrior, 1) >= ui32StateSize && size(dSRInfoMatPrior, 2) >= ui32StateSize, ...
+        'ERROR: prior SR information matrix is smaller than the active state block.');
+    assert(size(dHobsMatrix, 1) >= ui32MeasSize && size(dHobsMatrix, 2) >= ui32StateSize, ...
+        'ERROR: observation matrix is smaller than the active measurement/state block.');
+    assert(size(dMeasCovSR, 1) >= ui32MeasSize && size(dMeasCovSR, 2) >= ui32MeasSize, ...
+        'ERROR: measurement square-root covariance is smaller than the active measurement block.');
 end
 
-% Initialize arrays
+dStateIdx = 1:double(ui32StateSize);
+dMeasIdx = 1:double(ui32MeasSize);
 dJcost = 0.0;
 
+dxPriorWork = dxPrior(dStateIdx);
+dYwork = dYobs(dMeasIdx);
+dHwork = dHobsMatrix(dMeasIdx, dStateIdx);
 
-if bRUN_WHITENING == true
-    % Measurements whitening
-    dYobs(1:ui32MeasSize) = dMeasCovSR(1:ui32MeasSize, 1:ui32MeasSize) \ dYobs(1:ui32MeasSize);
-    dHobsMatrix(1:ui32MeasSize, 1:ui32StateSize) = dMeasCovSR(1:ui32MeasSize,  1:ui32MeasSize) \ dHobsMatrix (1:ui32MeasSize, 1:ui32StateSize);
+if bRUN_WHITENING
+    dMeasCovSRwork = dMeasCovSR(dMeasIdx, dMeasIdx);
+    dYwork(:, :) = dMeasCovSRwork \ dYwork;
+    dHwork(:, :) = dMeasCovSRwork \ dHwork;
 end
 
-%% INITIALIZATION ROUTINE
-if bNPRIOR_INFO == true
-    % Initialize without prior information
-    dInfoD = eps * eye(ui32StateSize, ui32StateSize);
-    dInfoU = eye(ui32StateSize, ui32StateSize);
-    dInfoVec = zeros(ui32StateSize, 1);
+if bNPRIOR_INFO
+    % Initialize prior with jitter when no prior information is available, to ensure numerical stability of the Givens rotations
+    dSRInfoMatWork = sqrt(eps(class(dxPriorWork))) * eye(double(ui32StateSize));
+    dInfoVecPrior = zeros(double(ui32StateSize), 1);
 else
     % Compute Uprior, Dprior and InfoVecPrior using prior information
-    dInfoD = zeros(ui32StateSize, ui32StateSize);
-    dInvD = zeros(ui32StateSize, ui32StateSize);
-
-    for ui32Idn = 1:ui32StateSize
-        dInfoD(ui32Idn, ui32Idn) = dSRInfoMatPrior(ui32Idn, ui32Idn) * dSRInfoMatPrior(ui32Idn, ui32Idn); % dii = Rii^2
-        dInvD(ui32Idn, ui32Idn) = 1/sqrt(dInfoD(ui32Idn, ui32Idn));
-    end
-    dInfoU = dInvD * dSRInfoMatPrior; % D^(-1/2)*R;
-    dInfoVec = dInfoU * dxPrior; % U*x
+    dSRInfoMatWork = BuildUpperSRInfoFactor_(dSRInfoMatPrior(dStateIdx, dStateIdx));
+    dInfoVecPrior = dSRInfoMatWork * dxPriorWork;
 end
 
-% Initialize output
-dErrorVec = zeros(ui32MeasSize, 1);
+% Stack prior and measurement information in the augmented matrix
+dAugmented = zeros(double(ui32StateSize + ui32MeasSize), double(ui32StateSize + 1));
+dAugmented(dStateIdx, dStateIdx) = dSRInfoMatWork;
+dAugmented(dStateIdx, double(ui32StateSize) + 1) = dInfoVecPrior;
+dAugmented(double(ui32StateSize) + dMeasIdx, dStateIdx) = dHwork;
+dAugmented(double(ui32StateSize) + dMeasIdx, double(ui32StateSize) + 1) = dYwork;
 
-% SQUARE ROOT FREE GIVENS ROTATIONS ALGORITHM
-% Nested loops
-for ui32Idk = 1:1:ui32MeasSize
+% Apply Givens rotations (square-root free) to the measurement block of the augmented matrix
+for ui32IdMeas = uint32(1):ui32MeasSize
+    ui32WorkRow = ui32StateSize + ui32IdMeas;
 
-    dDeltaTmp = 1.0;
-
-    for ui32Idi = 1:1:ui32StateSize
-        if dHobsMatrix(ui32Idk, ui32Idi) == 0
-            continue; % No operation required
+    % Eliminate rows
+    for ui32IdState = uint32(1):ui32StateSize
+        
+        if dAugmented(ui32WorkRow, ui32IdState) == 0.0
+            continue;
         end
 
-        % Entry of Dpost diagonal
-        dDnewEntry = dInfoD(ui32Idi, ui32Idi) + dDeltaTmp * dHobsMatrix(ui32Idk, ui32Idi) * dHobsMatrix(ui32Idk, ui32Idi);
+        [dCosTheta, dSinTheta] = ComputeGivensRotValues([dAugmented(ui32IdState, ui32IdState); ...
+                                                dAugmented(ui32WorkRow, ui32IdState)]);
+
+        % Apply Givens rotation to the current state row and the current measurement row, across all columns of the augmented matrix
+        for ui32IdCol = ui32IdState:ui32StateSize + 1
+
+            [dAugmented(ui32IdState, ui32IdCol), ...
+             dAugmented(ui32WorkRow, ui32IdCol)] = ApplyGivensRot(dAugmented(ui32IdState, ui32IdCol), ...
+                                                                  dAugmented(ui32WorkRow, ui32IdCol), ...
+                                                                  dCosTheta, ...
+                                                                  dSinTheta);
         
-        % Compute Sbar (Check if it forms the Square Root Covariance) S(idi, idk)
-        dSbarTmp = dDeltaTmp * dHobsMatrix(ui32Idk, ui32Idi) / dDnewEntry;
-        
-        % Compute temporary residual
-        dyNewTmp = dYobs(ui32Idk) - dInfoVec(ui32Idi) * dHobsMatrix(ui32Idk, ui32Idi);
-        
-        % Add Information in Information vector
-        dInfoVec(ui32Idi) = dInfoVec(ui32Idi) + dyNewTmp * dSbarTmp;
-        
-        % Replace entries in dYobs, deltaTmp and Dpost
-        dYobs(ui32Idk) = dyNewTmp;
-        dDeltaTmp = dDeltaTmp * dInfoD(ui32Idi, ui32Idi)/dDnewEntry;
-        dInfoD(ui32Idi, ui32Idi) = dDnewEntry;
+        end
 
-        for ui32Idj = ui32Idi+1:1:ui32StateSize
-            % Hobsnew may be a scalar instead of matrix. It seems that it
-            % only serves as temporary storage
-            HobsNewTmp = dHobsMatrix(ui32Idk, ui32Idj) - dInfoU(ui32Idi, ui32Idj) * dHobsMatrix(ui32Idk, ui32Idi);
-            % Update entry of U matrix
-            dInfoU(ui32Idi, ui32Idj) = dInfoU(ui32Idi, ui32Idj) + HobsNewTmp * dSbarTmp; % SbarTmp is likely S(idk, idj) TBC
-            % Update entry of Observation matrix
-            dHobsMatrix(ui32Idk, ui32Idj) = HobsNewTmp;
+        dAugmented(ui32WorkRow, ui32IdState) = 0.0;
+    end
+end
 
-        end % info matrix columns j innermost loop
-    end % state vector i inner loop
+% Extract post-update information matrix, information vector, and post-fit residuals from the triangularized augmented matrix
+dSRInfoMatPost = triu(dAugmented(dStateIdx, dStateIdx));
+dSRInfoMatPost(abs(dSRInfoMatPost) < 1.5 * eps(class(dSRInfoMatPost))) = 0.0;
 
-    dErrorVec(ui32Idk) = sqrt(dDeltaTmp) * dYobs(ui32Idk);
-end % residuals k outer loop
+dInfoVecPost = dAugmented(dStateIdx, double(ui32StateSize) + 1);
+dInfoVecPost(abs(dInfoVecPost) < 1.5 * eps(class(dInfoVecPost))) = 0.0;
 
-% STATE VECTOR BACKSUBSTITUTION
-dxPost = dInfoU\dInfoVec;
+dxPost = dSRInfoMatPost \ dInfoVecPost;
 
-% OUTPUT INTERFACE
-dSRInfoMatPost = sqrt(dInfoD) * dInfoU;
-dInfoVecPost = dSRInfoMatPost * dxPost;
+dErrorVec = dAugmented(double(ui32StateSize) + dMeasIdx, double(ui32StateSize) + 1);
+dErrorVec(abs(dErrorVec) < 1.5 * eps(class(dErrorVec))) = 0.0;
 
 if nargout > 4
-    if nargout > 5
-        % Cost function value
-        for ui32Idk = 1:ui32MeasSize
-            dJcost = dJcost + dErrorVec(ui32Idk) * dErrorVec(ui32Idk);
-        end
-    end
-    % Compute Square Root covariance matrix
-    dSqrtPxPost = eye(ui32StateSize)/(dSRInfoMatPost);
+    dSqrtPxPost = eye(double(ui32StateSize)) / dSRInfoMatPost;
 else
-    dSqrtPxPost = zeros(ui32StateSize);
+    dSqrtPxPost = zeros(double(ui32StateSize));
+end
+
+if nargout > 5
+    dJcost = sum(dErrorVec .* dErrorVec);
 end
 
 end
 
+%% Internal function to compute the upper-triangular Cholesky factor of the prior information matrix, with jitter fallback
+function dSRInfoMatUpper = BuildUpperSRInfoFactor_(dSRInfoMatPrior)
 
+dInfoMatPrior = dSRInfoMatPrior' * dSRInfoMatPrior;
+dInfoMatPrior = 0.5 * (dInfoMatPrior + transpose(dInfoMatPrior));
+dSRInfoMatUpper = chol(dInfoMatPrior);
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+end
 

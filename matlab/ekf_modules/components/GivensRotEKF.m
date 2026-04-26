@@ -42,7 +42,7 @@ function [dxPost, dPxPost, dDxPost] = GivensRotEKF(dxPrior, ...
 % OPTIONS for ui8FILTER_TYPE: 
 % 0: Full Covariance
 % 1: UD Filtering
-% 2: Square Root covariance
+% 2: Square Root covariance (legacy TYPE2 currently expects a lower square-root covariance factor)
 % -------------------------------------------------------------------------------------------------------------
 %% INPUT
 % dxPrior:        [Nx, 1]    State vector prior observation update
@@ -90,6 +90,8 @@ if bNPRIOR_INFO == false
         dUxPrior = dPxPrior;
     elseif ui8FILTER_TYPE == 2
         % SQUARE ROOT COVARIANCE variant
+        % DEVNOTE: legacy TYPE2 currently expects a lower square-root covariance factor S such that P = S * S'.
+        % The SRIF/SRIS roadmap tracks rewriting this wrapper into explicit named interfaces.
         dSRInfoMatPrior = eye(ui32Nx)/dPxPrior;
     end
 
