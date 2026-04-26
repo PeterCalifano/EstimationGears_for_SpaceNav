@@ -1,105 +1,174 @@
-function dHobsMatrix = ComputeObsMatrix(~, ...
-    bValidMeasBool, ...
-    strMeasModelParams, ...
-    strFilterConfig) %#codegen
+function dHobsMatrix = ComputeObsMatrix(dxStateAtMeas, ...
+                                        bValidMeasBool, ...
+                                        strMeasModelParams, ...
+                                        strFilterConfig) %#codegen
+arguments
+    dxStateAtMeas
+    bValidMeasBool
+    strMeasModelParams
+    strFilterConfig
+end
 %% PROTOTYPE
-% dHobsMatrix = ComputeObsMatrix(~, ...
+% dHobsMatrix = ComputeObsMatrix(dxStateAtMeas, ...
 %                                bValidMeasBool, ...
 %                                strMeasModelParams, ...
-%                                strFilterConfig, ...
-%                                ui8MeasVecSize
-%                                ui8StateSize) %#codegen
+%                                strFilterConfig) %#codegen
 % ----------------------------------------------------------------------------------------------------------
 %% DESCRIPTION
 % Standard interface function of measurement models Observation matrix for filtering.
-% ----------------------------------------------------------------------------------------------------------
-%% INPUT
-% i_dxStateAtMeas
-% i_bValidMeasBool
-% STRUCT FIELDS: i_strFilterConfig
-%   strMeasIndex
-%       ui8AImeasIdx
-%       ui8CRAmeasIdx
-%   strStatesIdx
-%       ui8PosVelIdx
-%       ui8AImeasBiasIdx
-%       ui8CRAmeasBiasIdx
-%   ui8MeasVecSize
-% STRUCT FIELDS: i_strMeasModelParams
-%   dDCM_fromSCBtoCAM
-%   dDCM_fromECItoSCB
-%   dDCM_fromECItoECEF
-%   dMoonPos_IN
-%   ui8StatesIdx
-% ----------------------------------------------------------------------------------------------------------
-%% OUTPUT
-% out1 [dim] description
-% Name1                     []
-% Name2                     []
-% Name3                     []
-% Name4                     []
-% Name5                     []
-% Name6                     []
 % ----------------------------------------------------------------------------------------------------------
 %% CHANGELOG
 % 29-03-2024        Pietro Califano         First prototype coded. Not validated
 % 15-04-2024        Pietro Califano         Update based on new interfaces. Code execution verified.
 % 23-04-2026        Pietro Califano         Promote template entrypoint to capitalized public naming.
+% 24-04-2026        Pietro Califano         Align the tailoring hook with the imported FUTURE absolute and
+%                                           relative position Jacobians while keeping the generic linear
+%                                           observed-state fallback.
 % ----------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
-% 1) evalJAC_AbsPosInTargetFrame
-% 2) evalJAC_RelVisNavPosition
+% 1) PredictAbsPosInTargetFrame
+% 2) evalJAC_AbsPosInTargetFrame
+% 3) evalJAC_RelVisNavPosition
 % ----------------------------------------------------------------------------------------------------------
 %% Function code
 
-% TEMPORARY COMMENT
-% i_strFilterConfig.ui8MeasSize
-% i_strFilterConfig.strStatesIdx
-% i_strFilterConfig.strMeasVecIdx.ui8CRAmeasIdx
-% i_strFilterConfig.strMeasVecIdx.ui8AImeasIdx
-% i_strFilterConfig.ui8StateSize
-%
-% i_strMeasModelParams.dDCM_fromECItoECEF
-% i_strMeasModelParams.dDCM_fromSCBtoCAM;
-% i_strMeasModelParams.dDCM_fromECItoSCB;
-% i_strMeasModelParams.dMoonPos_IN;
+dHobsMatrix = zeros(strFilterConfig.ui8MeasVecSize, strFilterConfig.ui16StateSize);
 
-% o_dHobsMatrix = zeros(1:i_ui8MeasSize, 1:i_ui8StateSize);
-dHobsMatrix = zeros(strFilterConfig.ui8MeasVecSize, strFilterConfig.ui8StateSize);
-positionStateIdx = strFilterConfig.strStatesIdx.ui8posVelIdx(1:3);
-
-% Jacobian of position vector in ECEF with respect to state vector
-if all(bValidMeasBool(strFilterConfig.strMeasVecIdx.ui8AImeasIdx), 'all') == true
-
-    % Get measurement model input variables
-    dDCM_fromECItoECEF = strMeasModelParams.dDCM_fromECItoECEF;
-    biasStatesIdx = strFilterConfig.strStatesIdx.ui8AImeasBiasIdx;
-
-    [dPosObsMatrix, dBiasObsMatrix] = evalJAC_AbsPosInTargetFrame(dDCM_fromECItoECEF, ...
-        strFilterConfig.bAddMeasBias);
-
-    % Allocate jacobians
-    dHobsMatrix(strFilterConfig.strMeasVecIdx.ui8AImeasIdx, positionStateIdx) = dPosObsMatrix;
-    dHobsMatrix(strFilterConfig.strMeasVecIdx.ui8AImeasIdx, biasStatesIdx)    = dBiasObsMatrix;
-
+if isfield(strMeasModelParams, "ui16ObservedStateIdx")
+    dHobsMatrix = BuildObservedStateFallback_(strMeasModelParams, strFilterConfig);
+    return
 end
 
-% Jacobian of position vector in CAM with respect to state vector
-if all(bValidMeasBool(strFilterConfig.strMeasVecIdx.ui8CRAmeasIdx), 'all') == true
-
-        % Get measurement model input variables
-    dDCM_fromSCBtoCAM = strMeasModelParams.dDCM_fromSCBtoCAM;
-    dDCM_fromECItoSCB = strMeasModelParams.dDCM_fromECItoSCB;
-    biasStatesIdx = strFilterConfig.strStatesIdx.ui8CRAmeasBiasIdx;
-
-    [dPosObsMatrix, dBiasObsMatrix] = evalJAC_RelVisNavPosition(dDCM_fromSCBtoCAM, ...
-        dDCM_fromECItoSCB, ...
-        strFilterConfig.bAddMeasBias);
-
-    % Allocate jacobians
-    dHobsMatrix(strFilterConfig.strMeasVecIdx.ui8CRAmeasIdx, positionStateIdx) = dPosObsMatrix;
-    dHobsMatrix(strFilterConfig.strMeasVecIdx.ui8CRAmeasIdx, biasStatesIdx)    = dBiasObsMatrix;
-
+if coder.target('MATLAB') || coder.target('MEX')
+    assert(isfield(strFilterConfig, 'strMeasVecIdx'), ...
+        'ERROR: measurement tailoring requires strFilterConfig.strMeasVecIdx.');
+    assert(isfield(strFilterConfig, 'strStatesIdx') && isfield(strFilterConfig.strStatesIdx, 'ui8posVelIdx'), ...
+        'ERROR: measurement tailoring requires strFilterConfig.strStatesIdx.ui8posVelIdx.');
 end
 
+positionStateIdx = double(strFilterConfig.strStatesIdx.ui8posVelIdx(1:3));
+bAddMeasBias = ResolveLogicalField_(strFilterConfig, 'bAddMeasBias', false);
+
+ui8AImeasIdx = ResolveIndexField_(strFilterConfig.strMeasVecIdx, 'ui8AImeasIdx');
+if ~isempty(ui8AImeasIdx) && all(bValidMeasBool(double(ui8AImeasIdx)), 'all')
+    dDCM_TFfromW = ResolveField_(strMeasModelParams, {'dDCM_TFfromW', 'dDCM_fromECItoECEF'});
+    dRefRadius = ResolveFieldOrDefault_(strMeasModelParams, {'dRefRadius'}, 0.0);
+    dTargetPos_W = ResolveFieldOrDefault_(strMeasModelParams, {'dTargetPos_W', 'dTargetPosition_IN'}, zeros(3,1));
+    ui8AbsMeasModelVariant = uint8(ResolveFieldOrDefault_(strMeasModelParams, {'ui8AbsMeasModelVariant'}, uint8(0)));
+
+    if ui8AbsMeasModelVariant == 0
+        dAbsPositionArg = PredictAbsPosInTargetFrame(dxStateAtMeas(positionStateIdx), ...
+                                                     dDCM_TFfromW, ...
+                                                     dRefRadius, ...
+                                                     dTargetPos_W, ...
+                                                     zeros(3,1), ...
+                                                     ui8AbsMeasModelVariant);
+    else
+        [~, dAbsPositionArg] = PredictAbsPosInTargetFrame(dxStateAtMeas(positionStateIdx), ...
+                                                          dDCM_TFfromW, ...
+                                                          dRefRadius, ...
+                                                          dTargetPos_W, ...
+                                                          zeros(3,1), ...
+                                                          ui8AbsMeasModelVariant);
+    end
+
+    [dPosObsMatrix, dBiasObsMatrix] = evalJAC_AbsPosInTargetFrame(dAbsPositionArg, ...
+                                                                  dDCM_TFfromW, ...
+                                                                  bAddMeasBias, ...
+                                                                  ui8AbsMeasModelVariant);
+    dHobsMatrix(double(ui8AImeasIdx), positionStateIdx) = dPosObsMatrix;
+    dHobsMatrix = AssignBiasJacobian_(dHobsMatrix, ...
+                                      strFilterConfig.strStatesIdx, ...
+                                      'ui8AImeasBiasIdx', ...
+                                      ui8AImeasIdx, ...
+                                      dBiasObsMatrix);
+end
+
+ui8CRAmeasIdx = ResolveIndexField_(strFilterConfig.strMeasVecIdx, 'ui8CRAmeasIdx');
+if ~isempty(ui8CRAmeasIdx) && all(bValidMeasBool(double(ui8CRAmeasIdx)), 'all')
+    dDCM_CamFromSCB = ResolveField_(strMeasModelParams, {'dDCM_CamFromSCB', 'dDCM_fromSCBtoCAM'});
+    dDCM_SCBfromW = ResolveBodyDcm_(strMeasModelParams);
+
+    [dPosObsMatrix, dBiasObsMatrix] = evalJAC_RelVisNavPosition(dDCM_CamFromSCB, ...
+                                                                dDCM_SCBfromW, ...
+                                                                bAddMeasBias);
+    dHobsMatrix(double(ui8CRAmeasIdx), positionStateIdx) = dPosObsMatrix;
+    dHobsMatrix = AssignBiasJacobian_(dHobsMatrix, ...
+                                      strFilterConfig.strStatesIdx, ...
+                                      'ui8CRAmeasBiasIdx', ...
+                                      ui8CRAmeasIdx, ...
+                                      dBiasObsMatrix);
+end
+end
+
+function dHobsMatrix = BuildObservedStateFallback_(strMeasModelParams, strFilterConfig)
+dHobsMatrix = zeros(strFilterConfig.ui8MeasVecSize, strFilterConfig.ui16StateSize);
+ui16ObservedStateIdx = double(strMeasModelParams.ui16ObservedStateIdx(:));
+ui16NumRows = min(numel(ui16ObservedStateIdx), double(strFilterConfig.ui8MeasVecSize));
+
+for idRow = 1:ui16NumRows
+    dHobsMatrix(idRow, ui16ObservedStateIdx(idRow)) = 1.0;
+end
+end
+
+function dMatrix = AssignBiasJacobian_(dMatrix, strStatesIdx, charBiasFieldName, ui8MeasIdx, dBiasObsMatrix)
+if ~isfield(strStatesIdx, charBiasFieldName)
+    return
+end
+
+ui8BiasStateIdx = uint8(strStatesIdx.(charBiasFieldName)(:));
+if isempty(ui8BiasStateIdx)
+    return
+end
+
+dMatrix(double(ui8MeasIdx), double(ui8BiasStateIdx)) = dBiasObsMatrix;
+end
+
+function dValue = ResolveField_(strInput, cellFieldNames)
+for idField = 1:numel(cellFieldNames)
+    if isfield(strInput, cellFieldNames{idField})
+        dValue = strInput.(cellFieldNames{idField});
+        return
+    end
+end
+
+error('filter_tailoring:ComputeObsMatrix:MissingField', ...
+    'ERROR: missing measurement-model field. Expected one of: %s', ...
+    strjoin(cellFieldNames, ', '));
+end
+
+function dValue = ResolveFieldOrDefault_(strInput, cellFieldNames, dDefaultValue)
+for idField = 1:numel(cellFieldNames)
+    if isfield(strInput, cellFieldNames{idField})
+        dValue = strInput.(cellFieldNames{idField});
+        return
+    end
+end
+
+dValue = dDefaultValue;
+end
+
+function ui8Indices = ResolveIndexField_(strInput, charFieldName)
+if isfield(strInput, charFieldName)
+    ui8Indices = uint8(strInput.(charFieldName)(:));
+else
+    ui8Indices = uint8.empty(0, 1);
+end
+end
+
+function dDCM_SCBfromW = ResolveBodyDcm_(strMeasModelParams)
+if isfield(strMeasModelParams, 'dDCM_SCBiFromIN')
+    dDCM_SCBfromW = strMeasModelParams.dDCM_SCBiFromIN(:,:,1);
+    return
+end
+
+dDCM_SCBfromW = ResolveField_(strMeasModelParams, {'dDCM_fromECItoSCB'});
+end
+
+function bValue = ResolveLogicalField_(strInput, charFieldName, bDefaultValue)
+if isfield(strInput, charFieldName)
+    bValue = logical(strInput.(charFieldName));
+else
+    bValue = logical(bDefaultValue);
+end
 end
