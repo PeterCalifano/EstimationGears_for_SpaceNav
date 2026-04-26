@@ -1,204 +1,170 @@
-close all
-clear
-clc
+classdef testGivensRotUpdate < matlab.unittest.TestCase
+    methods (TestClassSetup)
+        function addProjectPaths(~)
+            charThisDir = fileparts(mfilename('fullpath'));
+            addpath(fullfile(charThisDir, '..', '..', '..'));
+            SetupPaths_EstimationGears;
+        end
+    end
 
-% Add paths for tests
-addpath(genpath("../../matlab/"))
-addpath(genpath("../../lib/UnitTesting4MATLAB/utils"))
+    methods (Test)
+        function testTapleyExampleMatchesFixtureAndCovariance(testCase)
+            [dxPrior, dPcov, dYobs, dHobsMatrix, dMeasCovSR] = BuildTapleyProblem_();
+            dSRInfoMatPrior = chol(inv(dPcov));
 
-% TEST SETUP
-% Reference: example from Tapley chapter 5.6.4
-% Inputs
-bNPRIOR_INFO = false;
-dYobs = [-1.1; 1.2; 1.8];
-dHobsMatrix = [1, -2;
-               2, -1;
-               1, 1];
+            [dxPost, dSRInfoMatPost, dInfoVecPost, dErrorVec, dSqrtPxPost, dJcost] = GivensRotSRIF(dxPrior, ...
+                dSRInfoMatPrior, ...
+                dYobs, ...
+                dHobsMatrix, ...
+                false, ...
+                false, ...
+                dMeasCovSR);
 
+            dxExpected = [1.00335913215659; 0.970062794753707];
+            dPxExpected = inv(inv(dPcov) + dHobsMatrix' * dHobsMatrix);
+
+            testCase.verifyEqual(dxPost, dxExpected, 'AbsTol', 1e-9);
+            testCase.verifyEqual(dInfoVecPost, dSRInfoMatPost * dxPost, 'AbsTol', 1e-12);
+            testCase.verifyEqual(dSqrtPxPost * dSqrtPxPost', dPxExpected, 'AbsTol', 1e-10);
+            testCase.verifyEqual(dJcost, sum(dErrorVec .* dErrorVec), 'AbsTol', 1e-12);
+        end
+
+        function testWhiteningAndLowerPriorFactorMatchWeightedLeastSquares(testCase)
+            dxPrior = [0.5; -0.2];
+            dPcov = [3.0, 0.4; 0.4, 2.0];
+            dYobs = [1.2; -0.7; 0.3];
+            dHobsMatrix = [1.0, 2.0; -1.0, 0.5; 0.5, -0.25];
+            dMeasCov = [2.0, 0.3, 0.0; 0.3, 1.5, 0.2; 0.0, 0.2, 1.0];
+            dMeasCovSR = chol(dMeasCov, 'lower');
+            dSRInfoMatPrior = chol(dPcov, 'lower') \ eye(2);
+
+            [dxPost, dSRInfoMatPost, dInfoVecPost, ~, dSqrtPxPost] = GivensRotSRIF(dxPrior, ...
+                dSRInfoMatPrior, ...
+                dYobs, ...
+                dHobsMatrix, ...
+                false, ...
+                true, ...
+                dMeasCovSR);
+
+            dInfoMatExpected = inv(dPcov) + dHobsMatrix' * (dMeasCov \ dHobsMatrix);
+            dPxExpected = inv(dInfoMatExpected);
+            dxExpected = dPxExpected * (inv(dPcov) * dxPrior + dHobsMatrix' * (dMeasCov \ dYobs));
+
+            testCase.verifyEqual(dxPost, dxExpected, 'AbsTol', 1e-10);
+            testCase.verifyEqual(dInfoVecPost, dSRInfoMatPost * dxPost, 'AbsTol', 1e-12);
+            testCase.verifyEqual(dSqrtPxPost * dSqrtPxPost', dPxExpected, 'AbsTol', 1e-10);
+        end
+
+        function testNoPriorWhitenedMatchesWeightedLeastSquares(testCase)
+            dxPrior = zeros(2, 1);
+            dYobs = [1.0; 2.0; 0.5];
+            dHobsMatrix = [1.0, 0.0; 0.0, 1.0; 1.0, 1.0];
+            dMeasCov = [1.0, 0.2, 0.0; 0.2, 2.0, 0.1; 0.0, 0.1, 1.5];
+            dMeasCovSR = chol(dMeasCov, 'lower');
+
+            [dxPost, dSRInfoMatPost, dInfoVecPost] = GivensRotSRIF(dxPrior, ...
+                eye(2), ...
+                dYobs, ...
+                dHobsMatrix, ...
+                true, ...
+                true, ...
+                dMeasCovSR);
+
+            dInfoMatExpected = dHobsMatrix' * (dMeasCov \ dHobsMatrix);
+            dxExpected = dInfoMatExpected \ (dHobsMatrix' * (dMeasCov \ dYobs));
+
+            testCase.verifyEqual(dxPost, dxExpected, 'AbsTol', 1e-10);
+            testCase.verifyEqual(dInfoVecPost, dSRInfoMatPost * dxPost, 'AbsTol', 1e-12);
+        end
+
+        function testGivensRotEKFParityAcrossFilterTypes(testCase)
+            dxPrior = [0.5; -0.2];
+            dPcov = [3.0, 0.4; 0.4, 2.0];
+            dYobs = [1.2; -0.7; 0.3];
+            dHobsMatrix = [1.0, 2.0; -1.0, 0.5; 0.5, -0.25];
+            dMeasCovSR = eye(3);
+            dSRInfoMatPrior = chol(inv(dPcov));
+
+            [dxSrif, dSRInfoMatPost, ~, ~, dSqrtPxPost] = GivensRotSRIF(dxPrior, ...
+                dSRInfoMatPrior, ...
+                dYobs, ...
+                dHobsMatrix, ...
+                false, ...
+                false, ...
+                dMeasCovSR);
+
+            dPxExpected = dSqrtPxPost * dSqrtPxPost';
+
+            for ui8FilterType = uint8(0:2)
+                if ui8FilterType == 0
+                    dInputTest = dPcov;
+                    dDxPrior = zeros(2);
+                elseif ui8FilterType == 1
+                    [dInputTest, dDxPrior] = UDdecomposition(dPcov);
+                else
+                    dInputTest = chol(dPcov, 'lower');
+                    dDxPrior = zeros(2);
+                end
+
+                [dxPost, dPxPost, dDxPost] = GivensRotEKF(dxPrior, ...
+                    dInputTest, ...
+                    dYobs, ...
+                    dHobsMatrix, ...
+                    false, ...
+                    false, ...
+                    dMeasCovSR, ...
+                    ui8FilterType, ...
+                    dDxPrior);
+
+                testCase.verifyEqual(dxPost, dxSrif, 'AbsTol', 1e-10);
+
+                if ui8FilterType == 1
+                    testCase.verifyEqual(dPxPost * dDxPost * dPxPost', dPxExpected, 'AbsTol', 1e-10);
+                elseif ui8FilterType == 2
+                    testCase.verifyEqual(dPxPost * dPxPost', dPxExpected, 'AbsTol', 1e-10);
+                else
+                    testCase.verifyEqual(dPxPost, dPxExpected, 'AbsTol', 1e-10);
+                end
+            end
+        end
+
+        function testModifiedAgeeTurnerMatchesGivensRotEKF(testCase)
+            [dxPrior, dPcov, dYobs, dHobsMatrix, dMeasCovSR] = BuildTapleyProblem_();
+            [dUprior, dDxPrior] = UDdecomposition(dPcov);
+
+            [dxPost, dPxPost, dDxPost] = GivensRotEKF(dxPrior, ...
+                dUprior, ...
+                dYobs, ...
+                dHobsMatrix, ...
+                false, ...
+                false, ...
+                dMeasCovSR, ...
+                uint8(1), ...
+                dDxPrior);
+
+            dyRes = dYobs - dHobsMatrix * dxPrior;
+            [dzPost, dUpost, ~, dDpost, dxErrState] = UDobsUpdate_ModAgeeTurner(dxPrior, ...
+                dUprior, ...
+                dDxPrior, ...
+                chol(dMeasCovSR), ...
+                dHobsMatrix, ...
+                dyRes, ...
+                false);
+
+            testCase.verifyEqual(dzPost, dxPost, 'AbsTol', 1e-10);
+            testCase.verifyEqual(dxErrState, dxPost - dxPrior, 'AbsTol', 1e-10);
+            testCase.verifyEqual(dPxPost * dDxPost * dPxPost', dUpost * dDpost * dUpost', 'AbsTol', 1e-10);
+        end
+
+    end
+end
+
+function [dxPrior, dPcov, dYobs, dHobsMatrix, dMeasCovSR] = BuildTapleyProblem_()
 dxPrior = [2; 2];
 dPcov = diag([100, 100]);
-
-dSroot = chol(dPcov, 'lower');
-dSRInfoMatPrior = dSroot^-1;
-dMeasCovSR = diag([1, 1, 1]);
-bRUN_WHITENING = false;
-bENABLE_EDITING = false;
-
-% Correct estimate after ith residual (FIXTURES)
-dxState_r0 = [2.17964071856287; 1.64071856287425]; 
-dxState_r1 = [1.1750640102856; 1.14176767288272]; 
-dxState_r2 = [1.00335913215659; 0.970062794753707];
-
-% Missing covariance fixture?
-% TODO
-
-dDefaultTol = 1e-9;
-
-%% test_GivensRotSRIF_withMexEquivalence
-
-tic
-% Algorithm test
-[dxPost, dSRInfoMatPost, dInfoVecPost, dErrorVec] = GivensRotSRIF(dxPrior, ...
-    dSRInfoMatPrior, ...
-    dYobs, ...
-    dHobsMatrix, ...
-    bNPRIOR_INFO, ...
-    bRUN_WHITENING,...
-    dMeasCovSR);
-toc
-
-assertDifference(dxPost, dxState_r2, dDefaultTol);
-
-if exist('GivensRotSRIF_MEX', 'file')
-    % MEX EQUIVALENCE TEST
-    tic
-    [dxPost_MEX, dSRInfoMatPost_MEX, dInfoVecPost_MEX, dErrorVec_MEX] = GivensRotSRIF_MEX(dxPrior, ...
-        dSRInfoMatPrior, ...
-        dYobs, ...
-        dHobsMatrix, ...
-        bNPRIOR_INFO, ...
-        bRUN_WHITENING,...
-        dMeasCovSR);
-    toc
-
-    % Test assertions
-    assertDifference(dxPost         , dxPost_MEX);
-    assertDifference(dSRInfoMatPost , dSRInfoMatPost_MEX);
-    assertDifference(dInfoVecPost   , dInfoVecPost_MEX  );
-    assertDifference(dErrorVec      , dErrorVec_MEX     );
-
-else
-    warning('MEx equivalence test skipped due to missing function.')
+dYobs = [-1.1; 1.2; 1.8];
+dHobsMatrix = [1, -2; ...
+               2, -1; ...
+               1, 1];
+dMeasCovSR = eye(3);
 end
-
-
-%% test_GivensRotEKFvsSRIF_TYPE0
-% TODO
-ui8FILTER_TYPE = uint8(0);
-% Test to do for complete coverage:
-% 0) Full covariance passing Pcov
-% 1) UD passing UD decomposition
-% 2) Square root covariance passing Sroot
-% All must return the same result
-
-tic
-if ui8FILTER_TYPE == 0
-    dInputTest = dPcov;
-    dDxPrior = zeros(2);
-
-elseif ui8FILTER_TYPE == 2
-    dInputTest = dSroot;
-    dDxPrior = zeros(2);
-
-elseif ui8FILTER_TYPE == 1
-    [dInputTest, dDxPrior] = UDdecomposition(dPcov);
-end
-
-
-% Call GivensRotEKF
-[dxPost, dPxPost, dDxPost] = GivensRotEKF(dxPrior, ...
-    dInputTest, ...
-    dYobs, ...
-    dHobsMatrix, ...
-    bNPRIOR_INFO, ...
-    bRUN_WHITENING, ...
-    dMeasCovSR, ...
-    ui8FILTER_TYPE, ...
-    dDxPrior);
-
-toc
-
-% Algorithm test
-[dxPost_SRIF, dSRInfoMatPost_SRIF, dInfoVecPost_SRIF, dErrorVec_SRIF] = GivensRotSRIF(dxPrior, ...
-    dSRInfoMatPrior, ...
-    dYobs, ...
-    dHobsMatrix, ...
-    bNPRIOR_INFO, ...
-    bRUN_WHITENING,...
-    dMeasCovSR);
-
-assertDifference(dxPost, dxState_r2, dDefaultTol);
-
-% Test assertions
-assertDifference(dxPost, dxState_r2, dDefaultTol);
-assertDifference(dxPost, dxPost_SRIF, dDefaultTol);
-
-% TODO add assertion on covariance
-
-dSpost = dSRInfoMatPost_SRIF^-1;
-dPxPost_ref = dSpost * dSpost';
-
-% Discrepancy between GivensRotSRIF and GivensRotEKF should be a numerical zero
-if ui8FILTER_TYPE == 2
-    dPxPost* dPxPost'- dPxPost_ref %#ok<*NOPTS>
-elseif ui8FILTER_TYPE == 0
-    dPxPost - dPxPost_ref
-elseif ui8FILTER_TYPE == 1
-    dPxPost * dDxPost * dPxPost' - dPxPost_ref
-end
-
-%% test_GivensRotEKF_ModifiedAgeeTurner_AgeeTurnerRank1Update
-ui8FILTER_TYPE = uint8(1);
-
-[dInputTest, dDxPrior] = UDdecomposition(dPcov);
-dUprior = dInputTest;
-
-% GivensEKF Algorithm test (reference)
-tic
-
-[dxPost, dPxPost, dDxPost] = GivensRotEKF(dxPrior, ...
-    dInputTest, ...
-    dYobs, ...
-    dHobsMatrix, ...
-    bNPRIOR_INFO, ...
-    bRUN_WHITENING, ...
-    dMeasCovSR, ...
-    ui8FILTER_TYPE, ...
-    dDxPrior);
-toc
-
-% Algorithm test: Modified Agee-Turner and (basic, No consider states) UD EKF update module
-dzPrior = dxPrior;
-dSRmeasCov = chol(dMeasCovSR);
-
-dyRes = dYobs - dHobsMatrix * dzPrior; % Evaluate residuals
-
-% Kalman gain check
-Kcheck = dPcov* dHobsMatrix' / (dHobsMatrix* dPcov *dHobsMatrix' + dMeasCovSR);
-
-[dzPost, dUpost, dK, dDpost] = UDobsUpdate_ModAgeeTurner(dzPrior, ...
-    dUprior, ...
-    dDxPrior, ...
-    dSRmeasCov, ...
-    dHobsMatrix, ...
-    dyRes, ...
-    bENABLE_EDITING)
-
-dzPrior + Kcheck * dyRes
-
-dErrState = dxPost - dzPost %% DEVNOTE: state update is incorrect. Error may be in the Kalman gain,
-% but does not influence the update of the UD factors, which are correct
-dErrCov = dPxPost* dDxPost * dPxPost' - dUpost * dDpost * dUpost' % PASSED
-% TODO: add test assertions
-
-% Algorithm test Agee-Turner
-% Execute Rank 1 update of UD factors through  Agee-Turner
-% algorithm and mean estimate update
-% bValidResiduals = true(Nres, 1);
-%
-% for idRes = 1:Nres
-%
-%     if bValidResiduals(idRes) == true
-%
-%         % Update UD factors of covariance and compute Kalman gain column
-%         dHrow = dHobs(idRes, :);
-%
-%         [dUpost, dDpost, dK(:, idRes)] = UDRank1Up_ModAgeeTurner(dUpost, dDpost, measCovRdiag(idRes), dHrow);
-%
-%
-%         dK(:, idRes)
-%     end
-%
-%     % Update mean state estimate using accepted residuals
-%     dzPost = dzPost + dK(:, idRes) * dyRes(idRes);
-% end

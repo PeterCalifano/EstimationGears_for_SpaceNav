@@ -1,3 +1,7 @@
+% DEPRECATED:
+% This legacy test depends on external .mat workspace fixtures.
+% Rework it to generated/builder test data before re-enabling it.
+
 close all
 clear
 % clc
@@ -1105,7 +1109,6 @@ end
 resY = Yobs - UVpixPrediction;
 
 end
-
 
 
 
