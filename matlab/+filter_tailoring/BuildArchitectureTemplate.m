@@ -1,69 +1,68 @@
-function [strFilterConstConfig] = BuildArchitectureTemplate(kwargs, config)
+function [strFilterConstConfig] = BuildArchitectureTemplate(kwargs)
 arguments
     kwargs.bWriteBusDefs        (1,1) {mustBeNumericOrLogical} = true;
     kwargs.charDefsOutputPath   {mustBeA(kwargs.charDefsOutputPath, ["string", "char"])} = "./bus_defs_EKF";
+    kwargs.ui16StateSize        (1,1) uint16 = 17
+    kwargs.bAddExponentialAtmosphData (1,1) logical = false
 end
-arguments
-    config.ui16StateSize (1,1) uint16 = 17
+%% CHANGELOG
+% 22-04-2026    Pietro Califano     Add reusable default architecture builder for standard filter structs.
+% 24-04-2026    Pietro Califano     Align sigma-point architecture metadata with the EKF-style template.
+% 24-04-2026    Pietro Califano     Align sigma-point runtime fields with the EKF-style template.
+% 26-04-2026    Pietro Califano     Remove template-mode selector; keep only explicit optional data flags.
+
+strFilterConstConfig.ui16StateSize = uint16(kwargs.ui16StateSize);
+strFilterConstConfig.ui32UnscentedNumSigmaPoints = uint32(2 * double(strFilterConstConfig.ui16StateSize) + 1);
+strFilterConstConfig.dUnscentedAlpha            = 1.0e-3;
+strFilterConstConfig.dUnscentedBeta             = 2.0;
+strFilterConstConfig.dUnscentedKappa            = 0.0;
+strFilterConstConfig.enumSigmaPointResidualMode = EnumSigmaPointResidualMode.ADDITIVE;
+strFilterConstConfig.bAddExponentialAtmosphData = kwargs.bAddExponentialAtmosphData;
+strFilterConstConfig.bUseGMbetaVariant = true;
+strFilterConstConfig.bOrbitStateOnly = false;
+strFilterConstConfig.bUseKilometersScale = false;
+strFilterConstConfig.bIncludeAdaptivityStep = true;
+strFilterConstConfig.enumMeasDelayManagementMode = EnumMeasDelayManagementMode.NONE;
+
+if coder.target('MATLAB') || coder.target('MEX')
+    assert(strFilterConstConfig.ui16StateSize >= uint16(17), ...
+        'ERROR: BuildArchitectureTemplate requires at least 17 current-state entries.');
 end
 
-% STATE MANAGEMENT
 strFilterConstConfig.ui16NumWindowPoses     = uint16(13); % Max number of poses in the sliding window
-strFilterConstConfig.ui16StateSize          = uint16(config.ui16StateSize);
 strFilterConstConfig.ui16WindowPoseSize     = uint16(7); % [r, q] Size of each state of sliding window
 strFilterConstConfig.ui16WindowStateCovSize = uint16(6); % [r, dTheta] Size of each covariance block of sliding window
 strFilterConstConfig.ui32WindowMaxSize      = uint32(strFilterConstConfig.ui16WindowPoseSize * strFilterConstConfig.ui16NumWindowPoses); % Total size of window
 strFilterConstConfig.ui32FullStateSize      = uint32(strFilterConstConfig.ui16StateSize) + strFilterConstConfig.ui32WindowMaxSize;
 strFilterConstConfig.ui32FullCovSize        = uint32(strFilterConstConfig.ui16StateSize) + uint32(strFilterConstConfig.ui16WindowStateCovSize * strFilterConstConfig.ui16NumWindowPoses);
 
-
 ui16VariablesWithoutNoise = uint16(7);
-strFilterConstConfig.ui32AdditionalInputCh = 3;
+strFilterConstConfig.ui32AdditionalInputCh = uint32(3);
+strFilterConstConfig.ui8NumOfInputNoiseChannels = uint8(uint32(strFilterConstConfig.ui16StateSize - ui16VariablesWithoutNoise) + ...
+                                                        strFilterConstConfig.ui32AdditionalInputCh);
+strFilterConstConfig.bAddVelocityInputNoise = true;
 
-strFilterConstConfig.ui8NumOfInputNoiseChannels = uint8(strFilterConstConfig.ui16StateSize - ui16VariablesWithoutNoise + ...
-                                                                strFilterConstConfig.ui32AdditionalInputCh);
-strFilterConstConfig.bUseGMbetaVariant          = true;
-strFilterConstConfig.bOrbitStateOnly            = false;
-strFilterConstConfig.bAddVelocityInputNoise     = true;
-strFilterConstConfig.bUseKilometersScale        = false;
-strFilterConstConfig.bIncludeAdaptivityStep     = true;
-strFilterConstConfig.enumMeasDelayManagementMode = EnumMeasDelayManagementMode.NONE;
-
-% State vector INDEX
 strStatesIdx.ui8posVelIdx        = uint8(1:6)';
 strStatesIdx.ui8attBiasDeltaIdx  = uint8(7:9)';
 strStatesIdx.ui8CoeffSRPidx      = uint8(10)';
-strStatesIdx.ui8ResidualAccelIdx = uint8(11:13)' ;
-strStatesIdx.ui8LidarMeasBiasIdx = uint8(14)'    ;
-strStatesIdx.ui8CenMeasBiasIdx   = uint8(15:16)' ;
+strStatesIdx.ui8ResidualAccelIdx = uint8(11:13)';
+strStatesIdx.ui8LidarMeasBiasIdx = uint8(14)';
+strStatesIdx.ui8CenMeasBiasIdx   = uint8(15:16)';
 strStatesIdx.ui8GravParamIdx     = uint8(17);
-% strStatesIdx.ui8CenMeasBiasIdx      = [] ;
 
-strStatesIdx = orderfields(strStatesIdx);
-strFilterConstConfig.strStatesIdx              = strStatesIdx;
-
-% TIME UPDATE
-strFilterConstConfig.ui8NumOf3rdBodies  = 1;
-
-% OBSERVATION UPDATE
-strFilterConstConfig.ui8RelDirDesign = uint8(1); % 0: StateAugmentation, 1: Backward Error Propagation (delayed-state update)
-strFilterConstConfig.bEstimateGravParam         = true;
-
-strFilterConstConfig.ui16MaxFeatureCount        = uint16(75); % MAX NUMBER of FEATURES active at the same time
-strFilterConstConfig.ui16MaxTrackLength         = uint16(strFilterConstConfig.ui16NumWindowPoses  + 1);  % Max number of frames through which a feature can be tracked
-% DEVNOTE: Max size of the residual vector given as 2*Max num of frames*Max num of features + lidar + centroiding
-% strFilterConstConfig.ui16MaxResidualsVecSize    = uint16(2 * strFilterConstConfig.ui16MaxTrackLength * ...
-%                                                         strFilterConstConfig.ui16MaxFeatureCount + 3);
-
-strFilterConstConfig.ui16MaxResidualsVecSize = 6;
-strFilterConstConfig.ui8CenCorrectionDesign     = uint8(0); % 0: (x,y) bias; 1: (mag,angle) bias
-strFilterConstConfig.ui8MeasVecSize             = uint8(6);
-strFilterConstConfig.dUnscentedAlpha            = 1.0e-3;
-strFilterConstConfig.dUnscentedBeta             = 2.0;
-strFilterConstConfig.dUnscentedKappa            = 0.0;
+strFilterConstConfig.strStatesIdx = orderfields(strStatesIdx);
+strFilterConstConfig.ui8NumOf3rdBodies = uint8(1);
+strFilterConstConfig.ui8RelDirDesign = uint8(1); % 0: StateAugmentation, 1: Backward Error Propagation
+strFilterConstConfig.bEstimateGravParam = true;
+strFilterConstConfig.ui16MaxFeatureCount = uint16(75);
+strFilterConstConfig.ui16MaxTrackLength = uint16(strFilterConstConfig.ui16NumWindowPoses + 1);
+strFilterConstConfig.ui16MaxResidualsVecSize = uint16(6);
+strFilterConstConfig.ui8CenCorrectionDesign = uint8(0);
+strFilterConstConfig.ui8MeasVecSize = uint8(6);
 
 if strFilterConstConfig.bEstimateGravParam
     strFilterConstConfig.ui8NumOfInputNoiseChannels = strFilterConstConfig.ui8NumOfInputNoiseChannels + 1;
     strFilterConstConfig.ui32AdditionalInputCh = strFilterConstConfig.ui32AdditionalInputCh + 1;
 end
+
 end
