@@ -98,7 +98,6 @@ end
 
 % Normalize the incoming square-root covariance representation
 dSqrtStateCovPrior = NormalizeSqrtFactorForm_(dxStateSqrtCov, ui16StateSize);
-dStateCovPrior = dSqrtStateCovPrior' * dSqrtStateCovPrior;
 
 % Resolve the measurement vector and validity mask
 dyMeasVec = strMeasBus.dyMeasVec(1:double(ui8MeasVecSize));
@@ -231,7 +230,6 @@ if bEnableEditing
 
     if bRejectMeasurement
         dAllPriorResVector(bActiveMeasMask) = 0.0;
-        dAllPriorResVector(bActiveMeasMask) = 0.0;
         dKalmanGain(:, bActiveMeasMask) = 0.0;
     end
 end
@@ -246,24 +244,32 @@ end
 
 dxStatePost(:) = dxState + dxErrState;
 
-if any(strFilterMutabConfig.bConsiderStatesMode)
-    
-    % Apply consider-reset in posterior covariance correction in covariance form, then factorize back
-    dStateCovPost = dStateCovPrior - dKalmanGain(:, bActiveMeasMask) * dPyyActive * dKalmanGain(:, bActiveMeasMask)';
+%%% Upper-root Schmidt covariance update. With Pyy = Syy' * Syy, downdate by K*Syy'.
+dSqrtStateCovPost = dSqrtStateCovPrior;
 
-    dStateCovPost = 0.5 .* (dStateCovPost + dStateCovPost');
+% Compute update vector U1
+dUpdateVectors = dKalmanGain(:, bActiveMeasMask) * dSqrtSyyActive';
 
-    bConsiderStatesMode = strFilterMutabConfig.bConsiderStatesMode;
-    dxStatePost(bConsiderStatesMode) = dxState(bConsiderStatesMode);
-    dStateCovPost(bConsiderStatesMode, bConsiderStatesMode) = dStateCovPrior(bConsiderStatesMode, bConsiderStatesMode);
-
-    dxStateSqrtCovPost = FactorizeCovariance_(dStateCovPost, dSqrtStateCovPrior);
-
-else
-    % Update square-root covariance
-
+% Run sequence of updates
+for idMeas = 1:size(dUpdateVectors, 2)
+    dSqrtStateCovPost = cholupdate(dSqrtStateCovPost, dUpdateVectors(:, idMeas), '-');
 end
 
+if any(strFilterMutabConfig.bConsiderStatesMode)
+
+    % Reset consider-state dimensions to their prior covariance values by applying positive update
+    bConsiderStatesMode = strFilterMutabConfig.bConsiderStatesMode(:);
+    dConsiderUpdateVectors = zeros(size(dUpdateVectors));
+    dConsiderUpdateVectors(bConsiderStatesMode, :) = dUpdateVectors(bConsiderStatesMode, :);
+
+    for idMeas = 1:size(dConsiderUpdateVectors, 2)
+        dSqrtStateCovPost = cholupdate(dSqrtStateCovPost, dConsiderUpdateVectors(:, idMeas), '+');
+    end
+
+    dxStatePost(bConsiderStatesMode) = dxState(bConsiderStatesMode);
+end
+
+dxStateSqrtCovPost = dSqrtStateCovPost;
 
 end
 
@@ -324,35 +330,6 @@ if isequal(size(dInputMatrix), [double(ui16Size), double(ui16Size)])
     end
 end
 
-dNormalizedSqrt = FactorizeCovariance_(dInputMatrix, eye(ui16Size));
-
-end
-
-function dSqrtCov = FactorizeCovariance_(dCovariance, dFallbackSqrt)
-% Symmetrize before factorization, then add a tiny diagonal jitter if the nominal factorization
-% fails. Fall back to the previous square-root factor as the last safe option.
-
-dSqrtCov = zeros(size(dFallbackSqrt));
-dCovariance = 0.5 .* (dCovariance + dCovariance');
-[dSqrtCandidate, i32Flag] = chol(dCovariance, 'upper');
-
-if i32Flag == 0
-    dSqrtCov(:,:) = dSqrtCandidate;
-    return
-end
-
-dJitterScale = max(1.0, max(abs(diag(dCovariance))));
-[dSqrtCandidate, i32Flag] = chol(dCovariance + 1.0e-12 .* dJitterScale .* eye(size(dCovariance)), 'upper');
-
-if i32Flag ~= 0
-    if coder.target('MATLAB') || coder.target('MEX')
-        warning('SR_UKF_ObsUp:CovarianceFactorizationFallback', ...
-                'Posterior covariance factorization failed. Falling back to the previous square-root factor.');
-    end
-
-    dSqrtCov = dFallbackSqrt;
-else
-    dSqrtCov(:,:) = dSqrtCandidate;
-end
+dNormalizedSqrt = FactorizeCovariance(dInputMatrix, eye(double(ui16Size)));
 
 end
