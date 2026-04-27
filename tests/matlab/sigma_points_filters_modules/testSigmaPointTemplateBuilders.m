@@ -42,7 +42,7 @@ classdef testSigmaPointTemplateBuilders < matlab.unittest.TestCase
             testCase.verifyEqual(strFilterConstConfig.ui32FullCovSize, uint32(3));
             testCase.verifyEqual(strFilterConstConfig.ui16NumWindowPoses, uint16(0));
             testCase.verifyEqual(strFilterConstConfig.ui8NumOfInputNoiseChannels, uint8(0));
-            testCase.verifyTrue(isfield(strFilterConstConfig.strStatesIdx, 'ui8ActiveStateIdx'));
+            testCase.verifyTrue(isfield(strFilterConstConfig.strStatesIdx, 'ui8posVelIdx'));
             testCase.verifySize(strFilterMutabConfig.bConsiderStatesMode, [3, 1]);
             testCase.verifySize(strMeasModelParams.dFlowSTM, [3, 3]);
             testCase.verifySize(strMeasBus.dyMeasVec, [2, 1]);
