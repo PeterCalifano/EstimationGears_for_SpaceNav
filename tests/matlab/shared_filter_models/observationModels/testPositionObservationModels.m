@@ -50,25 +50,27 @@ classdef testPositionObservationModels < matlab.unittest.TestCase
         end
 
         function testTemplateHookUsesObservedStateSelection(testCase)
-            dxStateAtMeas = [1.0; 2.0; 3.0];
+            dxStateAtMeas = [1.0; 2.0; 3.0; 4.0; 5.0; 6.0];
             bValidMeasBool = logical([true; false]);
 
-            strFilterConfig = struct();
-            strFilterConfig.ui8MeasVecSize = uint8(2);
-            strFilterConfig.ui16StateSize = uint16(3);
-            strFilterConfig.strStatesIdx.ui8ActiveStateIdx = uint8([1; 3]);
-
+            strFilterMutabConfig = struct();
+            strFilterConstConfig = struct();
+            strFilterConstConfig.ui8MeasVecSize = uint8(2);
+            strFilterConstConfig.ui16StateSize = uint16(6);
+            strFilterConstConfig.strStatesIdx.ui8posVelIdx = uint8((1:6).');
             strMeasModelParams = struct();
 
             [dyMeasPred, bValidPrediction, dHobsMatrix] = ...
                 filter_tailoring.ComputeMeasPredAndObsJacobian(dxStateAtMeas, ...
                                                                bValidMeasBool, ...
                                                                strMeasModelParams, ...
-                                                               strFilterConfig);
+                                                               strFilterMutabConfig, ...
+                                                               strFilterConstConfig);
 
-            testCase.verifyEqual(dyMeasPred, [1.0; 3.0], 'AbsTol', 1e-12);
+            testCase.verifyEqual(dyMeasPred, [1.0; 2.0], 'AbsTol', 1e-12);
             testCase.verifyEqual(bValidPrediction, bValidMeasBool);
-            testCase.verifyEqual(dHobsMatrix, [1.0, 0.0, 0.0; 0.0, 0.0, 1.0], 'AbsTol', 1e-12);
+            testCase.verifyEqual(dHobsMatrix, [1.0, 0.0, 0.0, 0.0, 0.0, 0.0; ...
+                                               0.0, 1.0, 0.0, 0.0, 0.0, 0.0], 'AbsTol', 1e-12);
         end
 
     end

@@ -57,11 +57,12 @@ strFilterConstConfig.ui16MaxResidualsVecSize = uint16(max(1, min(double(ui16Stat
 strFilterConstConfig.ui8CenCorrectionDesign = uint8(0);
 
 strStatesIdx = struct();
-if ui16StateSize >= uint16(6)
+if ui16StateSize >= uint16(6) && numel(ui16MeasStateIdx) <= 6
     strStatesIdx.ui8posVelIdx = uint8(1:6)';
+    strStatesIdx.ui8posVelIdx(1:numel(ui16MeasStateIdx)) = uint8(ui16MeasStateIdx(:));
+else
+    strStatesIdx.ui8posVelIdx = uint8(ui16MeasStateIdx(:));
 end
-
-strStatesIdx.ui8ActiveStateIdx = uint8(ui16MeasStateIdx(:));
 
 strFilterConstConfig.strStatesIdx = orderfields(strStatesIdx);
 
