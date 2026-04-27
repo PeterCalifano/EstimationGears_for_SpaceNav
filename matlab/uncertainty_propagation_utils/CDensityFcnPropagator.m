@@ -373,12 +373,11 @@ classdef CDensityFcnPropagator
                                                             ui32NumOfSigmaPoints, ...
                                                             dPerturbScale)%#codegen
             arguments
-                dxMean                  (:,1) double {isvector, mustBeReal}
-                dxCovariance            (:,:) double {ismatrix, mustBeReal}
+                dxMean                  (:,1) double {mustBeReal, mustBeNumeric}
+                dxCovariance            (:,:) double {mustBeReal, mustBeNumeric}
                 ui32NumOfSigmaPoints    (1,1) uint32 {mustBeGreaterThan(ui32NumOfSigmaPoints, 0)}
                 dPerturbScale           (1,1) double {mustBeReal, mustBeGreaterThan(dPerturbScale, 0.0)}
             end
-
             %% PROTOTYPE
             % [dSigmaPointsSet] = GenerateSigmaPointsSet(dxMean, ...
             %                                           dxCovariance, ...
@@ -389,8 +388,8 @@ classdef CDensityFcnPropagator
             % 
             % -------------------------------------------------------------------------------------------------------------
             %% INPUT
-            % dxMean                  (:,1) double {isvector, mustBeReal}
-            % dxCovariance            (:,:) double {ismatrix, mustBeReal}
+            % dxMean                  (:,1) double {mustBeReal, mustBeNumeric}
+            % dxCovariance            (:,:) double {mustBeReal, mustBeNumeric}
             % ui32NumOfSigmaPoints    (1,1) uint32 {mustBeGreaterThan(ui32NumOfSigmaPoints, 0)}
             % dPerturbScale           (1,1) double {mustBeReal, mustBeGreaterThan(dPerturbScale, 0.0)}
             % -------------------------------------------------------------------------------------------------------------
@@ -399,17 +398,26 @@ classdef CDensityFcnPropagator
             % -------------------------------------------------------------------------------------------------------------
             %% CHANGELOG
             % 17-08-2025    Pietro Califano     Renewed implementation from deprecated code.
+            % 27-04-2026    Pietro Califano     Avoid resizing the covariance input in-place so the
+            %                                   generator remains MATLAB Coder compatible.
             % -------------------------------------------------------------------------------------------------------------
             %% DEPENDENCIES
             % [-]
             % -------------------------------------------------------------------------------------------------------------
 
+            %% Function code
+            coder.inline('always');
+            dSqrtCovariance = zeros(size(dxCovariance));
+
             if istriu(dxCovariance)
                 % Already factorized as upper triangular, transpose
-                dxCovariance = transpose(dxCovariance);
+                dSqrtCovariance(:,:) = transpose(dxCovariance);
+                
             elseif not(istril(dxCovariance))
                 % Full covariance matrix, factorize cholesky
-                dxCovariance = chol(dxCovariance, 'lower');
+                dSqrtCovariance(:,:) = chol(dxCovariance, 'lower');
+            else
+                dSqrtCovariance(:,:) = dxCovariance;
             end
 
             % Initialize output
@@ -417,17 +425,16 @@ classdef CDensityFcnPropagator
             dSigmaPointsSet = zeros(ui32StateSize, ui32NumOfSigmaPoints);
 
             % Compute perturbations vectors
-            dDeltaX = dPerturbScale .* dxCovariance;
+            dDeltaX = dPerturbScale .* dSqrtCovariance;
 
             % Assign first Sigma point (Mean state)
             dSigmaPointsSet(:, 1) = dxMean(1:ui32StateSize);
 
             % Perturb state vector to get Sigma Points
-            % "Right-side" Sigma Points
-            dSigmaPointsSet(:, 2:ui32StateSize+1) = dxMean(1:ui32StateSize) + dDeltaX;
-
-            % "Left-side" Sigma Points
-            dSigmaPointsSet(:, ui32StateSize + 2:ui32NumOfSigmaPoints) = dxMean(1:ui32StateSize) - dDeltaX;
+            for idState = 1:double(ui32StateSize)
+                dSigmaPointsSet(:, 1 + idState) = dxMean(1:ui32StateSize) + dDeltaX(:, idState);
+                dSigmaPointsSet(:, 1 + double(ui32StateSize) + idState) = dxMean(1:ui32StateSize) - dDeltaX(:, idState);
+            end
 
 
         end
@@ -700,4 +707,3 @@ classdef CDensityFcnPropagator
     end
 
 end
-
