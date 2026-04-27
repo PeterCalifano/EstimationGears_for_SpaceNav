@@ -76,6 +76,7 @@ end
 % Resolve square-root covariance prior form for internal consistency
 dxStatePrior = dxState;
 dxStateSqrtCovPrior = NormalizeSqrtFactorForm_(dxStateSqrtCov, ui16StateSize);
+dxSigmaPointsPrior = zeros(double(ui16StateSize), double(ui32NumSigmaPoints));
 
 % Initialize variables
 dFlowSTM = eye(double(ui16StateSize));
@@ -87,6 +88,11 @@ dRemainingTime = dTargetTimetag - dStateTimetag(1);
 dTimeThreshold = coder.const(0.001 * eps);
 
 if abs(dRemainingTime) <= dTimeThreshold
+    % Initialize sigma points if no propagation is needed, then return
+    dxSigmaPointsPrior(:,:) = CDensityFcnPropagator.GenerateSigmaPointsSet(dxStatePrior, ...
+                                                                           dxStateSqrtCovPrior, ...
+                                                                           ui32NumSigmaPoints, ...
+                                                                           strFilterMutabConfig.dPerturbScale);
     return
 end
 
