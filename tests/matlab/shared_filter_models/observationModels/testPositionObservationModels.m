@@ -56,10 +56,9 @@ classdef testPositionObservationModels < matlab.unittest.TestCase
             strFilterConfig = struct();
             strFilterConfig.ui8MeasVecSize = uint8(2);
             strFilterConfig.ui16StateSize = uint16(3);
+            strFilterConfig.strStatesIdx.ui8ActiveStateIdx = uint8([1; 3]);
 
             strMeasModelParams = struct();
-            strMeasModelParams.ui16ObservedStateIdx = uint16([1; 3]);
-            strMeasModelParams.dMeasBias = [0.1; 0.2];
 
             [dyMeasPred, bValidPrediction, dHobsMatrix] = ...
                 filter_tailoring.ComputeMeasPredAndObsJacobian(dxStateAtMeas, ...
@@ -67,7 +66,7 @@ classdef testPositionObservationModels < matlab.unittest.TestCase
                                                                strMeasModelParams, ...
                                                                strFilterConfig);
 
-            testCase.verifyEqual(dyMeasPred, [1.1; 3.2], 'AbsTol', 1e-12);
+            testCase.verifyEqual(dyMeasPred, [1.0; 3.0], 'AbsTol', 1e-12);
             testCase.verifyEqual(bValidPrediction, bValidMeasBool);
             testCase.verifyEqual(dHobsMatrix, [1.0, 0.0, 0.0; 0.0, 0.0, 1.0], 'AbsTol', 1e-12);
         end

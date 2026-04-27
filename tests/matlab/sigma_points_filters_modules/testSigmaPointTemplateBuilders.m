@@ -12,11 +12,13 @@ classdef testSigmaPointTemplateBuilders < matlab.unittest.TestCase
                 filter_tailoring.BuildInputStructsTemplate(strFilterConstConfig);
 
             testCase.verifyEqual(strFilterConstConfig.ui32UnscentedNumSigmaPoints, uint32(35));
+            testCase.verifyEqual(strFilterConstConfig.enumFilterBackend, EnumFilterBackend.EKF_FULLCOV);
+            testCase.verifyEqual(strFilterConstConfig.enumSmoothingBackend, EnumSmoothingBackend.NONE);
             testCase.verifyClass(strFilterConstConfig.enumSigmaPointResidualMode, 'EnumSigmaPointResidualMode');
             testCase.verifyTrue(isfield(strFilterMutabConfig, 'bConsiderStatesMode'));
             testCase.verifyTrue(isfield(strFilterMutabConfig, 'bEnableProcessNoise'));
-            testCase.verifyTrue(isfield(strFilterMutabConfig, 'dsqrtQprocessNoiseCov'));
-            testCase.verifyTrue(isfield(strFilterMutabConfig, 'dsqrtRmeasNoiseCov'));
+            testCase.verifyTrue(isfield(strFilterMutabConfig, 'dSqrtQprocessNoiseCov'));
+            testCase.verifyTrue(isfield(strFilterMutabConfig, 'dSqrtRmeasNoiseCov'));
             testCase.verifyTrue(isfield(strFilterMutabConfig, 'dUnscentedWeightsMean'));
             testCase.verifyTrue(isfield(strFilterMutabConfig, 'dUnscentedWeightsCov'));
             testCase.verifyTrue(isfield(strFilterMutabConfig, 'ui32UnscentedNumSigmaPoints'));
@@ -62,6 +64,21 @@ classdef testSigmaPointTemplateBuilders < matlab.unittest.TestCase
             testCase.verifyTrue(isfield(strDynParamsWithAtm.strAtmExpModel, 'dH'));
         end
 
+        function testBuilderSelectsSRIFBackendWithoutChangingTailoringContract(testCase)
+            strFilterConstConfig = filter_tailoring.BuildArchitectureTemplate(ui16StateSize=uint16(17), ...
+                                                                             enumFilterBackend=EnumFilterBackend.SRIF, ...
+                                                                             enumSmoothingBackend=EnumSmoothingBackend.SRIS_SLIDEWINDOW);
+            [strFilterMutabConfig, strDynParams, strMeasModelParams, strMeasBus] = ...
+                filter_tailoring.BuildInputStructsTemplate(strFilterConstConfig);
+
+            testCase.verifyEqual(strFilterConstConfig.enumFilterBackend, EnumFilterBackend.SRIF);
+            testCase.verifyEqual(strFilterConstConfig.enumSmoothingBackend, EnumSmoothingBackend.SRIS_SLIDEWINDOW);
+            testCase.verifyTrue(isfield(strFilterMutabConfig, 'dSqrtRmeasNoiseCov'));
+            testCase.verifyTrue(isfield(strDynParams, 'dResidualAccelTimeConst'));
+            testCase.verifyTrue(isfield(strMeasModelParams, 'dFlowSTM'));
+            testCase.verifyTrue(isfield(strMeasBus, 'dyMeasVec'));
+        end
+
         function testProcessNoiseTemplateReturnsZeroWhenDisabled(testCase)
             strFilterConstConfig = filter_tailoring.BuildArchitectureTemplate(ui16StateSize=uint16(17));
             [strFilterMutabConfig, strDynParams, ~, ~] = filter_tailoring.BuildInputStructsTemplate(strFilterConstConfig);
@@ -70,13 +87,13 @@ classdef testSigmaPointTemplateBuilders < matlab.unittest.TestCase
                                                                         strDynParams, ...
                                                                         strFilterMutabConfig, ...
                                                                         strFilterConstConfig);
-            [dsqrtQprocessNoiseCov, dQprocessNoiseCovFromFactor] = ComputeFactorProcessNoiseCov(1.0, ...
+            [dSqrtQprocessNoiseCov, dQprocessNoiseCovFromFactor] = ComputeFactorProcessNoiseCov(1.0, ...
                                                                                                 strDynParams, ...
                                                                                                 strFilterMutabConfig, ...
                                                                                                 strFilterConstConfig);
 
             testCase.verifyEqual(dQprocessNoiseCov, zeros(17), 'AbsTol', 1e-12);
-            testCase.verifyEqual(dsqrtQprocessNoiseCov, zeros(17), 'AbsTol', 1e-12);
+            testCase.verifyEqual(dSqrtQprocessNoiseCov, zeros(17), 'AbsTol', 1e-12);
             testCase.verifyEqual(dQprocessNoiseCovFromFactor, zeros(17), 'AbsTol', 1e-12);
         end
 
@@ -137,15 +154,15 @@ classdef testSigmaPointTemplateBuilders < matlab.unittest.TestCase
                                                                         strDynParams, ...
                                                                         strFilterMutabConfig, ...
                                                                         strFilterConstConfig);
-            [dsqrtQprocessNoiseCov, dQprocessNoiseCovFromFactor] = ComputeFactorProcessNoiseCov(dDeltaTstep, ...
+            [dSqrtQprocessNoiseCov, dQprocessNoiseCovFromFactor] = ComputeFactorProcessNoiseCov(dDeltaTstep, ...
                                                                                                 strDynParams, ...
                                                                                                 strFilterMutabConfig, ...
                                                                                                 strFilterConstConfig);
 
             testCase.verifyEqual(dQprocessNoiseCov, dExpectedQprocessNoiseCov, 'AbsTol', 1e-12);
             testCase.verifyEqual(dQprocessNoiseCovFromFactor, dExpectedQprocessNoiseCov, 'AbsTol', 1e-12);
-            testCase.verifyTrue(istriu(dsqrtQprocessNoiseCov));
-            testCase.verifyEqual(dsqrtQprocessNoiseCov' * dsqrtQprocessNoiseCov, ...
+            testCase.verifyTrue(istriu(dSqrtQprocessNoiseCov));
+            testCase.verifyEqual(dSqrtQprocessNoiseCov' * dSqrtQprocessNoiseCov, ...
                                  dExpectedQprocessNoiseCov, ...
                                  'AbsTol', 1e-11);
         end
