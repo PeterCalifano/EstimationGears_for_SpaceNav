@@ -54,9 +54,9 @@ end
 % the covariance representation exposed at the interface.
 %
 % The prior U/D factors are converted to an upper-triangular square-root covariance, the shared
-% SR-UKF observation update is executed, and the posterior covariance is then mapped back to U/D
-% form. This keeps the UD path interoperable with the other modernized templates while avoiding a
-% second divergent observation-update implementation.
+% SR-UKF observation update is executed, and the posterior upper square-root covariance is then
+% mapped directly back to U/D form. This keeps the UD path interoperable with the other modernized
+% templates while avoiding a second divergent observation-update implementation.
 %
 % TODO: Replace this transitional wrapper with a native UD sigma-point update rather than interface-level UD compatibility.
 % -------------------------------------------------------------------------------------------------------------
@@ -64,6 +64,7 @@ end
 % 24-04-2026    Pietro Califano     Replace the legacy stub with a modern UD wrapper aligned with
 %                                   SR_UKF_ObsUp and the common tailoring interface.
 % 27-04-2026    Pietro Califano     Rename to SR_UKF_UDCov_ObsUp and document the transitional UD contract.
+% 27-04-2026    Pietro Califano     Use direct U-D decomposition from the posterior upper square-root covariance.
 % -------------------------------------------------------------------------------------------------------------
 
 %% Function code
@@ -96,11 +97,8 @@ end
                                 strFilterMutabConfig, ...
                                 strFilterConstConfig);
 
-% Re-build the posterior covariance from the updated square-root factor and decompose back to UD form for output
-dStateCovPost = dSqrtStateCovPost' * dSqrtStateCovPost;
-
-% TODO recompose UD factors directly from the updated square-root covariance without explicitly forming the dense covariance in between.
-[dUpost, dDpost] = UDdecomposition(RegularizeCovariance_(dStateCovPost));
+% Map the posterior upper square-root covariance back to U/D form without materializing P = S' * S.
+[dUpost, dDpost] = UDdecompositionFromUpperSqrtCov(dSqrtStateCovPost);
 dPyyResCov = dSqrtSyyResCov' * dSqrtSyyResCov;
 
 end
