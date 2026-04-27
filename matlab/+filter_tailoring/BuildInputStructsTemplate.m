@@ -33,7 +33,7 @@ ui8MeasVecSize = GetFieldOrDefault_(strFilterConstConfig, "ui8MeasVecSize", uint
 
 ui16DCMbufferLength = max(2, double(ui16NumWindowPoses) + 1);
 ui32NumSigmaPoints = uint32(2 * ui16StateSize + 1);
-[dUnscentedWeightsMean, dUnscentedWeightsCov, dPerturbScale, dsqrtWmWc, bIsW0negative] = ...
+[dUnscentedWeightsMean, dUnscentedWeightsCov, dPerturbScale, dSqrtWmWc, bIsW0negative] = ...
     BuildDefaultUnscentedWeights_(ui16StateSize, strFilterConstConfig);
 
 %% Mutable configuration
@@ -90,10 +90,10 @@ strFilterMutabConfig.ui8DecorrAlgorithmID = uint8(0);
 strFilterMutabConfig.ui32EstimationCameraID = uint32(1);
 strFilterMutabConfig.ui8MeasUpMode = uint8(0);
 strFilterMutabConfig.dSqrtRmeasNoiseCov = eye(double(ui8MeasVecSize));
-strFilterMutabConfig.dsqrtQprocessNoiseCov = zeros(ui16StateSize);
+strFilterMutabConfig.dSqrtQprocessNoiseCov = zeros(ui16StateSize);
 strFilterMutabConfig.dUnscentedWeightsMean = dUnscentedWeightsMean;
 strFilterMutabConfig.dUnscentedWeightsCov = dUnscentedWeightsCov;
-strFilterMutabConfig.dsqrtWmWc = dsqrtWmWc;
+strFilterMutabConfig.dSqrtWmWc = dSqrtWmWc;
 strFilterMutabConfig.bIsW0negative = bIsW0negative;
 strFilterMutabConfig.dPerturbScale = dPerturbScale;
 strFilterMutabConfig.ui32UnscentedNumSigmaPoints = ui32NumSigmaPoints;
@@ -206,7 +206,7 @@ else
 end
 end
 
-function [dWeightsMean, dWeightsCov, dPerturbScale, dsqrtWmWc, bIsW0negative] = ...
+function [dWeightsMean, dWeightsCov, dPerturbScale, dSqrtWmWc, bIsW0negative] = ...
         BuildDefaultUnscentedWeights_(ui16StateSize, strFilterConstConfig)
 dAlpha = GetFieldOrDefault_(strFilterConstConfig, "dUnscentedAlpha", 1.0e-3);
 dBeta = GetFieldOrDefault_(strFilterConstConfig, "dUnscentedBeta", 2.0);
@@ -226,11 +226,11 @@ dWeightsCov(2:end) = dWeightsMean(2:end);
 
 if coder.target('MATLAB') || coder.target('MEX')
     assert(sign(dWeightsMean(1)) == sign(dWeightsCov(1)), ...
-        'ERROR: the current dsqrtWmWc representation assumes equal sign for the first mean/covariance weights.');
+        'ERROR: the current dSqrtWmWc representation assumes equal sign for the first mean/covariance weights.');
 end
 
-dsqrtWmWc = zeros(ui32NumSigmaPoints, 2);
-dsqrtWmWc(:, 1) = sqrt(abs(dWeightsMean));
-dsqrtWmWc(:, 2) = sqrt(abs(dWeightsCov));
+dSqrtWmWc = zeros(ui32NumSigmaPoints, 2);
+dSqrtWmWc(:, 1) = sqrt(abs(dWeightsMean));
+dSqrtWmWc(:, 2) = sqrt(abs(dWeightsCov));
 bIsW0negative = dWeightsCov(1) < 0.0;
 end
