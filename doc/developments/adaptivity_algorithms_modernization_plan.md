@@ -18,35 +18,81 @@
 
 ## Stage 0: Inventory And Scope Freeze
 
-- [ ] Inventory every adaptive mechanism in the repo: adaptive measurement-noise estimation, adaptive process-noise estimation, ASNC-style process-noise estimation, outage handling, underweighting, consider-state triggering, and adaptive buffer/state update logic.
-- [ ] Classify each mechanism as `AdaptiveTuning` or `AdaptiveLogics`.
-- [ ] Classify each mechanism as immediate-policy logic or next-cycle tuning logic.
-- [ ] Mark each path as active and to be modernized, or legacy/deprecated and review-only.
-- [ ] Produce one review table with algorithm, callers, required inputs, internal state, outputs, estimator-family dependencies, and reference basis.
+- [x] Inventory every adaptive mechanism in the repo: adaptive measurement-noise estimation, adaptive process-noise estimation, ASNC-style process-noise estimation, outage handling, underweighting, consider-state triggering, and adaptive buffer/state update logic.
+- [x] Classify each mechanism as `AdaptiveTuning` or `AdaptiveLogics`.
+- [x] Classify each mechanism as immediate-policy logic or next-cycle tuning logic.
+- [x] Mark each path as active and to be modernized, or legacy/deprecated and review-only.
+- [x] Produce one review table with algorithm, callers, required inputs, internal state, outputs, estimator-family dependencies, and reference basis.
 
-- [ ] Gate: no implementation starts before the inventory table is complete.
+- [x] Gate: no implementation starts before the inventory table is complete.
+
+| Mechanism | Current Owner | Current Callers | Layer | Timing | Required Inputs | Owned State | Outputs | Estimator Dependency | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Adaptive measurement-noise covariance | `AdaptMeasCov` | `AdaptRQcovs`; no active SR-UKF kernel caller after `SR_UKF_ObsUp` externalization | `AdaptiveTuning` | next-cycle tuning | base `R`, forgetting factor, post residual, predicted measurement, sigma-point measurement cloud, sigma-point weights, valid-measurement mask | none currently explicit | adapted `R` block | sigma-point statistics today; should accept generic innovation/post-fit statistics | active algorithm, modernize before reintegration |
+| Adaptive process-noise covariance | `AdaptProcessCov` | `AdaptRQcovs`; no active SR-UKF kernel caller after `SR_UKF_ObsUp` externalization | `AdaptiveTuning` | next-cycle tuning | base `Q`, forgetting factor, residual, Kalman/update gain | none currently explicit | adapted `Q` block | gain-based filter statistics | active algorithm, modernize before reintegration |
+| ASNC process-noise estimation | `AdaptQCovASNC` | no stable architecture-level caller confirmed | `AdaptiveTuning` | next-cycle tuning | timestep, gain buffer, residual-covariance buffer, Q bounds, delta-state buffer, posterior covariance buffer | window buffers supplied externally today | discrete SNC covariance and process-noise covariance | position/velocity state convention | active algorithm candidate, isolate before integration |
+| Combined adaptive R/Q wrapper | `AdaptRQcovs` | no active estimator-kernel caller after SR-UKF cleanup | adapter over `AdaptiveTuning` | next-cycle tuning | statistics needed by `AdaptMeasCov` and `AdaptProcessCov`, enable flags | none currently explicit | adapted `R`, adapted `Q` | sigma-point wrapper | transitional legacy adapter, replace after standalone contracts exist |
+| Measurement editing/rejection | `EvaluateMeasRejectionProposal`, `ApplyMeasurementEditingPolicy` | EKF and sigma-point observation paths | `AdaptiveLogics` | immediate in-cycle policy | residual, Mahalanobis threshold, counters, max rejection count | editing counters in mutable filter config | accepted/rejected residual policy and updated counters | representation-neutral | active, keep external to kernels |
+| Measurement outage consider-state trigger | `EKF_SlideWindow_AdaptivityManagementStep` | EKF sliding-window step | `AdaptiveLogics` | immediate in-cycle policy | measurement-type flags, outage counters, patience, state index config | outage and underweight counters in mutable filter config | consider-state mask, reset bias states, updated counters | EKF state layout today | active behavior source, generalize later |
+| Underweighting after outage | `EKF_SlideWindow_AdaptivityManagementStep` | EKF sliding-window step | `AdaptiveLogics` | immediate in-cycle policy | underweight enable flag, counter, max duration, underweight coefficient | underweight counter in mutable filter config | measurement underweight coefficient and counter update | EKF wrapper today | active behavior source, generalize later |
 
 ## Stage 1: Reference Review And Intended Behavior
 
-- [ ] Review each adaptive algorithm against the relevant references and the repo's current intended use.
-- [ ] Define the mathematical purpose, invariants, valid input domain, numerical constraints, expected response direction, and degenerate/failure handling for each algorithm.
-- [ ] Decide explicitly what behavior is preserved, corrected, simplified, or removed.
+- [x] Review each adaptive algorithm against the relevant references and the repo's current intended use.
+- [x] Define the mathematical purpose, invariants, valid input domain, numerical constraints, expected response direction, and degenerate/failure handling for each algorithm.
+- [x] Decide explicitly what behavior is preserved, corrected, simplified, or removed.
 
-- [ ] Gate: each algorithm has a decision-complete behavioral spec.
+- [x] Gate: each algorithm has a decision-complete behavioral spec.
+
+| Mechanism | Purpose | Invariants | Valid Domain | Expected Response | Degenerate Handling | Decision |
+| --- | --- | --- | --- | --- | --- | --- |
+| Adaptive `R` | Tune measurement-noise covariance from post-fit residual statistics | symmetric covariance; updated valid block only; no hidden estimator mutation | nonempty valid-measurement mask, finite residuals, finite weights | residual growth increases relevant `R` entries; nominal residuals decay toward base/statistical value | no valid measurements returns input `R`; invalid covariance must be rejected or projected by the standalone algorithm | preserve purpose, make symmetry/PSD/bounds explicit |
+| Adaptive `Q` | Tune process-noise covariance from residual/update statistics | symmetric covariance; bounded to configured subspace | finite residual and update-gain statistics | systematic residual growth increases process-noise estimate in driven states | missing gain/statistics returns input `Q` with no-op status | preserve purpose, separate generic tuning from wrapper statistics |
+| ASNC | Estimate SNC process noise from correction/covariance windows | PSD covariance; explicit bounds; fixed state block ownership | filled or partially filled finite buffers with known sample count | larger correction energy increases SNC process noise within bounds | empty window returns prior/default and no-op status | preserve as standalone candidate; do not integrate until deterministic and randomized tests exist |
+| Editing/rejection | Reject or override outlier residuals using Mahalanobis policy | counter transitions deterministic; max-rejection override deterministic | finite residual, finite threshold, nonnegative counters | outliers rejected until override threshold; accepted measurements reset counters | invalid residual or disabled editing returns accepted/no-op policy | preserve current behavior, keep representation-neutral |
+| Outage/consider/underweight | Trigger conservative consider-state and underweight policies after measurement outage | counters saturate/reset deterministically; state resets are explicit wrapper actions | measurement-type flags and configured state indices present | outage increments counters and eventually raises consider/underweight actions | missing measurement fields should no-op with explicit status in standalone contract | preserve behavior source, move state-layout specifics into adapter |
 
 ## Stage 2: Standalone Interface Design
 
-- [ ] Define standalone contracts for each adaptive algorithm with explicit config parameters, runtime statistics, owned buffers/state, returned updated state, and returned actions or tuning values.
+- [x] Define standalone contracts for each adaptive algorithm with explicit config parameters, runtime statistics, owned buffers/state, returned updated state, and returned actions or tuning values.
 - [x] Keep the split explicit between reusable algorithm core, family-specific adapter, and future wrapper integration.
 - [x] Preserve the mixed timing model: immediate policy logic may act in-cycle, while covariance tuning updates apply to the next cycle.
-- [ ] Define separate standalone contracts for `AdaptiveTuning` and `AdaptiveLogics`, including their handoff responsibilities.
+- [x] Define separate standalone contracts for `AdaptiveTuning` and `AdaptiveLogics`, including their handoff responsibilities.
 
-- [ ] Gate: each adaptive algorithm can be exercised without calling EKF, UKF, UD, or SRIF step implementations directly.
+- [x] Gate: each adaptive algorithm can be exercised without calling EKF, UKF, UD, or SRIF step implementations directly.
+
+### Standalone Contract Sketch
+
+`AdaptiveTuning` algorithms should consume only:
+
+- immutable tuning configuration such as enable flags, forgetting factors, bounds, target blocks, and algorithm IDs
+- runtime statistics such as prior/post residuals, predicted measurement statistics, innovation covariance or square-root/information equivalent, update gain or update-equivalent statistics, and timing context
+- owned tuning state such as ASNC buffers, previous tuned values, and sample counters
+
+`AdaptiveTuning` algorithms should return:
+
+- updated tuning state
+- next-cycle covariance/noise tuning values
+- no-op/status flags explaining disabled, missing-data, bounded, or rejected updates
+
+`AdaptiveLogics` algorithms should consume only:
+
+- immutable policy configuration such as thresholds, patience, maximum consecutive rejection/outage counts, underweight coefficients, and state groups
+- runtime event statistics such as measurement availability, residual gates, validity masks, and timing context
+- owned policy state such as counters and active policy flags
+
+`AdaptiveLogics` algorithms should return:
+
+- updated policy state
+- immediate wrapper-level actions such as residual acceptance masks, underweight coefficients, consider-state masks, reset-state masks, and no-op/status flags
+
+Estimator wrappers must provide adapters from EKF, SR-UKF, UD, and SRIF statistics into these standalone inputs. The adaptive algorithms must not call estimator step implementations directly.
 
 ## Stage 3: Refactor And Isolate Algorithms
 
+- [x] Remove built-in adaptive `R`/`Q` mutation from the active SR-UKF observation update; `SR_UKF_ObsUp` now exposes residual, gain, error-state, and innovation square-root statistics for an external wrapper-level adaptivity step.
 - [ ] Refactor current implementations into standalone `AdaptiveTuning` and `AdaptiveLogics` modules.
-- [ ] Remove hidden coupling to observation-step internals.
+- [ ] Remove remaining hidden coupling to observation-step internals.
 - [ ] Make buffer ownership, reset behavior, clipping/bounds, no-op behavior, empty-history handling, and missing-measurement handling explicit.
 - [ ] Keep estimator-family specifics in thin adapters only where unavoidable.
 
