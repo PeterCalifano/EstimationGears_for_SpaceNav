@@ -37,24 +37,10 @@ if ~any(dQprocessNoiseCov, 'all')
     return
 end
 
-dSqrtQprocessNoiseCov = FactorizeCovariance_(dQprocessNoiseCov);
-
-end
-
-%% Internal function to compute the upper-triangular Cholesky factor of a covariance matrix, with jitter fallback
-function dSqrtCov = FactorizeCovariance_(dCovariance)
-dCovariance = 0.5 .* (dCovariance + transpose(dCovariance));
-[dSqrtCov, i32Flag] = chol(dCovariance, 'upper');
-
-if i32Flag == 0
-    return
-end
-
-dJitterScale = max(1.0, max(abs(diag(dCovariance))));
-[dSqrtCov, i32Flag] = chol(dCovariance + 1.0e-12 .* dJitterScale .* eye(size(dCovariance)), 'upper');
-
+[dSqrtQprocessNoiseCov, i32Flag] = FactorizeCovariance(dQprocessNoiseCov);
 if coder.target('MATLAB') || coder.target('MEX')
     assert(i32Flag == 0, ...
         'ERROR: ComputeFactorProcessNoiseCov failed to factorize the process-noise covariance.');
 end
+
 end

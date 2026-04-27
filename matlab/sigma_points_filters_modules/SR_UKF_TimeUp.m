@@ -199,7 +199,7 @@ if any(strFilterMutabConfig.bConsiderStatesMode)
     dxStatePrior(bConsiderStatesMode) = dxState(bConsiderStatesMode);
     dStateCovPrior(bConsiderStatesMode, bConsiderStatesMode) = dStateCovInput(bConsiderStatesMode, bConsiderStatesMode);
 
-    dxStateSqrtCovPrior(:,:) = FactorizeCovariance_(dStateCovPrior, dxStateSqrtCov);
+    dxStateSqrtCovPrior(:,:) = FactorizeCovariance(dStateCovPrior, dxStateSqrtCov);
     
     % Regenerate sigma points to reflect the consider-state reset
     dxSigmaPointsPrior(:,:) = CDensityFcnPropagator.GenerateSigmaPointsSet(dxStatePrior, ...
@@ -263,31 +263,6 @@ if coder.const(isequal(size(dInputMatrix), [double(ui16Size), double(ui16Size)])
 end
 
 % Factorize covariance if input is found to be non sqrt factor
-dNormalizedSqrt = FactorizeCovariance_(dInputMatrix, eye(ui16Size));
-
-end
-
-function dSqrtCov = FactorizeCovariance_(dCovariance, dFallbackSqrt)
-% Compute the upper-triangular Cholesky factor of a covariance matrix, with jitter fallback and optional
-
-dSqrtCov = zeros(size(dFallbackSqrt));
-dCovariance = 0.5 .* (dCovariance + dCovariance');
-
-[dSqrtCandidate, i32Flag] = chol(dCovariance, 'upper');
-
-if i32Flag == 0
-    dSqrtCov(:,:) = dSqrtCandidate;
-    return
-end
-
-% Add jitter to the covariance for stability and retry factorization
-dJitterScale = max(1.0, max(abs(diag(dCovariance))));
-[dSqrtCandidate, i32Flag] = chol(dCovariance + 1.0e-12 .* dJitterScale .* eye(size(dCovariance)), 'upper');
-
-if i32Flag == 0
-    dSqrtCov(:,:) = dSqrtCandidate;
-else
-    dSqrtCov = dFallbackSqrt;
-end
+dNormalizedSqrt = FactorizeCovariance(dInputMatrix, eye(double(ui16Size)));
 
 end
