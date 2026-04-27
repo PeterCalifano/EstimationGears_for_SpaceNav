@@ -1,25 +1,19 @@
 function [dyMeasPred, bValidPrediction, dHobsMatrix] = ComputeMeasPredAndObsJacobian(dxStateAtMeas, ...
                                                                                      bValidMeasBool, ...
                                                                                      strMeasModelParams, ...
-                                                                                     strFilterConfig) %#codegen
+                                                                                     strFilterMutabConfig, ...
+                                                                                     strFilterConstConfig) %#codegen
 arguments
-    dxStateAtMeas
-    bValidMeasBool
-    strMeasModelParams
-    strFilterConfig
+    dxStateAtMeas         (:,1) double {mustBeReal}
+    bValidMeasBool        (:,1) logical
+    strMeasModelParams    (1,1) struct
+    strFilterMutabConfig  (1,1) struct
+    strFilterConstConfig  (1,1) struct {coder.mustBeConst}
 end
 
-ui16MeasVecSize = double(strFilterConfig.ui8MeasVecSize);
-ui16StateSize = double(strFilterConfig.ui16StateSize);
-ui16MeasStateIdx = uint16((1:ui16MeasVecSize).');
-
-if isfield(strFilterConfig, "strStatesIdx")
-    if isfield(strFilterConfig.strStatesIdx, "ui8ActiveStateIdx")
-        ui16MeasStateIdx(:) = uint16(strFilterConfig.strStatesIdx.ui8ActiveStateIdx(1:ui16MeasVecSize));
-    elseif isfield(strFilterConfig.strStatesIdx, "ui8posVelIdx")
-        ui16MeasStateIdx(:) = uint16(strFilterConfig.strStatesIdx.ui8posVelIdx(1:ui16MeasVecSize));
-    end
-end
+ui16MeasVecSize = double(strFilterConstConfig.ui8MeasVecSize);
+ui16StateSize = double(strFilterConstConfig.ui16StateSize);
+ui16MeasStateIdx = uint16(strFilterConstConfig.strStatesIdx.ui8posVelIdx(1:ui16MeasVecSize));
 
 dyMeasPred = zeros(ui16MeasVecSize, 1);
 bValidPrediction = logical(bValidMeasBool(:));
