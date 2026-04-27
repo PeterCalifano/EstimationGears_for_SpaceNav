@@ -15,10 +15,12 @@ end
 % 22-04-2026    Pietro Califano     Add reusable default builders for standard filter input structs.
 % 23-04-2026    Pietro Califano     Promote template entrypoint to capitalized public naming.
 % 23-04-2026    Pietro Califano     Remove the SR-UKF linear measurement shortcut from the default
-%                                   builder. Measurement prediction is expected through
-%                                   filter_tailoring.ComputeMeasPred.
+%                                   builder. Measurement prediction is expected through the tailoring
+%                                   measurement hook.
 % 24-04-2026    Pietro Califano     Align sigma-point runtime fields with the EKF-style template and
 %                                   make UKF runtime data explicit instead of optional.
+% 27-04-2026    Pietro Califano     Use ComputeMeasPredAndObsJacobian as the single tailoring hook;
+%                                   UKF paths request prediction outputs only.
 % -------------------------------------------------------------------------------------------------------------
 
 ui16StateSize = double(strFilterConstConfig.ui16StateSize);
@@ -87,7 +89,7 @@ strFilterMutabConfig.ui8LidarShapeModelMode = uint8(1);
 strFilterMutabConfig.ui8DecorrAlgorithmID = uint8(0);
 strFilterMutabConfig.ui32EstimationCameraID = uint32(1);
 strFilterMutabConfig.ui8MeasUpMode = uint8(0);
-strFilterMutabConfig.dsqrtRmeasNoiseCov = eye(double(ui8MeasVecSize));
+strFilterMutabConfig.dSqrtRmeasNoiseCov = eye(double(ui8MeasVecSize));
 strFilterMutabConfig.dsqrtQprocessNoiseCov = zeros(ui16StateSize);
 strFilterMutabConfig.dUnscentedWeightsMean = dUnscentedWeightsMean;
 strFilterMutabConfig.dUnscentedWeightsCov = dUnscentedWeightsCov;
