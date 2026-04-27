@@ -11,29 +11,25 @@ end
 
 ui16MeasVecSize = double(strFilterConfig.ui8MeasVecSize);
 ui16StateSize = double(strFilterConfig.ui16StateSize);
-dyMeasPred = zeros(ui16MeasVecSize, 1);
-bValidPrediction = true(ui16MeasVecSize, 1);
-dHobsMatrix = zeros(ui16MeasVecSize, ui16StateSize);
+ui16MeasStateIdx = uint16((1:ui16MeasVecSize).');
 
-if isfield(strMeasModelParams, "ui16ObservedStateIdx")
-    ui16ObservedStateIdx = double(strMeasModelParams.ui16ObservedStateIdx(:));
-else
-    ui16ObservedStateIdx = (1:ui16MeasVecSize).';
-end
-
-dyMeasPred(:) = dxStateAtMeas(ui16ObservedStateIdx);
-
-if isfield(strMeasModelParams, "dMeasBias")
-    dyMeasPred(:) = dyMeasPred + strMeasModelParams.dMeasBias(:);
-end
-
-if nargout > 2
-    for idRow = 1:ui16MeasVecSize
-        dHobsMatrix(idRow, ui16ObservedStateIdx(idRow)) = 1.0;
+if isfield(strFilterConfig, "strStatesIdx")
+    if isfield(strFilterConfig.strStatesIdx, "ui8ActiveStateIdx")
+        ui16MeasStateIdx(:) = uint16(strFilterConfig.strStatesIdx.ui8ActiveStateIdx(1:ui16MeasVecSize));
+    elseif isfield(strFilterConfig.strStatesIdx, "ui8posVelIdx")
+        ui16MeasStateIdx(:) = uint16(strFilterConfig.strStatesIdx.ui8posVelIdx(1:ui16MeasVecSize));
     end
 end
 
-if numel(bValidMeasBool) == ui16MeasVecSize
-    bValidPrediction(:) = logical(bValidMeasBool(:));
+dyMeasPred = zeros(ui16MeasVecSize, 1);
+bValidPrediction = logical(bValidMeasBool(:));
+dHobsMatrix = zeros(ui16MeasVecSize, ui16StateSize);
+
+dyMeasPred(:) = dxStateAtMeas(ui16MeasStateIdx);
+
+if nargout > 2
+    for idRow = 1:ui16MeasVecSize
+        dHobsMatrix(idRow, ui16MeasStateIdx(idRow)) = 1.0;
+    end
 end
 end

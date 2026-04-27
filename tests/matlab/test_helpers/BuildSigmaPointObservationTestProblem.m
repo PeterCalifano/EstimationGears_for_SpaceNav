@@ -1,13 +1,13 @@
 function strProblem = BuildSigmaPointObservationTestProblem(dxState, ...
                                                            dStateCov, ...
                                                            dyMeasVec, ...
-                                                           ui16ObservedStateIdx, ...
+                                                           ui16MeasStateIdx, ...
                                                            kwargs)
 arguments
     dxState                  (:,1) double
     dStateCov                (:,:) double
     dyMeasVec                (:,1) double
-    ui16ObservedStateIdx     (:,1) uint16
+    ui16MeasStateIdx         (:,1) uint16
     kwargs.enumResidualMode  (1,1) EnumSigmaPointResidualMode = EnumSigmaPointResidualMode.ADDITIVE
     kwargs.dMeasNoiseVariance (1,1) double {mustBePositive} = 0.1
     kwargs.bEnableEditing    (1,1) logical = false
@@ -61,9 +61,7 @@ if ui16StateSize >= uint16(6)
     strStatesIdx.ui8posVelIdx = uint8(1:6)';
 end
 
-if isempty(fieldnames(strStatesIdx))
-    strStatesIdx.ui8ActiveStateIdx = uint8(1:double(ui16StateSize))';
-end
+strStatesIdx.ui8ActiveStateIdx = uint8(ui16MeasStateIdx(:));
 
 strFilterConstConfig.strStatesIdx = orderfields(strStatesIdx);
 
@@ -79,8 +77,8 @@ strFilterMutabConfig.bEnableAdaptivity = kwargs.bEnableAdaptivity;
 strFilterMutabConfig.bAdaptMeasNoiseCov = kwargs.bAdaptMeasNoiseCov;
 strFilterMutabConfig.bAdaptProcessNoiseCov = kwargs.bAdaptProcessNoiseCov;
 strFilterMutabConfig.dAdaptiveNoiseAlpha = kwargs.dAdaptiveNoiseAlpha;
-strFilterMutabConfig.dsqrtRmeasNoiseCov = chol(kwargs.dMeasNoiseVariance * eye(double(ui8MeasVecSize)), 'upper');
-strFilterMutabConfig.dsqrtQprocessNoiseCov = zeros(double(ui16StateSize));
+strFilterMutabConfig.dSqrtRmeasNoiseCov = chol(kwargs.dMeasNoiseVariance * eye(double(ui8MeasVecSize)), 'upper');
+strFilterMutabConfig.dSqrtQprocessNoiseCov = zeros(double(ui16StateSize));
 strFilterMutabConfig.ui8MeasUpMode = kwargs.ui8MeasUpMode;
 
 if ~isempty(kwargs.bConsiderStatesMode)
@@ -88,10 +86,8 @@ if ~isempty(kwargs.bConsiderStatesMode)
 end
 
 if ~isempty(kwargs.dProcessNoiseCov)
-    strFilterMutabConfig.dsqrtQprocessNoiseCov = chol(kwargs.dProcessNoiseCov, 'upper');
+    strFilterMutabConfig.dSqrtQprocessNoiseCov = chol(kwargs.dProcessNoiseCov, 'upper');
 end
-
-strMeasModelParams.ui16ObservedStateIdx = ui16ObservedStateIdx;
 
 strMeasBus.dyMeasVec = dyMeasVec;
 strMeasBus.bValidMeasBool = true(double(ui8MeasVecSize), 1);
