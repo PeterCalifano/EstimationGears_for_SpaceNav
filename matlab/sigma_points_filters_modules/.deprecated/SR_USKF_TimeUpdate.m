@@ -1,4 +1,4 @@
-function o_strStateBus = SRUSKF_TimeUpdate(i_dDeltaTime, ...
+function o_strStateBus = SR_USKF_TimeUpdate(i_dDeltaTime, ...
                                            i_strStateBus, ...
                                            i_strDynParams, ...
                                            i_strFilterConfig) % #codegen
@@ -18,7 +18,7 @@ end
 % i_strFilterConfig.bIsW0negative         (1, 1) logical = true
 % i_strFilterConfig.dIntegrTimestep       (1, 1) double = 1.0
 % i_strFilterConfig.dPerturbScale         (1, 1) double
-% i_strFilterConfig.dsqrtWmWc             (:, 2) double
+% i_strFilterConfig.dSqrtWmWc             (:, 2) double
 
 
 % o_strStateBus.dZ_kNextPrior
@@ -107,7 +107,7 @@ assert(all(uint16(size(i_strStateBus.dSqrtCovStatePost)) == ui16StateSize), "ERR
 % Variables allocation
 dxState = i_strStateBus.dxStatePost(1:ui16StateSize);
 dxSigmaPoints = coder.nullcopy(zeros(ui16StateSize, ui16NumOfSigmaPoints)); % Sigma points before Time Update
-dsqrtQprocessNoiseCov = zeros(ui16StateSize);
+dSqrtQprocessNoiseCov = zeros(ui16StateSize);
 
 % Variables initialization
 o_strStateBus.dxStatePrior       = i_strStateBus.dxStatePost;
@@ -123,10 +123,10 @@ o_strStateBus.dSqrtCovStatePrior = i_strStateBus.dSqrtCovStatePost;
 % Wci = Wmi = 1.0/(2.0* (L + lambda));
 
 % Retrieve non-sqrt weights
-% i_strFilterConfig.dsqrtWmWc;
+% i_strFilterConfig.dSqrtWmWc;
 
-dWmWc = [i_strFilterConfig.dsqrtWmWc(:, 1) .* i_strFilterConfig.dsqrtWmWc(:, 1), ...
-         i_strFilterConfig.dsqrtWmWc(:, 2) .* i_strFilterConfig.dsqrtWmWc(:, 2)];
+dWmWc = [i_strFilterConfig.dSqrtWmWc(:, 1) .* i_strFilterConfig.dSqrtWmWc(:, 1), ...
+         i_strFilterConfig.dSqrtWmWc(:, 2) .* i_strFilterConfig.dSqrtWmWc(:, 2)];
  
 if i_strFilterConfig.bIsW0negative
     dWmWc(1, :) = -dWmWc(1, :); % Recover sign (NEGATIVE 1st weights assumed)
@@ -141,7 +141,7 @@ end
 
 % Compute process noise covariance matrix approximation
 if i_dDeltaTime > 0
-    dsqrtQprocessNoiseCov(1:ui16StateSize, 1:ui16StateSize) = computeFactorProcessNoiseCov(i_dDeltaTime,...
+    dSqrtQprocessNoiseCov(1:ui16StateSize, 1:ui16StateSize) = computeFactorProcessNoiseCov(i_dDeltaTime,...
                                                                                        i_strDynParams,...
                                                                                        i_strFilterConfig.strFilterParams, ...
                                                                                        i_strFilterConfig.strStatesIdx, ...
@@ -192,26 +192,26 @@ if i_dDeltaTime > 0
     o_strStateBus.dxStatePrior = sum(dWmWc(:, 1)' .* dxSigmaPointsPrior, 2);
 
     % Compute prior SR Covariance matrix
-    assert(istriu(dsqrtQprocessNoiseCov));
+    assert(istriu(dSqrtQprocessNoiseCov));
 
-    [~, o_strStateBus.dSqrtCovStatePrior ] = qr( [i_strFilterConfig.dsqrtWmWc(2:end, 2)' .* ...
-        ( dxSigmaPointsPrior(:, 2:end) - o_strStateBus.dxStatePrior ),  dsqrtQprocessNoiseCov]', 'econ' ); % qr time update
+    [~, o_strStateBus.dSqrtCovStatePrior ] = qr( [i_strFilterConfig.dSqrtWmWc(2:end, 2)' .* ...
+        ( dxSigmaPointsPrior(:, 2:end) - o_strStateBus.dxStatePrior ),  dSqrtQprocessNoiseCov]', 'econ' ); % qr time update
 
     % Execute Chol Rank1 Update (Output: UPPER tria)
     if i_strFilterConfig.bIsW0negative == true
 
         % o_strStateBus.dSqrtCovStatePrior  = cholupdate(o_strStateBus.dSqrtCovStatePrior , ...
-        %     i_strFilterConfig.dsqrtWmWc(1, 2) .* ( dxSigmaPointsPrior(:, 1) - o_strStateBus.dxStatePrior ), '-'); % cholupdate
+        %     i_strFilterConfig.dSqrtWmWc(1, 2) .* ( dxSigmaPointsPrior(:, 1) - o_strStateBus.dxStatePrior ), '-'); % cholupdate
 
         o_strStateBus.dSqrtCovStatePrior = cholRank1Update(o_strStateBus.dSqrtCovStatePrior, ...
-            i_strFilterConfig.dsqrtWmWc(1, 2).*( dxSigmaPointsPrior(:, 1) - o_strStateBus.dxStatePrior ), -1);
+            i_strFilterConfig.dSqrtWmWc(1, 2).*( dxSigmaPointsPrior(:, 1) - o_strStateBus.dxStatePrior ), -1);
 
     else
         % o_strStateBus.dSqrtCovStatePrior  = cholupdate(o_strStateBus.dSqrtCovStatePrior ,...
-        %     i_strFilterConfig.dsqrtWmWc(1, 2) .* ( dxSigmaPointsPrior(:, 1) - o_strStateBus.dxStatePrior ), '+'); % cholupdate
+        %     i_strFilterConfig.dSqrtWmWc(1, 2) .* ( dxSigmaPointsPrior(:, 1) - o_strStateBus.dxStatePrior ), '+'); % cholupdate
 
         o_strStateBus.dSqrtCovStatePrior = cholRank1Update(o_strStateBus.dSqrtCovStatePrior, ...
-            i_strFilterConfig.dsqrtWmWc(1, 2).*( dxSigmaPointsPrior(:, 1) - o_strStateBus.dxStatePrior ), +1);
+            i_strFilterConfig.dSqrtWmWc(1, 2).*( dxSigmaPointsPrior(:, 1) - o_strStateBus.dxStatePrior ), +1);
     end
 
 end
