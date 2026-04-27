@@ -70,7 +70,7 @@ if bEnableAdaptiveQ
     % Update Process noise covariance
     dProcessCovCandidate = AdaptProcessCov(dProcessCovBase, dAlphaFactor, dyRes, dKalmanGain);
     dProcessCovAdapted = dProcessCovBase;
-    ui32ProcessBlockSize = min(6, size(dProcessCovBase, 1));
+    ui32ProcessBlockSize = uint32(min(6, size(dProcessCovBase, 1)));
     dProcessCovAdapted(1:ui32ProcessBlockSize, 1:ui32ProcessBlockSize) = ...
         dProcessCovCandidate(1:ui32ProcessBlockSize, 1:ui32ProcessBlockSize);
 else

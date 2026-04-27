@@ -11,17 +11,17 @@ arguments
     dResidualVector         (:,1) double {isvector, isnumeric}
     ui32LastObsVectorPtr    (1,1) {mustBeNumeric}
     ui32LastJacEntryPos     (1,1) {mustBeNumeric}
-    ui8DecorrAlgorithmID    (1,1) {mustBeNumeric} = 0
-    ui32MaxNumOfVecMeas     (1,1) {mustBeNumeric} = size(dObsMatrix_State, 1) / 2
+    ui8DecorrAlgorithmID    (1,1) {mustBeNumeric} = uint8(0)
+    ui32MaxNumOfVecMeas     (1,1) {mustBeNumeric} = uint32(size(dObsMatrix_State, 1) / 2)
 end
 
-ui32LastObsVectorPtr = min(size(dObsMatrix_State, 1), double(ui32LastObsVectorPtr));
-ui32LastJacEntryPos = min(size(dObsMatrix_State, 2), double(ui32LastJacEntryPos));
-ui32ProjectedMaxRows = max(0, 2 * double(ui32MaxNumOfVecMeas) - 3);
+ui32LastObsVectorPtr = uint32(min(size(dObsMatrix_State, 1), double(ui32LastObsVectorPtr)));
+ui32LastJacEntryPos = uint32(min(size(dObsMatrix_State, 2), double(ui32LastJacEntryPos)));
+ui32ProjectedMaxRows = uint32(max(0, 2 * double(ui32MaxNumOfVecMeas) - 3));
 
-dObsVectorProj = zeros(ui32ProjectedMaxRows, 1);
-dJacMatrixProj = zeros(ui32ProjectedMaxRows, size(dObsMatrix_State, 2));
-dNullSpaceProjector = zeros(ui32LastObsVectorPtr, max(ui32LastObsVectorPtr - size(dObsMatrix_FeatPos, 2), 0));
+dObsVectorProj = zeros(double(ui32ProjectedMaxRows), 1);
+dJacMatrixProj = zeros(double(ui32ProjectedMaxRows), size(dObsMatrix_State, 2));
+dNullSpaceProjector = zeros(double(ui32LastObsVectorPtr), max(double(ui32LastObsVectorPtr) - size(dObsMatrix_FeatPos, 2), 0));
 
 if ui32LastObsVectorPtr <= size(dObsMatrix_FeatPos, 2)
     return
@@ -41,7 +41,7 @@ dNullSpaceProjector = dOrthQ(:, size(dObsMatrix_FeatPosActive, 2) + 1:end);
 
 dProjectedJac = transpose(dNullSpaceProjector) * dObsMatrix_StateActive;
 dProjectedResidual = transpose(dNullSpaceProjector) * dResidualVectorActive;
-ui32ProjectedRows = size(dProjectedJac, 1);
+ui32ProjectedRows = uint32(size(dProjectedJac, 1));
 
 dJacMatrixProj(1:ui32ProjectedRows, 1:ui32LastJacEntryPos) = dProjectedJac;
 dObsVectorProj(1:ui32ProjectedRows) = dProjectedResidual;

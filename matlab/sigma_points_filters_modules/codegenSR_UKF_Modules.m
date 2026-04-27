@@ -101,24 +101,24 @@ strFilterConstConfig.enumSigmaPointResidualMode = EnumSigmaPointResidualMode.ADD
 [strFilterMutabConfig, strDynParams, strMeasModelParams, strMeasBus] = ...
     filter_tailoring.BuildInputStructsTemplate(strFilterConstConfig);
 
-ui16StateSize = double(strFilterConstConfig.ui16StateSize);
-ui16MeasVecSize = double(strFilterConstConfig.ui8MeasVecSize);
+ui16StateSize = strFilterConstConfig.ui16StateSize;
+ui8MeasVecSize = strFilterConstConfig.ui8MeasVecSize;
 
-dxState = linspace(0.1, 1.7, ui16StateSize).';
-dStateCov = diag(linspace(0.2, 0.8, ui16StateSize));
+dxState = linspace(0.1, 1.7, double(ui16StateSize)).';
+dStateCov = diag(linspace(0.2, 0.8, double(ui16StateSize)));
 dStateSqrtCov = chol(dStateCov, 'upper');
 dStateTimetag = 0.0;
 dTargetTimetag = 0.0;
 
-strFilterMutabConfig.dSqrtRmeasNoiseCov = chol(0.1 * eye(ui16MeasVecSize), 'upper');
+strFilterMutabConfig.dSqrtRmeasNoiseCov = chol(0.1 * eye(double(ui8MeasVecSize)), 'upper');
 strFilterMutabConfig.bNewMeasAvailable = true;
 strFilterMutabConfig.bEnableAdaptivity = true;
 strFilterMutabConfig.bAdaptMeasNoiseCov = true;
 strFilterMutabConfig.bAdaptProcessNoiseCov = true;
 strFilterMutabConfig.dIntegrTimestep = 1.0;
 
-strMeasBus.dyMeasVec = dxState(1:ui16MeasVecSize) + 0.05 .* (1:ui16MeasVecSize).';
-strMeasBus.bValidMeasBool = true(ui16MeasVecSize, 1);
+strMeasBus.dyMeasVec = dxState(1:double(ui8MeasVecSize)) + 0.05 .* (1:double(ui8MeasVecSize)).';
+strMeasBus.bValidMeasBool = true(double(ui8MeasVecSize), 1);
 strMeasBus.bMeasTypeFlags(:) = false;
 strMeasBus.bMeasTypeFlags(1) = true;
 strMeasBus.dMeasTimetags(:) = 0.0;

@@ -698,10 +698,10 @@ classdef CDensityFcnPropagator
             dMeanOut           = mean(dxSamplesSet, 2);
             dCentredDataMatrix = dxSamplesSet - dMeanOut;
 
-            ui32SampleSize = size(dxSamplesSet, 2);
+            ui32SampleSize = uint32(size(dxSamplesSet, 2));
 
             % Population covariance (consistent with sigma-point weighting style)
-            dCovOut = (dCentredDataMatrix * transpose(dCentredDataMatrix)) / ui32SampleSize;
+            dCovOut = (dCentredDataMatrix * transpose(dCentredDataMatrix)) / double(ui32SampleSize);
         end
 
     end

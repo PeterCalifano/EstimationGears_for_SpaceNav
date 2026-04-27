@@ -25,13 +25,13 @@ end
 %                                   capitalized naming.
 % -------------------------------------------------------------------------------------------------------------
 
-ui16StateSize = double(strFilterConstConfig.ui16StateSize);
+ui16StateSize = strFilterConstConfig.ui16StateSize;
 
 dQprocessNoiseCov = filter_tailoring.ComputeProcessNoiseCov(dDeltaTstep, ...
                                                             strDynParams, ...
                                                             strFilterMutabConfig, ...
                                                             strFilterConstConfig);
-dSqrtQprocessNoiseCov = zeros(ui16StateSize, ui16StateSize);
+dSqrtQprocessNoiseCov = zeros(double(ui16StateSize), double(ui16StateSize));
 
 if ~any(dQprocessNoiseCov, 'all')
     return

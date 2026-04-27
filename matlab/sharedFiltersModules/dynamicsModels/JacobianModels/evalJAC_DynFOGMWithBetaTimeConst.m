@@ -48,9 +48,9 @@ end
 % TODO verify this allows static-sizing if ui16StatesIdx is constant
 
 % Output initialization
-ui8FOGMstateSize        = length(ui8FOGMstateIdx);
-ui8BetaTimeConstSize    = length(ui8BetaConstIdx);
-dDynMatrix              = zeros(ui8FOGMstateSize + ui8BetaTimeConstSize); 
+ui8FOGMstateSize        = coder.const(uint8(length(ui8FOGMstateIdx)));
+ui8BetaTimeConstSize    = coder.const(uint8(length(ui8BetaConstIdx)));
+dDynMatrix              = zeros(double(ui8FOGMstateSize) + double(ui8BetaTimeConstSize)); 
 
 % Get entries from state vector
 bSolvedForTimeConstant = true;

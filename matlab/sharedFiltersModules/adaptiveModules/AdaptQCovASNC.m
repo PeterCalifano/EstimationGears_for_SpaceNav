@@ -50,7 +50,7 @@ function [o_dDiscreteQposVelSNC, o_dProcessNoiseCovSNC] = adaptQCovASNC(i_dProce
 % ui8SigmaSize = size(i_dKalmanGain, 1);
 % Nentries in half matrix: N + N*(N-1)/2
 % ui16SigmaNelems = ui8SigmaSize + ui8SigmaSize*(ui8SigmaSize-1)/2; % Number of entries below Q diagonal 
-ui16Nsamples = size(i_dDeltaStatesBuffer, 2);
+ui16Nsamples = uint16(size(i_dDeltaStatesBuffer, 2));
 weightVecWLS = zeros(3, 3); % HARDCODED TEMPORARILY
 
 % Default values and allocation

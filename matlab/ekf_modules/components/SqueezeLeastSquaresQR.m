@@ -7,15 +7,15 @@ function [dJacMatrixRedux, dObsVectorRedux, ui32LastValidReduxEntry] = SqueezeLe
 arguments
     dJacMatrix              (:,:) double {ismatrix, isnumeric}
     dObsVector              (:,1) double {isvector, isnumeric}
-    ui16LastJacEntryPtr     (1,1) {mustBeNumeric} = size(dJacMatrix, 2)
-    ui16LastResEntryPtr     (1,1) {mustBeNumeric} = size(dObsVector, 1)
-    ui8SqueezeMode          (1,1) {mustBeNumeric} = 0
-    ui32LastValidReduxEntry (1,1) {mustBeNumeric} = min(size(dJacMatrix, 2), size(dObsVector, 1))
+    ui16LastJacEntryPtr     (1,1) {mustBeNumeric} = uint16(size(dJacMatrix, 2))
+    ui16LastResEntryPtr     (1,1) {mustBeNumeric} = uint16(size(dObsVector, 1))
+    ui8SqueezeMode          (1,1) {mustBeNumeric} = uint8(0)
+    ui32LastValidReduxEntry (1,1) {mustBeNumeric} = uint32(min(size(dJacMatrix, 2), size(dObsVector, 1)))
 end
 
-ui16LastJacEntryPtr = min(size(dJacMatrix, 2), double(ui16LastJacEntryPtr));
-ui16LastResEntryPtr = min(size(dObsVector, 1), double(ui16LastResEntryPtr));
-ui32LastValidReduxEntry = min(min(ui16LastJacEntryPtr, ui16LastResEntryPtr), double(ui32LastValidReduxEntry));
+ui16LastJacEntryPtr = uint16(min(size(dJacMatrix, 2), double(ui16LastJacEntryPtr)));
+ui16LastResEntryPtr = uint16(min(size(dObsVector, 1), double(ui16LastResEntryPtr)));
+ui32LastValidReduxEntry = uint32(min(min(double(ui16LastJacEntryPtr), double(ui16LastResEntryPtr)), double(ui32LastValidReduxEntry)));
 
 if ~(ui8SqueezeMode == 0 || ui8SqueezeMode == 1)
     error('SqueezeLeastSquaresQR:InvalidMode', ...
@@ -26,9 +26,9 @@ dJacMatrixRedux = zeros(size(dJacMatrix));
 dObsVectorRedux = zeros(size(dObsVector));
 
 [dOrthQ, dUpperR] = qr(dJacMatrix(1:ui16LastResEntryPtr, 1:ui16LastJacEntryPtr), 'econ');
-ui32ActiveRows = min(ui32LastValidReduxEntry, size(dUpperR, 1));
+ui32ActiveRows = uint32(min(double(ui32LastValidReduxEntry), size(dUpperR, 1)));
 
 dJacMatrixRedux(1:ui32ActiveRows, 1:ui16LastJacEntryPtr) = dUpperR(1:ui32ActiveRows, 1:ui16LastJacEntryPtr);
 dObsVectorRedux(1:ui32ActiveRows) = transpose(dOrthQ(:, 1:ui32ActiveRows)) * dObsVector(1:ui16LastResEntryPtr);
-ui32LastValidReduxEntry = uint32(ui32ActiveRows);
+ui32LastValidReduxEntry = ui32ActiveRows;
 end

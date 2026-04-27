@@ -171,8 +171,8 @@ function dCorrSamples = ComputeCorrectionSamples_(dSunPosition_Cam, dAppRadiusPx
 dNominalCoeff = 0.0062; % Matches ComputeCorrectionAnalyticCoB internal coefficient
 dScaleRatio = dCorrectionScalingCoeff / dNominalCoeff;
 
-ui32NumSamples = numel(dAppRadiusPx);
-dCorrSamples = zeros(2, ui32NumSamples);
+ui32NumSamples = uint32(numel(dAppRadiusPx));
+dCorrSamples = zeros(2, double(ui32NumSamples));
 for ii = 1:ui32NumSamples
     dCorrSamples(:, ii) = dScaleRatio .* ComputeCorrectionAnalyticCoB(dSunPosition_Cam, ...
                                             dAppRadiusPx(ii), dPhaseAngleInDeg);

@@ -46,18 +46,18 @@ else
     cfg.strFilterConstConfig.ui16StateSize = uint16(6);
 end
 
-ui16StateSize = double(cfg.strFilterConstConfig.ui16StateSize);
+ui16StateSize = cfg.strFilterConstConfig.ui16StateSize;
 
 % strFilterMutabConfig
 cfg.strFilterMutabConfig = struct();
-cfg.strFilterMutabConfig.bConsiderStatesMode = false(ui16StateSize, 1);
+cfg.strFilterMutabConfig.bConsiderStatesMode = false(double(ui16StateSize), 1);
 
 % Geometry: Earth at origin, SC in LEO-like position, Sun far along +X (scaled Earth-Sun distance
 % for numerically meaningful Jacobian entries while preserving the reference geometry).
 dAU = 1.495978707e11;
 cfg.dSunPosition_IN = [1e-3 * dAU; 0.0; 0.0];
 
-cfg.dxState = zeros(ui16StateSize, 1);
+cfg.dxState = zeros(double(ui16StateSize), 1);
 cfg.dxState(cfg.strFilterConstConfig.strStatesIdx.ui8posVelIdx(1:3)) = [7.2e6; -1.1e6; 9.0e5];
 cfg.dxState(cfg.strFilterConstConfig.strStatesIdx.ui8posVelIdx(4:6)) = [10.0; 7.5e3; -25.0];
 if bIncludeCoeffSRPstate

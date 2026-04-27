@@ -23,16 +23,16 @@ end
 %                                   UKF paths request prediction outputs only.
 % -------------------------------------------------------------------------------------------------------------
 
-ui16StateSize = double(strFilterConstConfig.ui16StateSize);
+ui16StateSize = strFilterConstConfig.ui16StateSize;
 ui16NumWindowPoses = GetFieldOrDefault_(strFilterConstConfig, "ui16NumWindowPoses", uint16(0));
 ui16MaxTrackLength = GetFieldOrDefault_(strFilterConstConfig, "ui16MaxTrackLength", uint16(1));
 ui16MaxFeatureCount = GetFieldOrDefault_(strFilterConstConfig, "ui16MaxFeatureCount", uint16(1));
 ui16MaxResidualsVecSize = GetFieldOrDefault_(strFilterConstConfig, "ui16MaxResidualsVecSize", uint16(3));
 ui8NumOfInputNoiseChannels = GetFieldOrDefault_(strFilterConstConfig, "ui8NumOfInputNoiseChannels", uint8(0));
-ui8MeasVecSize = GetFieldOrDefault_(strFilterConstConfig, "ui8MeasVecSize", uint8(min(ui16StateSize, 6)));
+ui8MeasVecSize = GetFieldOrDefault_(strFilterConstConfig, "ui8MeasVecSize", uint8(min(double(ui16StateSize), 6)));
 
-ui16DCMbufferLength = max(2, double(ui16NumWindowPoses) + 1);
-ui32NumSigmaPoints = uint32(2 * ui16StateSize + 1);
+ui16DCMbufferLength = uint16(max(2, double(ui16NumWindowPoses) + 1));
+ui32NumSigmaPoints = uint32(2 * double(ui16StateSize) + 1);
 [dUnscentedWeightsMean, dUnscentedWeightsCov, dPerturbScale, dSqrtWmWc, bIsW0negative] = ...
     BuildDefaultUnscentedWeights_(ui16StateSize, strFilterConstConfig);
 
@@ -45,10 +45,10 @@ strFilterMutabConfig.dMaxPiecewiseTimestep = 1.0;
 strFilterMutabConfig.dIntegrTimestep = 1.0;
 strFilterMutabConfig.bEnableProcessNoise = false;
 strFilterMutabConfig.dDefaultDeltaTstep = 1.0;
-strFilterMutabConfig.bConsiderStatesMode = false(ui16StateSize, 1);
+strFilterMutabConfig.bConsiderStatesMode = false(double(ui16StateSize), 1);
 strFilterMutabConfig.dVelocityInputNoiseCov = zeros(3);
 strFilterMutabConfig.dAttBiasDeltaInputNoiseCov = zeros(3);
-strFilterMutabConfig.dProcessNoiseMapMatrix = zeros(ui16StateSize, double(ui8NumOfInputNoiseChannels));
+strFilterMutabConfig.dProcessNoiseMapMatrix = zeros(double(ui16StateSize), double(ui8NumOfInputNoiseChannels));
 strFilterMutabConfig.dInputProcessNoiseMatrix = zeros(double(ui8NumOfInputNoiseChannels));
 strFilterMutabConfig.dGravParamInputNoiseVar = 0.0;
 
@@ -90,7 +90,7 @@ strFilterMutabConfig.ui8DecorrAlgorithmID = uint8(0);
 strFilterMutabConfig.ui32EstimationCameraID = uint32(1);
 strFilterMutabConfig.ui8MeasUpMode = uint8(0);
 strFilterMutabConfig.dSqrtRmeasNoiseCov = eye(double(ui8MeasVecSize));
-strFilterMutabConfig.dSqrtQprocessNoiseCov = zeros(ui16StateSize);
+strFilterMutabConfig.dSqrtQprocessNoiseCov = zeros(double(ui16StateSize));
 strFilterMutabConfig.dUnscentedWeightsMean = dUnscentedWeightsMean;
 strFilterMutabConfig.dUnscentedWeightsCov = dUnscentedWeightsCov;
 strFilterMutabConfig.dSqrtWmWc = dSqrtWmWc;
@@ -182,10 +182,10 @@ strFilterMutabConfig = ComputeInputNoise(strFilterMutabConfig, strDynParams, str
 
 %% Measurement model parameters
 strMeasModelParams = struct();
-strMeasModelParams.dDCM_SCBiFromIN = zeros(3,3, ui16DCMbufferLength);
-strMeasModelParams.dBufferTimestamps = -ones(1, ui16DCMbufferLength);
-strMeasModelParams.dFlowSTM = eye(ui16StateSize);
-strMeasModelParams.dIntegrProcessNoiseCovQ = zeros(ui16StateSize);
+strMeasModelParams.dDCM_SCBiFromIN = zeros(3,3, double(ui16DCMbufferLength));
+strMeasModelParams.dBufferTimestamps = -ones(1, double(ui16DCMbufferLength));
+strMeasModelParams.dFlowSTM = eye(double(ui16StateSize));
+strMeasModelParams.dIntegrProcessNoiseCovQ = zeros(double(ui16StateSize));
 
 %% Measurement bus
 strMeasBus = struct();

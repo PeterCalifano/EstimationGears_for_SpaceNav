@@ -288,14 +288,14 @@ dExpectedState(ui8PosVelIdx(4:6)) = dxState(ui8PosVelIdx(4:6)) + ...
 end
 
 function dExpectedSTM = ExpectedCurrentStateSTM_(strFilterConstConfig, dDeltaTime)
-ui16StateSize = double(strFilterConstConfig.ui16StateSize);
+ui16StateSize = strFilterConstConfig.ui16StateSize;
 ui8PosVelIdx = strFilterConstConfig.strStatesIdx.ui8posVelIdx;
 ui8ResidualAccelIdx = strFilterConstConfig.strStatesIdx.ui8ResidualAccelIdx;
 
-dDynMatrix = zeros(ui16StateSize);
+dDynMatrix = zeros(double(ui16StateSize));
 dDynMatrix(ui8PosVelIdx(1:3), ui8PosVelIdx(4:6)) = eye(3);
 dDynMatrix(ui8PosVelIdx(4:6), ui8ResidualAccelIdx) = eye(3);
 
-dExpectedSTM = eye(ui16StateSize) + dDynMatrix .* dDeltaTime + ...
+dExpectedSTM = eye(double(ui16StateSize)) + dDynMatrix .* dDeltaTime + ...
     0.5 .* (dDynMatrix * dDynMatrix) .* dDeltaTime^2;
 end

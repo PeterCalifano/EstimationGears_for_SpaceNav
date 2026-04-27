@@ -121,11 +121,11 @@ classdef testSigmaPointTemplateBuilders < matlab.unittest.TestCase
                                                                          strFilterMutabConfig.dResidualAccelSigma2WN, ...
                                                                          strDynParams.dResidualAccelTimeConst);
 
-            ui8posVelIdx = double(strFilterConstConfig.strStatesIdx.ui8posVelIdx(:));
-            ui8ResidualAccelIdx = double(strFilterConstConfig.strStatesIdx.ui8ResidualAccelIdx(:));
-            ui8CoeffSRPidx = double(strFilterConstConfig.strStatesIdx.ui8CoeffSRPidx(:));
-            ui8LidarMeasBiasIdx = double(strFilterConstConfig.strStatesIdx.ui8LidarMeasBiasIdx(:));
-            ui8CenMeasBiasIdx = double(strFilterConstConfig.strStatesIdx.ui8CenMeasBiasIdx(:));
+            ui8posVelIdx = strFilterConstConfig.strStatesIdx.ui8posVelIdx(:);
+            ui8ResidualAccelIdx = strFilterConstConfig.strStatesIdx.ui8ResidualAccelIdx(:);
+            ui8CoeffSRPidx = strFilterConstConfig.strStatesIdx.ui8CoeffSRPidx(:);
+            ui8LidarMeasBiasIdx = strFilterConstConfig.strStatesIdx.ui8LidarMeasBiasIdx(:);
+            ui8CenMeasBiasIdx = strFilterConstConfig.strStatesIdx.ui8CenMeasBiasIdx(:);
 
             dExpectedQprocessNoiseCov(ui8posVelIdx, ui8posVelIdx) = dPosVelProcessQcov;
             dExpectedQprocessNoiseCov(ui8posVelIdx(1:3), ui8ResidualAccelIdx) = dPosResidualAccelCrossQcov;

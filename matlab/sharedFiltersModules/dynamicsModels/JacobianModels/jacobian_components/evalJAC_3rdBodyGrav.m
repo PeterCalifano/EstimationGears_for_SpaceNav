@@ -37,7 +37,7 @@ drv3rdBodyGravityJac = zeros(6,6);
 ui8PosVelIdx = strFilterConstConfig.strStatesIdx.ui8posVelIdx;
 dSCposition_IN = dxState(ui8PosVelIdx(1:3));
 
-ui32NumOf3rdBodies = length(strDynParams.strBody3rdData);
+ui32NumOf3rdBodies = uint32(length(strDynParams.strBody3rdData));
 
 if ui32NumOf3rdBodies > 0
 

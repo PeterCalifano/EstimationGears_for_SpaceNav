@@ -24,11 +24,11 @@ end
 % 23-04-2026    Pietro Califano     Add shared runtime helper for mapped process-noise assembly.
 % -------------------------------------------------------------------------------------------------------------
 
-ui16StateSize = double(strFilterConstConfig.ui16StateSize);
-ui8NumInputNoiseChannels = double(GetFieldOrDefault_(strFilterConstConfig, "ui8NumOfInputNoiseChannels", uint8(0)));
+ui16StateSize = strFilterConstConfig.ui16StateSize;
+ui8NumInputNoiseChannels = GetFieldOrDefault_(strFilterConstConfig, "ui8NumOfInputNoiseChannels", uint8(0));
 
-strFilterMutabConfig.dProcessNoiseMapMatrix = zeros(ui16StateSize, ui8NumInputNoiseChannels);
-strFilterMutabConfig.dInputProcessNoiseMatrix = zeros(ui8NumInputNoiseChannels, ui8NumInputNoiseChannels);
+strFilterMutabConfig.dProcessNoiseMapMatrix = zeros(double(ui16StateSize), double(ui8NumInputNoiseChannels));
+strFilterMutabConfig.dInputProcessNoiseMatrix = zeros(double(ui8NumInputNoiseChannels), double(ui8NumInputNoiseChannels));
 
 if ui8NumInputNoiseChannels == 0 || ~isfield(strFilterConstConfig, "strStatesIdx")
     return
@@ -133,7 +133,7 @@ if isfield(strFilterConstConfig.strStatesIdx, "ui8GravParamIdx")
 end
 
 if coder.target('MATLAB') || coder.target('MEX')
-    assert(ui32NoiseAllocPtr <= uint32(ui8NumInputNoiseChannels + 1), ...
+    assert(ui32NoiseAllocPtr <= uint32(ui8NumInputNoiseChannels) + 1, ...
         'ERROR: input-noise channel allocation exceeded ui8NumOfInputNoiseChannels.');
 end
 
@@ -182,10 +182,10 @@ if isempty(ui16StateIdx)
     return
 end
 
-ui32NumStates = numel(ui16StateIdx);
-dSigma2WN = NormalizeVectorField_(GetFieldOrDefault_(strFilterMutabConfig, charSigmaFieldName, zeros(ui32NumStates, 1)), ...
+ui32NumStates = uint32(numel(ui16StateIdx));
+dSigma2WN = NormalizeVectorField_(GetFieldOrDefault_(strFilterMutabConfig, charSigmaFieldName, zeros(double(ui32NumStates), 1)), ...
                                   ui32NumStates);
-dTimeConst = NormalizeVectorField_(GetFieldOrDefault_(strDynParams, charTimeConstFieldName, zeros(ui32NumStates, 1)), ...
+dTimeConst = NormalizeVectorField_(GetFieldOrDefault_(strDynParams, charTimeConstFieldName, zeros(double(ui32NumStates), 1)), ...
                                    ui32NumStates);
 
 dBlockNoiseCov = evalMappedProcessNoiseFOGM(dDefaultDeltaTstep, ...
@@ -216,7 +216,7 @@ if coder.target('MATLAB') || coder.target('MEX')
         'ERROR: insufficient input-noise channels for the configured state blocks.');
 end
 
-dBlockNoiseCov = NormalizeDirectNoiseCov_(dBlockNoiseCov, double(ui32NumStates));
+dBlockNoiseCov = NormalizeDirectNoiseCov_(dBlockNoiseCov, ui32NumStates);
 ui32NoiseRange = ui32NoiseAllocPtr:ui32BlockEnd;
 
 strFilterMutabConfig.dInputProcessNoiseMatrix(ui32NoiseRange, ui32NoiseRange) = dBlockNoiseCov;
@@ -237,7 +237,7 @@ function dVector = NormalizeVectorField_(dVector, ui32NumStates)
 dVector = dVector(:);
 
 if isscalar(dVector) && ui32NumStates > 1
-    dVector = repmat(dVector, ui32NumStates, 1);
+    dVector = repmat(dVector, double(ui32NumStates), 1);
 end
 
 if coder.target('MATLAB') || coder.target('MEX')
@@ -251,7 +251,7 @@ end
 function dNoiseCov = NormalizeDirectNoiseCov_(dNoiseCov, ui32NumStates)
 
 if isscalar(dNoiseCov)
-    dNoiseCov = double(dNoiseCov) * eye(ui32NumStates);
+    dNoiseCov = double(dNoiseCov) * eye(double(ui32NumStates));
     return
 end
 
@@ -263,7 +263,7 @@ if isvector(dNoiseCov)
 end
 
 if coder.target('MATLAB') || coder.target('MEX')
-    assert(all(size(dNoiseCov) == [ui32NumStates, ui32NumStates]), ...
+    assert(all(size(dNoiseCov) == [double(ui32NumStates), double(ui32NumStates)]), ...
         'ERROR: direct input-noise covariance block has incorrect size.');
 end
 end

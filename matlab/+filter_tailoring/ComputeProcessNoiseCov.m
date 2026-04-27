@@ -32,9 +32,9 @@ end
 %% Function code
 
 % Extract state size and indices
-ui16StateSize = double(strFilterConstConfig.ui16StateSize);
+ui16StateSize = strFilterConstConfig.ui16StateSize;
 strStatesIdx = strFilterConstConfig.strStatesIdx;
-dQprocessNoiseCov = zeros(ui16StateSize, ui16StateSize, 'double');
+dQprocessNoiseCov = zeros(double(ui16StateSize), double(ui16StateSize), 'double');
 
 if (~strFilterMutabConfig.bEnableProcessNoise) || (dDeltaTstep <= 0.0)
     return
@@ -42,11 +42,11 @@ end
 
 if coder.const(isfield(strStatesIdx, "ui8posVelIdx")) && coder.const(isfield(strStatesIdx, "ui8ResidualAccelIdx"))
     
-    dPosVelIdx = double(strStatesIdx.ui8posVelIdx(:));
-    dResidualAccelIdx = double(strStatesIdx.ui8ResidualAccelIdx(:));
+    ui8posVelIdx = strStatesIdx.ui8posVelIdx(:);
+    ui8ResidualAccelIdx = strStatesIdx.ui8ResidualAccelIdx(:);
 
     if coder.target('MATLAB') || coder.target('MEX')
-        assert(numel(dPosVelIdx) == 6 && numel(dResidualAccelIdx) == 3, ...
+        assert(numel(ui8posVelIdx) == 6 && numel(ui8ResidualAccelIdx) == 3, ...
             'ERROR: the default template expects 6 pos/vel states and 3 residual-acceleration states.');
     end
 
@@ -58,12 +58,12 @@ if coder.const(isfield(strStatesIdx, "ui8posVelIdx")) && coder.const(isfield(str
                                                                  strFilterMutabConfig.dResidualAccelSigma2WN, ...
                                                                  strDynParams.dResidualAccelTimeConst);
 
-    dQprocessNoiseCov(dPosVelIdx, dPosVelIdx) = dPosVelProcessQcov;
-    dQprocessNoiseCov(dPosVelIdx(1:3), dResidualAccelIdx) = dPosResidualAccelCrossQcov;
-    dQprocessNoiseCov(dResidualAccelIdx, dPosVelIdx(1:3)) = transpose(dPosResidualAccelCrossQcov);
-    dQprocessNoiseCov(dPosVelIdx(4:6), dResidualAccelIdx) = dVelResidualAccelCrossQcov;
-    dQprocessNoiseCov(dResidualAccelIdx, dPosVelIdx(4:6)) = transpose(dVelResidualAccelCrossQcov);
-    dQprocessNoiseCov(dResidualAccelIdx, dResidualAccelIdx) = dResidualAccelProcessQcov;
+    dQprocessNoiseCov(ui8posVelIdx, ui8posVelIdx) = dPosVelProcessQcov;
+    dQprocessNoiseCov(ui8posVelIdx(1:3), ui8ResidualAccelIdx) = dPosResidualAccelCrossQcov;
+    dQprocessNoiseCov(ui8ResidualAccelIdx, ui8posVelIdx(1:3)) = transpose(dPosResidualAccelCrossQcov);
+    dQprocessNoiseCov(ui8posVelIdx(4:6), ui8ResidualAccelIdx) = dVelResidualAccelCrossQcov;
+    dQprocessNoiseCov(ui8ResidualAccelIdx, ui8posVelIdx(4:6)) = transpose(dVelResidualAccelCrossQcov);
+    dQprocessNoiseCov(ui8ResidualAccelIdx, ui8ResidualAccelIdx) = dResidualAccelProcessQcov;
 end
 
 %% Evaluate and assign optional FOGM bias
@@ -103,34 +103,42 @@ dQprocessNoiseCov = 0.5 .* (dQprocessNoiseCov + transpose(dQprocessNoiseCov));
 
 end
 
+%% Helper functions
 function dQprocessNoiseCov = ComputeAssignBlock_FOGM_(dQprocessNoiseCov, ...
-                                              ui16StateIdx, ...
+                                              ui8StateIdx, ...
                                               dSigma2WN, ...
                                               dTimeConst, ...
                                               bUseGMbetaVariant, ...
                                               dDeltaTstep)
 
-dStateIdx = double(ui16StateIdx(:));
-if isempty(dStateIdx)
+% Get state size and validate indices
+ui8StateIdx = ui8StateIdx(:);
+if isempty(ui8StateIdx)
     return
 end
 
-dSigma2WN = ExpandProcessParam_(dSigma2WN, numel(dStateIdx));
-dTimeConst = ExpandProcessParam_(dTimeConst, numel(dStateIdx));
-dQprocessNoiseCov(dStateIdx, dStateIdx) = evalMappedProcessNoiseFOGM(dDeltaTstep, ...
-                                                                     dSigma2WN, ...
-                                                                     dTimeConst, ...
-                                                                     dDeltaTstep, ...
-                                                                     bUseGMbetaVariant);
+% Resolve FOGM parameters
+ui32NumStates = uint32(numel(ui8StateIdx));
+dSigma2WN = ExpandProcessParam_(dSigma2WN, ui32NumStates);
+dTimeConst = ExpandProcessParam_(dTimeConst, ui32NumStates);
+
+% Evaluate process noise covariance block for the FOGM process
+dQprocessNoiseCov(ui8StateIdx, ui8StateIdx) = evalMappedProcessNoiseFOGM(dDeltaTstep, ...
+                                                                         dSigma2WN, ...
+                                                                         dTimeConst, ...
+                                                                         dDeltaTstep, ...
+                                                                         bUseGMbetaVariant);
 end
 
 function dValue = ExpandProcessParam_(dValue, ui32NumStates)
+% Expand a scalar process-noise parameter to a vector matching the size of the corresponding state block, if needed. The function also ensures the output is a column vector.
+
 dValue = dValue(:);
 
 if isempty(dValue)
-    dValue = zeros(ui32NumStates, 1);
+    dValue = zeros(double(ui32NumStates), 1);
 elseif isscalar(dValue) && ui32NumStates > 1
-    dValue = repmat(dValue, ui32NumStates, 1);
+    dValue = repmat(dValue, double(ui32NumStates), 1);
 end
 
 if coder.target('MATLAB') || coder.target('MEX')

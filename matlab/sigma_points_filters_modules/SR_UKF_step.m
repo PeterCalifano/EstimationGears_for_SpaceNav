@@ -60,10 +60,10 @@ if coder.const(isfield(strDynParams, "bFiringManoeuvre"))
 end
 
 ui16StateSize = coder.const(strFilterConstConfig.ui16StateSize);
-ui16MeasVecSize = coder.const(strFilterConstConfig.ui8MeasVecSize);
+ui8MeasVecSize = coder.const(strFilterConstConfig.ui8MeasVecSize);
 ui16MaxResidualsVecSize = coder.const(strFilterConstConfig.ui16MaxResidualsVecSize);
 
-if ui16MeasVecSize > ui16MaxResidualsVecSize
+if uint16(ui8MeasVecSize) > ui16MaxResidualsVecSize
     error('SR_UKF_step:InvalidResidualAllocation', ...
           'ui16MaxResidualsVecSize must cover ui8MeasVecSize for the SR-UKF output bus.');
 end
@@ -133,11 +133,11 @@ if strFilterMutabConfig.bNewMeasAvailable && ~bFiringManoeuvre
     dxStateSqrtCov(:,:) = dxStateSqrtCovPost;
 
     % Assign output data from measurement update
-    strFilterOutputData.dKalmanGain(:, 1:ui16MeasVecSize) = dKalmanGain;
+    strFilterOutputData.dKalmanGain(:, 1:double(ui8MeasVecSize)) = dKalmanGain;
     strFilterOutputData.dxErrState(:) = dxErrState;
-    strFilterOutputData.dAllPriorResVector(1:ui16MeasVecSize) = dAllPriorResVector;
-    strFilterOutputData.dSqrtSyyResCov(1:ui16MeasVecSize, 1:ui16MeasVecSize) = dSqrtSyyResCov;
-    strFilterOutputData.dPyyResCov(1:ui16MeasVecSize, 1:ui16MeasVecSize) = dSqrtSyyResCov' * dSqrtSyyResCov;
+    strFilterOutputData.dAllPriorResVector(1:double(ui8MeasVecSize)) = dAllPriorResVector;
+    strFilterOutputData.dSqrtSyyResCov(1:double(ui8MeasVecSize), 1:double(ui8MeasVecSize)) = dSqrtSyyResCov;
+    strFilterOutputData.dPyyResCov(1:double(ui8MeasVecSize), 1:double(ui8MeasVecSize)) = dSqrtSyyResCov' * dSqrtSyyResCov;
     strFilterOutputData.dMeasUpdateTimetag = dStateTimetag(1);
 end
 

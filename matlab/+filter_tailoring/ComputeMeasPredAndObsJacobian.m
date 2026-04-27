@@ -36,18 +36,18 @@ assert(length(bValidMeasBool) == strFilterConstConfig.ui8MeasVecSize);
 assert(isfield(strFilterConstConfig.strStatesIdx, "ui8posVelIdx"), ...
     'ERROR: test measurement hook requires the standard EKF ui8posVelIdx state-index field.');
 
-ui16MeasVecSize = double(strFilterConstConfig.ui8MeasVecSize);
-ui16StateSize = double(strFilterConstConfig.ui16StateSize);
-ui16MeasStateIdx = uint16(strFilterConstConfig.strStatesIdx.ui8posVelIdx(1:ui16MeasVecSize));
+ui8MeasVecSize = strFilterConstConfig.ui8MeasVecSize;
+ui16StateSize = strFilterConstConfig.ui16StateSize;
+ui16MeasStateIdx = uint16(strFilterConstConfig.strStatesIdx.ui8posVelIdx(1:double(ui8MeasVecSize)));
 
-dyMeasPred = zeros(ui16MeasVecSize, 1);
+dyMeasPred = zeros(double(ui8MeasVecSize), 1);
 bValidPrediction = logical(bValidMeasBool(:));
-dHobsMatrix = zeros(ui16MeasVecSize, ui16StateSize);
+dHobsMatrix = zeros(double(ui8MeasVecSize), double(ui16StateSize));
 
 dyMeasPred(:) = dxStateAtMeas(ui16MeasStateIdx);
 
 if nargout > 2
-    for idRow = 1:ui16MeasVecSize
+    for idRow = 1:double(ui8MeasVecSize)
         dHobsMatrix(idRow, ui16MeasStateIdx(idRow)) = 1.0;
     end
 end
