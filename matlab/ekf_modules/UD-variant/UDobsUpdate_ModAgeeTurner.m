@@ -34,7 +34,7 @@ function [o_dxStatePost, o_dUpost, o_dKalmanGain, o_dDpost, o_dxErrState] = UDob
 %% CHANGELOG
 % 27-10-2023    Pietro Califano     First prototype coded. Not verified.
 % 13-12-2023    Pietro Califano     Update to introduce whitening, outliers rejection module.
-% 07-02-2024    Pietro Califano     Prototype validated against GivensRotSRIF/EKF
+% 07-02-2024    Pietro Califano     Prototype validated against Givens-rotation SRIF/EKF measurement updates.
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % [-]
