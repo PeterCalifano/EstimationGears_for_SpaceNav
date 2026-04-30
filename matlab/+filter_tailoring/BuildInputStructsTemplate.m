@@ -50,6 +50,8 @@ strFilterMutabConfig.dVelocityInputNoiseCov = zeros(3);
 strFilterMutabConfig.dAttBiasDeltaInputNoiseCov = zeros(3);
 strFilterMutabConfig.dProcessNoiseMapMatrix = zeros(double(ui16StateSize), double(ui8NumOfInputNoiseChannels));
 strFilterMutabConfig.dInputProcessNoiseMatrix = zeros(double(ui8NumOfInputNoiseChannels));
+strFilterMutabConfig.dLastProcessNoiseDeltaTstep = 0.0;
+strFilterMutabConfig.dLastCenMeasBiasInputNoiseDiag = zeros(2,1);
 strFilterMutabConfig.dGravParamInputNoiseVar = 0.0;
 
 % State-management defaults

@@ -354,6 +354,10 @@ end
 
 %% Centroiding measurement processing
 if bMeasTypeFlags(2) == true
+    if not(strFilterConstConfig.bOrbitStateOnly) && not(isempty(strFilterConstConfig.strStatesIdx.ui8CenMeasBiasIdx))
+        strFilterMutabConfig.bConsiderStatesMode(strFilterConstConfig.strStatesIdx.ui8CenMeasBiasIdx) = false;
+    end
+
     ui32CentrAllocPtr   = uint32([0,1]) + ui32ResStartAllocPtr;
 
     % Compute centroiding measurement prediction in image place
@@ -442,8 +446,10 @@ if bMeasTypeFlags(2) == true
     end
 else
     % Reset centroiding bias and enable consider mode
-    dxStatePost(strFilterConstConfig.strStatesIdx.ui8CenMeasBiasIdx) = [0;0];
-    strFilterMutabConfig.bConsiderStatesMode(strFilterConstConfig.strStatesIdx.ui8CenMeasBiasIdx) = true;
+    if not(strFilterConstConfig.bOrbitStateOnly) && not(isempty(strFilterConstConfig.strStatesIdx.ui8CenMeasBiasIdx))
+        dxStatePost(strFilterConstConfig.strStatesIdx.ui8CenMeasBiasIdx) = [0; 0];
+        strFilterMutabConfig.bConsiderStatesMode(strFilterConstConfig.strStatesIdx.ui8CenMeasBiasIdx) = true;
+    end
 end
 
 %% Feature-based measurement processing
