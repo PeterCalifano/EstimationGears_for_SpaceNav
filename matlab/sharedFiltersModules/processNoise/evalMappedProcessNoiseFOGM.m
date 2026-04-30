@@ -3,21 +3,21 @@ function [dProcessNoiseCovFOGM] = evalMappedProcessNoiseFOGM(dDeltaTstep, ...
                                                              dTimeConst, ...
                                                              dDefaultDeltaTstep, ...
                                                              bBetaVariant,...
-                                                             dDefaultProcessQcov) %#codegen
+                                                             dOverrideProcessQcov) %#codegen
 arguments
-    dDeltaTstep         (1, 1) {isscalar}
-    dSigma2WN           (:, 1) {isvector}
-    dTimeConst          (:, 1) {isvector}
-    dDefaultDeltaTstep  (1, 1) {isscalar}
-    bBetaVariant        (1, 1) {islogical, isscalar} = false
-    dDefaultProcessQcov = zeros(length(dSigma2WN)) 
+    dDeltaTstep         (1,1) {mustBeNumeric, mustBeFinite}
+    dSigma2WN           (:,1) {mustBeNumeric, mustBeFinite}
+    dTimeConst          (:,1) {mustBeNumeric, mustBeFinite}
+    dDefaultDeltaTstep  (1,1) {mustBeNumeric, mustBeFinite}
+    bBetaVariant        (1,1) logical {mustBeNumeric, mustBeFinite} = false
+    dOverrideProcessQcov = zeros(length(dSigma2WN)) 
 end
 %% PROTOTYPE
 % [dProcessNoiseCovFOGM] = evalMappedProcessNoiseFOGM(dDeltaTstep, ...
 %                                               dSigma2WN, ...
 %                                               dTimeConst, ...
 %                                               dDefaultDeltaTstep, ...
-%                                               dDefaultProcessQcov) %#codegen
+%                                               dOverrideProcessQcov) %#codegen
 % -------------------------------------------------------------------------------------------------------------
 %% DESCRIPTION
 % Function computing the mapped input noise covariance associated to a FOGM process assuming constant input
@@ -30,7 +30,7 @@ end
 % dSigma2WN
 % dTimeConst
 % dDefaultDeltaTstep
-% dDefaultProcessQcov
+% dOverrideProcessQcov
 % -------------------------------------------------------------------------------------------------------------
 %% OUTPUT
 % dProcessNoiseCovFOGM
@@ -39,10 +39,12 @@ end
 % 14-04-2024    Pietro Califano     First version coded.
 % 22-06-2025    Pietro Califano     Implement modifications for static size compatibility; improve
 %                                   robustness to zero time constant input (prevents nan).
+% 30-04-2026    Pietro Califano     [HOTFIX] Fix incorrect handling of beta variant input (time constant conversion).
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % [-]
 % -------------------------------------------------------------------------------------------------------------
+
 %% Function code
 
 % Input assert checks
@@ -50,24 +52,24 @@ assert(size(dSigma2WN,1) == size(dTimeConst,1), "ERROR: size of input column vec
 ui8numOfStates = uint8(size(dSigma2WN,1));
 
 assert( isscalar(dDefaultDeltaTstep), "" )
+
 if nargin > 4
-    assert( all(size(dDefaultProcessQcov) == [ui8numOfStates, ui8numOfStates]), "")
+    assert( all(size(dOverrideProcessQcov) == [ui8numOfStates, ui8numOfStates]), "")
 end
 
 % First Order Gauss Markov auto-covariance matrix [NxN]
-if ( any(dDefaultProcessQcov> 0, 'all') && abs(dDeltaTstep - dDefaultDeltaTstep) <= 2*eps )
+if ( any(dOverrideProcessQcov > 0, 'all') && abs(dDeltaTstep - dDefaultDeltaTstep) <= 2*eps )
 
-    dProcessNoiseCovFOGM = dDefaultProcessQcov;
+    dProcessNoiseCovFOGM = dOverrideProcessQcov;
 
 else
 
-    dProcessNoiseCovFOGM = zeros(ui8numOfStates);
-
+    dProcessNoiseCovFOGM = zeros(ui8numOfStates, ui8numOfStates, 'like', dSigma2WN);
     for idT = 1:length(dTimeConst)
-        if dTimeConst(idT) >= 1E-22
+        if dTimeConst(idT) >= 1E-24
 
             if bBetaVariant
-                dTimeConst = 1./dTimeConst;
+                dTimeConst(idT) = 1.0 / dTimeConst(idT); % Convert back to time constant tag from beta parameter (input)
             end
 
             dProcessNoiseCovFOGM( idT, idT ) = (dSigma2WN(idT) .* 0.5 .* dTimeConst(idT)).*...
