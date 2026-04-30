@@ -85,6 +85,7 @@ strFilterMutabConfig.ui32ImgProcMeasEditingCounter = uint32(0);
 strFilterMutabConfig.ui32LidarMeasEditingCounter = uint32(0);
 strFilterMutabConfig.ui32MaxNumImgProcMeasEditing = uint32(0);
 strFilterMutabConfig.ui32MaxNumLidarMeasEditing = uint32(0);
+strFilterMutabConfig.ui8CentroidingAlgorithmMode = uint8(1);
 strFilterMutabConfig.ui8IPRangeSource = uint8(0);
 strFilterMutabConfig.ui8CenMeasCovModel = uint8(0);
 strFilterMutabConfig.ui8LidarShapeModelMode = uint8(1);
