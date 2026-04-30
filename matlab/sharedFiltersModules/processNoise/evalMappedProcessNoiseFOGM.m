@@ -9,7 +9,7 @@ arguments
     dSigma2WN           (:,1) {mustBeNumeric, mustBeFinite}
     dTimeConst          (:,1) {mustBeNumeric, mustBeFinite}
     dDefaultDeltaTstep  (1,1) {mustBeNumeric, mustBeFinite}
-    bBetaVariant        (1,1) logical {mustBeNumeric, mustBeFinite} = false
+    bBetaVariant        (1,1) logical {mustBeNumericOrLogical} = false
     dOverrideProcessQcov = zeros(length(dSigma2WN)) 
 end
 %% PROTOTYPE
