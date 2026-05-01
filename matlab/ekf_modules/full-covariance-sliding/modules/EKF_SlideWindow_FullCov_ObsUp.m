@@ -80,6 +80,7 @@ end
 % 01-06-2025    Pietro Califano     Complete implementation of observation models (add VO measurement)
 % 06-06-2025    Pietro Califano     Update observation module with measurement rejection
 % 11-07-2025    Pietro Califano     [MAJOR] Fix incorrect pointer to sliding window entries for update step
+% 30-04-2026    Pietro Califano     Extend default implementation with ACOB correction jacobian support
 % -------------------------------------------------------------------------------------------------------------
 
 % Coder directives
