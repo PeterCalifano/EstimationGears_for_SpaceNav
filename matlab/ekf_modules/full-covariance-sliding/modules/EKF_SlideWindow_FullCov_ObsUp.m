@@ -80,6 +80,7 @@ end
 % 01-06-2025    Pietro Califano     Complete implementation of observation models (add VO measurement)
 % 06-06-2025    Pietro Califano     Update observation module with measurement rejection
 % 11-07-2025    Pietro Califano     [MAJOR] Fix incorrect pointer to sliding window entries for update step
+% 30-04-2026    Pietro Califano     Extend default implementation with ACOB correction jacobian support
 % -------------------------------------------------------------------------------------------------------------
 
 % Coder directives
@@ -153,9 +154,9 @@ if any(bMeasTypeFlags)
         % Compute covariance of centroiding measurement
         dMeasAutoCovR(ui32ResStartAllocPtr:ui32ResStartAllocPtr+ui32IndexDelta, ...
             ui32ResStartAllocPtr:ui32ResStartAllocPtr+ui32IndexDelta) = ComputeCentroidingMeasCov(dxStatePost, ...
-                                                                                                  strFilterMutabConfig, ...
-                                                                                                  strDynParams, ...
-                                                                                                  strFilterConstConfig);
+                                                                                                                    strFilterMutabConfig, ...
+                                                                                                                    strDynParams, ...
+                                                                                                                    strFilterConstConfig);
 
         ui32ResStartAllocPtr = ui32ResStartAllocPtr + ui32IndexDelta + uint32(1);
     end
@@ -354,6 +355,10 @@ end
 
 %% Centroiding measurement processing
 if bMeasTypeFlags(2) == true
+    if not(strFilterConstConfig.bOrbitStateOnly) && not(isempty(strFilterConstConfig.strStatesIdx.ui8CenMeasBiasIdx))
+        strFilterMutabConfig.bConsiderStatesMode(strFilterConstConfig.strStatesIdx.ui8CenMeasBiasIdx) = false;
+    end
+
     ui32CentrAllocPtr   = uint32([0,1]) + ui32ResStartAllocPtr;
 
     % Compute centroiding measurement prediction in image place
@@ -377,6 +382,40 @@ if bMeasTypeFlags(2) == true
     % DEVNOTE: add latency management here
     % dBackwardSTM = eye(ui16StateSize);
     % dCentroidObsMatrix = dCentroidObsMatrix * dBackwardSTM;
+    if strFilterMutabConfig.i8CentroidingAlgorithmMode == uint8(1)
+        % ACoB uses the filter-predicted range/pose to correct CoB into CoF.
+        % Account for that state dependence in the centroid residual Jacobian.
+        assert(strFilterMutabConfig.dReferenceMetricRadius > 0.0, ...
+            'ACoB centroiding requires strFilterMutabConfig.dReferenceMetricRadius > 0.');
+        assert(strFilterMutabConfig.dMeanInstFOVinRadPx > 0.0, ...
+            'ACoB centroiding requires strFilterMutabConfig.dMeanInstFOVinRadPx > 0.');
+
+        % Evaluate current sun position in inertial frame
+        dSunPosition_IN = evalChbvPolyWithCoeffs(strDynParams.strBody3rdData(1).strOrbitData.ui32PolyDeg, ...
+                                            3, dStateTimetag(1), ...
+                                            strDynParams.strBody3rdData(1).strOrbitData.dChbvPolycoeffs, ...
+                                            strDynParams.strBody3rdData(1).strOrbitData.dTimeLowBound, ...
+                                            strDynParams.strBody3rdData(1).strOrbitData.dTimeUpBound);
+
+        % Evaluate phase angle between sun and camera
+        dCameraPosition_IN = dxStatePost(strFilterConstConfig.strStatesIdx.ui8posVelIdx(1:3));
+        dPhaseAngleInRad = acos(max(-1.0, min(1.0, dot(dCameraPosition_IN / norm(dCameraPosition_IN), ...
+                                                       dSunPosition_IN / norm(dSunPosition_IN)))));
+
+        ui8PosIdx = coder.const(strFilterConstConfig.strStatesIdx.ui8posVelIdx(1:3));
+
+        % Subtract from the Jacobian the contribution of the CoB to CoF correction
+        dCentroidObsMatrix(:, ui8PosIdx) = dCentroidObsMatrix(:, ui8PosIdx) ...
+            - evalJAC_AnalyticCOB_CamPosition(dCameraPosition_IN, ...
+                                              dPhaseAngleInRad, ...
+                                              dSunPosition_IN, ...
+                                              dDCM_CiFromIN(:,:,1), ...
+                                              strFilterMutabConfig.dReferenceMetricRadius, ...
+                                              strFilterMutabConfig.dMeanInstFOVinRadPx, ...
+                                              coder.const(0.0062), ...
+                                              coder.const(false));
+    end
+
     dCentroidBiasObsMatrix = zeros(2, ui16StateSize);
     dCentroidBiasObsSubMat = zeros(2,2);
     dCorrectionVector = zeros(2,1);
@@ -442,8 +481,10 @@ if bMeasTypeFlags(2) == true
     end
 else
     % Reset centroiding bias and enable consider mode
-    dxStatePost(strFilterConstConfig.strStatesIdx.ui8CenMeasBiasIdx) = [0;0];
-    strFilterMutabConfig.bConsiderStatesMode(strFilterConstConfig.strStatesIdx.ui8CenMeasBiasIdx) = true;
+    if not(strFilterConstConfig.bOrbitStateOnly) && not(isempty(strFilterConstConfig.strStatesIdx.ui8CenMeasBiasIdx))
+        dxStatePost(strFilterConstConfig.strStatesIdx.ui8CenMeasBiasIdx) = [0; 0];
+        strFilterMutabConfig.bConsiderStatesMode(strFilterConstConfig.strStatesIdx.ui8CenMeasBiasIdx) = true;
+    end
 end
 
 %% Feature-based measurement processing

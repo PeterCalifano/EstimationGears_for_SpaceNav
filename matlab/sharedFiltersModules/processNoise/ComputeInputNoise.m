@@ -37,6 +37,8 @@ end
 ui32NoiseAllocPtr = uint32(1);
 bUseGMbetaVariant = GetFieldOrDefault_(strFilterConstConfig, "bUseGMbetaVariant", false);
 dDefaultDeltaTstep = GetFieldOrDefault_(strFilterMutabConfig, "dDefaultDeltaTstep", 1.0);
+strFilterMutabConfig.dLastProcessNoiseDeltaTstep = dDefaultDeltaTstep;
+strFilterMutabConfig.dLastCenMeasBiasInputNoiseDiag = zeros(2, 1);
 
 if isfield(strFilterConstConfig.strStatesIdx, "ui8posVelIdx") && numel(strFilterConstConfig.strStatesIdx.ui8posVelIdx) >= 6
     ui16VelIdx = uint16(strFilterConstConfig.strStatesIdx.ui8posVelIdx(4:6));
@@ -198,6 +200,11 @@ dBlockNoiseCov = evalMappedProcessNoiseFOGM(dDefaultDeltaTstep, ...
                                                                  ui16StateIdx, ...
                                                                  dBlockNoiseCov, ...
                                                                  ui32NoiseAllocPtr);
+
+if strcmpi(charStateFieldName, "ui8CenMeasBiasIdx")
+    strFilterMutabConfig.dLastCenMeasBiasInputNoiseDiag(:) = diag(dBlockNoiseCov);
+end
+
 end
 
 function [strFilterMutabConfig, ui32NoiseAllocPtr] = AddDirectNoiseBlock_(strFilterMutabConfig, ...
