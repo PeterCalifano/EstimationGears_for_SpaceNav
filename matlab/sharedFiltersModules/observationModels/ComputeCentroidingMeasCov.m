@@ -49,8 +49,9 @@ switch strFilterMutabConfig.ui8CenMeasCovModel
         dEstimatedRange = norm( dxState(strFilterConstConfig.strStatesIdx.ui8posVelIdx(1:3)) );
         dIFOVxy = atan(1.0 ./ [strFilterMutabConfig.dKcam(1,1); strFilterMutabConfig.dKcam(2,2)] );
 
-        dApparentDiamInPix(1) = atan( 2.0 * strDynParams.strMainData.dRefRadius ./ dEstimatedRange) ./ dIFOVxy;
-        dRmeasCovMatrix(:,:) = (strFilterMutabConfig.dCenMeasApparentSizeLawCoeff .* diag(dApparentDiamInPix)) .^2 ; %[px]
+        dApparentDiamInPix_XY = atan( 2.0 * strDynParams.strMainData.dRefRadius ./ dEstimatedRange) ./ dIFOVxy;
+        dApparentDiamInPix = mean(dApparentDiamInPix_XY);
+        dRmeasCovMatrix(:,:) = (strFilterMutabConfig.dCenMeasApparentSizeLawCoeff .* diag(dApparentDiamInPix_XY)) .^2 ; %[px]
 
     otherwise
         % Fall back is default case
