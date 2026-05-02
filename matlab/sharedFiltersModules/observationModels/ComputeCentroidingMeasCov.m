@@ -1,15 +1,15 @@
-function [dRmeasCovMatrix] = ComputeCentroidingMeasCov(dxState, ...
-                                                    strFilterMutabConfig, ...
-                                                    strDynParams, ...
-                                                    strFilterConstConfig)%#codegen
+function [dRmeasCovMatrix, dApparentDiamInPix] = ComputeCentroidingMeasCov(dxState, ...
+                                                                        strFilterMutabConfig, ...
+                                                                        strDynParams, ...
+                                                                        strFilterConstConfig)%#codegen
 arguments
-    dxState                 (:,1) {isvector, isnumeric}
-    strFilterMutabConfig    (1,1) {isstruct}
-    strDynParams            (1,1) {isstruct}
-    strFilterConstConfig    (1,1) {isstruct}
+    dxState                 (:,1) {mustBeNumeric}
+    strFilterMutabConfig    (1,1) struct
+    strDynParams            (1,1) struct
+    strFilterConstConfig    (1,1) struct {coder.mustBeConst}
 end
 %% SIGNATURE
-% [dRmeasCovMatrix] = ComputeCentroidingMeasCov(dxState, ...
+% [dRmeasCovMatrix, dApparentDiamInPix] = ComputeCentroidingMeasCov(dxState, ...
 %                                                strFilterMutabConfig, ...
 %                                                strDynParams, ...
 %                                                strFilterConstConfig)%#codegen
@@ -18,13 +18,14 @@ end
 % Function computing/assigning the measurement noise covariance matrix of the centroiding measurement.
 % -------------------------------------------------------------------------------------------------------------
 %% INPUT
-% dxState                 (:,1) {isvector, isnumeric}
-% strFilterMutabConfig    (1,1) {isstruct}
-% strDynParams            (1,1) {isstruct}
-% strFilterConstConfig    (1,1) {isstruct}
+% dxState                 (:,1) {mustBeNumeric}
+% strFilterMutabConfig    (1,1) struct
+% strDynParams            (1,1) struct
+% strFilterConstConfig    (1,1) struct {coder.mustBeConst}
 % -------------------------------------------------------------------------------------------------------------
 %% OUTPUT
 % dRmeasCovMatrix
+% dApparentDiamInPix
 % -------------------------------------------------------------------------------------------------------------
 %% CHANGELOG
 % 05-05-2025    Pietro Califano     First version to wrap previous assignment.
@@ -35,7 +36,8 @@ end
 % -------------------------------------------------------------------------------------------------------------
 
 %% Function code
-dRmeasCovMatrix = zeros(2,2);
+dRmeasCovMatrix     = zeros(2,2);
+dApparentDiamInPix  = 0.0;
 
 switch strFilterMutabConfig.ui8CenMeasCovModel
     case 0
@@ -47,8 +49,8 @@ switch strFilterMutabConfig.ui8CenMeasCovModel
         dEstimatedRange = norm( dxState(strFilterConstConfig.strStatesIdx.ui8posVelIdx(1:3)) );
         dIFOVxy = atan(1.0 ./ [strFilterMutabConfig.dKcam(1,1); strFilterMutabConfig.dKcam(2,2)] );
 
-        dRmeasCovMatrix(:,:) = (strFilterMutabConfig.dCenMeasApparentSizeLawCoeff .* ...
-            diag(atan( 2.0 * strDynParams.strMainData.dRefRadius ./ dEstimatedRange) ./ dIFOVxy)) .^2 ; %[px]
+        dApparentDiamInPix(1) = atan( 2.0 * strDynParams.strMainData.dRefRadius ./ dEstimatedRange) ./ dIFOVxy;
+        dRmeasCovMatrix(:,:) = (strFilterMutabConfig.dCenMeasApparentSizeLawCoeff .* diag(dApparentDiamInPix)) .^2 ; %[px]
 
     otherwise
         % Fall back is default case
