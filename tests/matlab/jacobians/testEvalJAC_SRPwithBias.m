@@ -27,24 +27,29 @@ VerifySRPJacobianMatchesFiniteDiff_(testCase, cfg)
 end
 
 %% Helpers
-function cfg = buildSRPTestConfig_(bEnableBiasSRP)
+function cfg = buildSRPTestConfig_(bIncludeCoeffSRPstate)
 
 % Construct minimal configuration structs
 cfg = struct();
 
 % strFilterConstConfig
 cfg.strFilterConstConfig = struct();
-cfg.strFilterConstConfig.ui16StateSize = uint16(7);
 cfg.strFilterConstConfig.bOrbitStateOnly = true;
 cfg.strFilterConstConfig.bUseKilometersScale = false;
+cfg.strFilterConstConfig.strStatesIdx = struct();
 cfg.strFilterConstConfig.strStatesIdx.ui8posVelIdx = uint16(1:6);
-cfg.strFilterConstConfig.strStatesIdx.ui8CoeffSRPidx = uint16(7);
+
+if bIncludeCoeffSRPstate
+    cfg.strFilterConstConfig.ui16StateSize = uint16(7);
+    cfg.strFilterConstConfig.strStatesIdx.ui8CoeffSRPidx = uint16(7);
+else
+    cfg.strFilterConstConfig.ui16StateSize = uint16(6);
+end
 
 ui16StateSize = double(cfg.strFilterConstConfig.ui16StateSize);
 
 % strFilterMutabConfig
 cfg.strFilterMutabConfig = struct();
-cfg.strFilterMutabConfig.bEnableBiasSRP = bEnableBiasSRP;
 cfg.strFilterMutabConfig.bConsiderStatesMode = false(ui16StateSize, 1);
 
 % Geometry: Earth at origin, SC in LEO-like position, Sun far along +X (scaled Earth-Sun distance
@@ -55,7 +60,9 @@ cfg.dSunPosition_IN = [1e-3 * dAU; 0.0; 0.0];
 cfg.dxState = zeros(ui16StateSize, 1);
 cfg.dxState(cfg.strFilterConstConfig.strStatesIdx.ui8posVelIdx(1:3)) = [7.2e6; -1.1e6; 9.0e5];
 cfg.dxState(cfg.strFilterConstConfig.strStatesIdx.ui8posVelIdx(4:6)) = [10.0; 7.5e3; -25.0];
-cfg.dxState(cfg.strFilterConstConfig.strStatesIdx.ui8CoeffSRPidx) = 1.0e-6;
+if bIncludeCoeffSRPstate
+    cfg.dxState(cfg.strFilterConstConfig.strStatesIdx.ui8CoeffSRPidx) = 1.0e-6;
+end
 
 % strDynParams
 cfg.strDynParams = struct();
@@ -84,7 +91,7 @@ drvSRPwithBiasJac = evalJAC_SRPwithBias(cfg.dxState, ...
                                         cfg.strFilterMutabConfig, ...
                                         cfg.strFilterConstConfig);
 
-if cfg.strFilterMutabConfig.bEnableBiasSRP
+if isfield(cfg.strFilterConstConfig.strStatesIdx, 'ui8CoeffSRPidx')
     % Jacobian with bias
     dExpectedSize = [6, 4];
     dStatesColumns = double([cfg.strFilterConstConfig.strStatesIdx.ui8posVelIdx(1:3), ...
@@ -109,7 +116,9 @@ testCase.verifySize(drvSRPwithBiasJac, dExpectedSize);
 dFiniteDiffSteps = zeros(size(cfg.dxState));
 dFiniteDiffSteps(cfg.strFilterConstConfig.strStatesIdx.ui8posVelIdx(1:3)) = cfg.dFiniteDiffStepPos;
 dFiniteDiffSteps(cfg.strFilterConstConfig.strStatesIdx.ui8posVelIdx(4:6)) = cfg.dFiniteDiffStepVel;
-dFiniteDiffSteps(cfg.strFilterConstConfig.strStatesIdx.ui8CoeffSRPidx) = cfg.dFiniteDiffStepCoeff;
+if isfield(cfg.strFilterConstConfig.strStatesIdx, 'ui8CoeffSRPidx')
+    dFiniteDiffSteps(cfg.strFilterConstConfig.strStatesIdx.ui8CoeffSRPidx) = cfg.dFiniteDiffStepCoeff;
+end
 
 dFiniteDiffJacFull = EvalCentralDiffJacobian_(@(state) EvalSRPAccelFromStateHelper_(state, cfg), ...
                                                                         cfg.dxState, ...
@@ -142,7 +151,7 @@ dCoeffSRP = (dP_SRP * cfg.strDynParams.strSCdata.dReflCoeff * cfg.strDynParams.s
 % Optional additive coefficient bias
 dBiasCoeff = 0.0;
 
-if cfg.strFilterMutabConfig.bEnableBiasSRP
+if isfield(cfg.strFilterConstConfig.strStatesIdx, 'ui8CoeffSRPidx')
     dBiasCoeff = dxState(cfg.strFilterConstConfig.strStatesIdx.ui8CoeffSRPidx);
 end
 

@@ -19,9 +19,6 @@ function o_dX_TLS = SolveTLS(i_dA, i_dB, i_ui16SolRank) %#codegen
 %% DEPENDENCIES
 % [-]
 % -------------------------------------------------------------------------------------------------------------
-%% Future upgrades
-% [-]
-% -------------------------------------------------------------------------------------------------------------
 %% Function code
 
 % Solves the more general linear problem in which both the data matrix A and the observations matrix B are

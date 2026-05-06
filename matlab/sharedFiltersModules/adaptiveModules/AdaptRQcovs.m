@@ -54,9 +54,6 @@ function [o_dMeasCov, o_dProcessCov] = adaptRQcovs(i_dMeasCov, ...
 % adaptProcessCov()
 % adaptMeasCov()
 % -------------------------------------------------------------------------------------------------------------
-%% Future upgrades
-% [-]
-% -------------------------------------------------------------------------------------------------------------
 %% Function code
 
 if i_bENABLE_ADAPTIVE_R

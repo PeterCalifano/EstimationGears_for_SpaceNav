@@ -53,9 +53,6 @@ function [dPosVelProcessQcov, dUnmodelAccProcessQcov, dPosUnmodelAccCrossQcov, d
 %% DEPENDENCIES
 % [-]
 % -------------------------------------------------------------------------------------------------------------
-%% Future upgrades
-% [-]
-% -------------------------------------------------------------------------------------------------------------
 %% Function code
 % Input assert checks
 assert(size(dSigma2WN,1) == size(dTimeConst,1), "ERROR: size of input column vectors must be the same.")

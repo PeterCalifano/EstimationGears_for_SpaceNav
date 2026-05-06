@@ -35,9 +35,6 @@ function [o_dUprior, o_dDprior] = UDcovParams_AgeeTurnerTimeUp(i_Utilde, ...
 %% DEPENDENCIES
 % [-]
 % -------------------------------------------------------------------------------------------------------------
-%% Future upgrades
-% [-]
-% -------------------------------------------------------------------------------------------------------------
 %% Function code
 
 % Allocate initial values

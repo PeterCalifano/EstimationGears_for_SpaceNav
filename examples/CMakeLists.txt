@@ -1,19 +1,11 @@
-# Add examples to build
-set(EXAMPLES_PATTERN "example_*.cpp")
-file(GLOB srcExampleFiles RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} ${EXAMPLES_PATTERN})
-message("Examples files found: ${srcExampleFiles}")
+set(lib_name ${project_name}) # Default name for the library is project_name
 
-# Exclude EXCLUDED_LIST from the list of examples
-set(EXCLUDED_LIST "example_ChristianVOmeas.cpp")
-list(REMOVE_ITEM srcExampleFiles ${EXCLUDED_LIST})
+set(EXCLUDED_LIST "example_build")
 
-# Add to build and link
-foreach(exampleFile ${srcExampleFiles})
+# Add subdirectories
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/template_examples/CMakeLists.txt")
+  add_subdirectory(template_examples)
+endif()
 
-    get_filename_component(exampleName ${exampleFile} NAME_WE)
-    add_executable(${exampleName} ${exampleFile})
-
-    target_link_libraries(${exampleName} PUBLIC lib_name)
-    target_include_directories(${exampleName} PRIVATE ${lib_name_INCLUDE_DIRS})
-
-endforeach()
+# Add examples files in this directory
+add_examples(${project_name} EXCLUDED_LIST ${CUDA_COMPILE_TARGET})

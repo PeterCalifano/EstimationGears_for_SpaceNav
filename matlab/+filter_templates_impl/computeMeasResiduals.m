@@ -21,9 +21,6 @@ function [dPriorMeasRes, ui8ResAllocIdx] = computeMeasResiduals(dyMeasVec, ...
 %% DEPENDENCIES
 % [-]
 % ----------------------------------------------------------------------------------------------------------
-%% Future upgrades
-% [-]
-% ----------------------------------------------------------------------------------------------------------
 %% Function code
 % INPUT ASSERT CHECKS
 assert( iscolumn(dyMeasVec) )

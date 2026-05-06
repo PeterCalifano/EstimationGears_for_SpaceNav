@@ -22,9 +22,6 @@ function [dQprocessNoiseCov] = computeProcessNoiseCov(dDeltaTstep, strDynParams,
 %% DEPENDENCIES
 % [-]
 % -------------------------------------------------------------------------------------------------------------
-%% Future upgrades
-% [-]
-% -------------------------------------------------------------------------------------------------------------
 %% Function code
 % ui16StatesIdx = [i_strStatesIdx.ui8posVelIdx(1), i_strStatesIdx.ui8posVelIdx(end);
 %     i_strStatesIdx.ui8unmodelAccIdx(1), i_strStatesIdx.ui8unmodelAccIdx(end);

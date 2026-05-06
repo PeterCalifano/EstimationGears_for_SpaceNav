@@ -3,13 +3,13 @@ function [dFlowSTM] = getDiscreteTimeSTM(dDynMatrix, ...
                                          dDeltaTstep, ...
                                          ui16StateSize)%#codegen
 arguments(Input)
-    dDynMatrix        (:, :) double {isnumeric}
-    dDynMatrixNext    (:, :) double {isnumeric}
-    dDeltaTstep       (1, 1) double {isnumeric}
+    dDynMatrix        (:, :) double {mustBeNumeric}
+    dDynMatrixNext    (:, :) double {mustBeNumeric}
+    dDeltaTstep       (1, 1) double {mustBeNumeric}
     ui16StateSize     (1,1) uint16 = size(dDynMatrix, 1)
 end
 arguments(Output)
-    dFlowSTM          (:, :) double {isnumeric}
+    dFlowSTM          (:, :) double {mustBeNumeric}
 end
 %% PROTOTYPE
 % [dflowSTM] = getDiscreteTimeSTM(dDynMatrix, dDynMatrixNext, dDeltaTstep)
@@ -32,9 +32,8 @@ end
 %% DEPENDENCIES
 % [-]
 % -------------------------------------------------------------------------------------------------------------
-%% Future upgrades
-% [-]
-% -------------------------------------------------------------------------------------------------------------
+
+
 %% Function code
 if coder.target('MATLAB') || coder.target('MEX')
     assert(all(size(dDynMatrix) == size(dDynMatrixNext), 'all'), 'ERROR: dDynMatrix and dDynMatrixNext sizes are not matched!');

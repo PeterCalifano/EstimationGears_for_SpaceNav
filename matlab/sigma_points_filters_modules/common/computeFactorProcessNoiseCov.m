@@ -24,9 +24,6 @@ function [o_dsqrtQprocessNoiseCov, o_dQprocessNoiseCov] = computeFactorProcessNo
 %% DEPENDENCIES
 % 1) evalProcessNoiseDMC
 % -------------------------------------------------------------------------------------------------------------
-%% Future upgrades
-% [-]
-% -------------------------------------------------------------------------------------------------------------
 %% Function code
 % ui16StatesIdx = [i_strStatesIdx.ui8posVelIdx(1), i_strStatesIdx.ui8posVelIdx(end);
 %     i_strStatesIdx.ui8unmodelAccIdx(1), i_strStatesIdx.ui8unmodelAccIdx(end);

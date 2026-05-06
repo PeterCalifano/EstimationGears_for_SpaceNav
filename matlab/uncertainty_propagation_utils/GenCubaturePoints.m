@@ -27,9 +27,6 @@ function [o_dCubaPoints, o_dW, o_dSqrtP] = GenCubaturePoints(i_dxState, i_dPxSta
 %% DEPENDENCIES
 % [-]
 % -------------------------------------------------------------------------------------------------------------
-%% Future upgrades
-% [-]
-% -------------------------------------------------------------------------------------------------------------
 %% Function code
 Nx = uint16(size(i_dxState, 1));
 NcubaPoints = uint16(2*Nx);

@@ -198,9 +198,6 @@ o_dProcessNoiseCovSNC = (1 - i_dAlphaForget) * i_dProcessNoiseCovSNC + i_dAlphaF
         %% DEPENDENCIES
         % [-]
         % -------------------------------------------------------------------------------------------------------------
-        %% Future upgrades
-        % [-]
-        % -------------------------------------------------------------------------------------------------------------
         %% Function code
         % Input asserts
         assert(all(size(i_dContProcessNoiseQ) == [3, 3]), 'Size of continuous time process noise covariance must be [3,3].' )

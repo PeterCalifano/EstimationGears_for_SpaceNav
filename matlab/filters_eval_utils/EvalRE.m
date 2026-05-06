@@ -24,10 +24,6 @@ function [RE, inst_err, mean_err]  = EvalRE(signal, time_grid, time, deltat_grid
 % DEPENDENCIES
 % [-]
 % -------------------------------------------------------------------------
-% Future upgrades
-% [-]
-% -------------------------------------------------------------------------
-
 if length(deltat_grid) == 2
     period = time_grid(2) - time_grid(1);
     deltat_grid = deltat_grid(1):period:deltat_grid(2);

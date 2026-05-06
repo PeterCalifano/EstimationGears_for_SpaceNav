@@ -36,10 +36,6 @@ end
 %% DEPENDENCIES
 % [-]
 % -------------------------------------------------------------------------------------------------------------
-%% Future upgrades
-% [-]
-% -------------------------------------------------------------------------------------------------------------
-
 %% Function code
 dJacPoseCovFromState = zeros( strFilterConstConfig.ui16WindowPoseSize-1, strFilterConstConfig.ui16StateSize);
 

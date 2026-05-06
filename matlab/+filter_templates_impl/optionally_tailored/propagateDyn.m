@@ -42,9 +42,6 @@ end
 %% DEPENDENCIES
 % [-]
 % -------------------------------------------------------------------------------------------------------------
-%% Future upgrades
-% [-]
-% -------------------------------------------------------------------------------------------------------------
 %% Function code
 
 % TODO for cases in which dDeltaTime is small, interpolation of the interpolant may be done here
