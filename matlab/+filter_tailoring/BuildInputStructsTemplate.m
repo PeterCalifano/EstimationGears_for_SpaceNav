@@ -50,6 +50,8 @@ strFilterMutabConfig.dVelocityInputNoiseCov = zeros(3);
 strFilterMutabConfig.dAttBiasDeltaInputNoiseCov = zeros(3);
 strFilterMutabConfig.dProcessNoiseMapMatrix = zeros(double(ui16StateSize), double(ui8NumOfInputNoiseChannels));
 strFilterMutabConfig.dInputProcessNoiseMatrix = zeros(double(ui8NumOfInputNoiseChannels));
+strFilterMutabConfig.dLastProcessNoiseDeltaTstep = 0.0;
+strFilterMutabConfig.dLastCenMeasBiasInputNoiseDiag = zeros(2,1);
 strFilterMutabConfig.dGravParamInputNoiseVar = 0.0;
 
 % State-management defaults
@@ -83,7 +85,7 @@ strFilterMutabConfig.ui32ImgProcMeasEditingCounter = uint32(0);
 strFilterMutabConfig.ui32LidarMeasEditingCounter = uint32(0);
 strFilterMutabConfig.ui32MaxNumImgProcMeasEditing = uint32(0);
 strFilterMutabConfig.ui32MaxNumLidarMeasEditing = uint32(0);
-strFilterMutabConfig.ui8IPRangeSource = uint8(0);
+strFilterMutabConfig.i8CentroidingAlgorithmMode = uint8(1);
 strFilterMutabConfig.ui8CenMeasCovModel = uint8(0);
 strFilterMutabConfig.ui8LidarShapeModelMode = uint8(1);
 strFilterMutabConfig.ui8DecorrAlgorithmID = uint8(0);
