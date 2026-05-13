@@ -25,7 +25,7 @@ end
 %% DESCRIPTION
 % What the function does
 %
-% ACHTUNG: the integrator function strictly depends on "ComputeDynFcn" with standard interface:
+% ACHTUNG: the integrator function strictly depends on a consumer-provided "ComputeDynFcn" with standard interface:
 %       ComputeDynFcn(dCurrentTime, dxState, strDynParams, strFilterMutabConfig, strFilterConstConfig).
 % The structure maps to the dynamic parameters of the dynamics model function and must be properly matched.
 % filterStepRK4() is agnostic with respect to the output returned by the RHS, provided that it is of the
