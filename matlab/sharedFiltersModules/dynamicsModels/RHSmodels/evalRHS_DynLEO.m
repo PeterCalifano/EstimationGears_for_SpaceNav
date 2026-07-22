@@ -48,6 +48,10 @@ end
 %                                            ui16StatesIdx) %#codegen
 % -------------------------------------------------------------------------------------------------------------
 %% DESCRIPTION
+% Evaluate inertial position/velocity dynamics about the main body. Third-body
+% gravity is the physical differential acceleration between the spacecraft and
+% the main body; ephemeris vectors are measured from the main body to each
+% perturbing body in the same inertial frame as the spacecraft state.
 % -------------------------------------------------------------------------------------------------------------
 %% INPUT
 % dxState_IN              (:,1) double {mustBeNumeric}
@@ -76,6 +80,7 @@ end
 % 02-05-2024        Pietro Califano     Incorrect J2 acceleration fixed.
 % 22-07-2025        Pietro Califano     Update for integration in new filter architecture (future-nav)
 % 07-12-2025        Pietro Califano     Fix minor bugs related to SRP
+% 13-07-2026        Pietro Califano      Correct the third-body differential-gravity sign.
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % evalAtmExpDensity()
@@ -216,7 +221,11 @@ if ~isempty(dBodyEphemerides)
                 % Compute 3rd body acceleration
                 d3rdBodyPosFromMain_IN = d3rdBodiesPos_IN(:, idB) - dMainBodyPos_IN;
 
-                dTotAcc3rdBody(:) = dTotAcc3rdBody(1:3) + d3rdBodiesGM(idB+1) * ...
+                % dPos3rdBodiesToSC stores r_sc-r_body. The physical
+                % main-body-relative perturbation is
+                % mu*((r_body-r_sc)/rho^3-r_body/|r_body|^3), hence the
+                % leading minus sign on the stored-vector expression.
+                dTotAcc3rdBody(:) = dTotAcc3rdBody(1:3) - d3rdBodiesGM(idB+1) * ...
                                                  ( dPos3rdBodiesToSC./( norm(dPos3rdBodiesToSC) )^3 + ...
                                                  d3rdBodyPosFromMain_IN./(norm(d3rdBodyPosFromMain_IN)^3) );
             end
@@ -245,7 +254,7 @@ if ~isempty(dBodyEphemerides)
         end
 
         % Sun 3rd Body acceleration
-        dAcc3rdSun(1:3) = d3rdBodiesGM(1) * dAuxTerm3;
+        dAcc3rdSun(1:3) = -d3rdBodiesGM(1) * dAuxTerm3;
 
     else
         if coder.target('MATLAB')

@@ -13,7 +13,10 @@ end
 %                                              strFilterConstConfig) %#codegen
 % -------------------------------------------------------------------------------------------------------------
 %% DESCRIPTION
-% What the function does
+% Evaluate the position derivative of physical differential third-body
+% gravity. Body ephemerides and the spacecraft position are main-body-relative
+% inertial vectors. The indirect main-body term is constant with respect to the
+% spacecraft state, so only the direct term contributes to this Jacobian.
 % -------------------------------------------------------------------------------------------------------------
 %% INPUT
 % dxState
@@ -27,6 +30,8 @@ end
 % 24-02-2025    Pietro Califano     First version implemented from legacy code.
 % 19-08-2025    Pietro Califano     [MAJOR] Bug fix of indexing to allocate Jacobian 
 %                                           (was being allocated to veloicty!)
+% 13-07-2026    Pietro Califano     Correct derivative sign to match physical
+%                                   differential third-body acceleration.
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % [-]
@@ -66,10 +71,12 @@ if ui32NumOf3rdBodies > 0
         dNormBodyPosToSC = norm(dBodyPosToSC);
         dNormBodyPosToSC3 = dNormBodyPosToSC * dNormBodyPosToSC * dNormBodyPosToSC;
 
-        % Compute and sum jacobian
+        % dBodyPosToSC stores r_sc-r_body. For physical acceleration
+        % -mu*d/|d|^3, the derivative is
+        % mu*(-I/|d|^3 + 3*d*d'/|d|^5).
         drv3rdBodyGravityJac(ui8PosVelIdx(4:6), ui8PosVelIdx(1:3)) = drv3rdBodyGravityJac(ui8PosVelIdx(4:6), ui8PosVelIdx(1:3)) ...
-                                                            + d3rdBodiesGM * ( (1/dNormBodyPosToSC3) * eye(3) ...
-                                                            - ( 3/(dNormBodyPosToSC3*dNormBodyPosToSC*dNormBodyPosToSC) ) * dBodyPosToSC * transpose(dBodyPosToSC) );
+                                                            + d3rdBodiesGM * ( -(1/dNormBodyPosToSC3) * eye(3) ...
+                                                            + ( 3/(dNormBodyPosToSC3*dNormBodyPosToSC*dNormBodyPosToSC) ) * dBodyPosToSC * transpose(dBodyPosToSC) );
         
         % DEVNOTE: zero-out contributions below machine precision
         drv3rdBodyGravityJac( abs(drv3rdBodyGravityJac) < eps ) = 0.0;
