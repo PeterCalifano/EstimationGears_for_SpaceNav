@@ -1,42 +1,52 @@
-function [dxWindowState] = ApplyWindowPoseUpdate(dxWindowState, dxErrWindowState) %#codegen
-arguments
-    dxWindowState    (7,1) double {isvector, isnumeric}
-    dxErrWindowState (6,1) double {isvector, isnumeric}    
-end
+function dxWindowState = ApplyWindowPoseUpdate(dxWindowState, dxErrWindowState) %#codegen
 %% SIGNATURE
-% [dxWindowState] = ApplyWindowPoseUpdate(dxWindowState, dxErrWindowState) %#codegen
+% dxWindowState = ApplyWindowPoseUpdate(dxWindowState, dxErrWindowState) %#codegen
 % -------------------------------------------------------------------------------------------------------------
 %% DESCRIPTION
-% Function constructing camera window pose from current position, attitude bias and attitude quaternions.
+% Retract a six-entry local pose error onto a seven-entry nominal window
+% pose. Position is additive; attitude uses right quaternion multiplication
+% followed by explicit unit normalization.
 % -------------------------------------------------------------------------------------------------------------
 %% INPUT
-% dxWindowState    (7,1) double {isvector, isnumeric}
-% dxErrWindowState (6,1) double {isvector, isnumeric}
+% dxWindowState       Nominal [position, quaternion] window pose.
+% dxErrWindowState    Local [position, attitude error] correction.
 % -------------------------------------------------------------------------------------------------------------
 %% OUTPUT
-% dxWindowState    (7,1) double {isvector, isnumeric}
+% dxWindowState       Corrected pose with a normalized quaternion.
 % -------------------------------------------------------------------------------------------------------------
 %% CHANGELOG
-% 03-02-2025    Pietro Califano     First prototype implementation for MSCKF.
+% 03-02-2025  Pietro Califano     First prototype implementation for MSCKF.
+% 05-08-2026  Pietro Califano, Codex gpt-5.6     Correct position indexing and normalize attitude.
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
-% [-]
+% quatmultiply.
 % -------------------------------------------------------------------------------------------------------------
-if coder.target('MATLAB') || coder.target('MEX')
-
-    % Assert checks
-    assert(length(dxWindowState) == 7, 'ERROR: invalid size of input dxWindowState');
-    assert(length(dxErrWindowState) == 6, 'ERROR: invalid size of input dxErrWindowState');
-
+arguments (Input)
+    dxWindowState    (7,1) double {isvector, isnumeric}
+    dxErrWindowState (6,1) double {isvector, isnumeric}
 end
+
+arguments (Output)
+    dxWindowState (7,1) double
+end
+
 % DEVNOTE: this function assumes the classical implementation of the MSCKF.
 % The window state is thus assumed to be [dCamPosition_TB, dQuat_CamFromTB];
 
-% Additive update of position
-dxWindowState(1:3) = dxWindowState(1:3) + dxErrWindowState(4:6);
+% Apply translation and attitude corrections from their independent local
+% error blocks; the multiplication order preserves the established contract.
+dxWindowState(1:3) = dxWindowState(1:3) + dxErrWindowState(1:3);
+dErrorQuaternion = [1.0; 0.5 .* dxErrWindowState(4:6)];
+dUpdatedQuaternion = transpose(quatmultiply( ...
+    transpose(dxWindowState(4:7)), transpose(dErrorQuaternion)));
+dQuaternionNorm = norm(dUpdatedQuaternion);
 
-% Multiplicative update of quaternion
-dErrQuat = [1.0; 0.5 * dxErrWindowState(4:6)] ;
-dxWindowState(4:7) = quatmultiply(dxWindowState(4:7)', dErrQuat'); % TODO verify order of quaternions
+if ~isfinite(dQuaternionNorm) || dQuaternionNorm <= 0.0 || ...
+        any(~isfinite(dUpdatedQuaternion))
+    error('ApplyWindowPoseUpdate:InvalidQuaternion', ...
+          'Retracted window quaternion must be finite and have nonzero norm.');
+end
+
+dxWindowState(4:7) = dUpdatedQuaternion ./ dQuaternionNorm;
 
 end
