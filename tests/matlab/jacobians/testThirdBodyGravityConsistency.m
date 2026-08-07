@@ -160,9 +160,10 @@ function dAcceleration_IN = ComputePhysicalThirdBodyAcceleration_( ...
         dSpacecraftPosition_IN, dBodyPosition_IN, dBodyGM)
 %COMPUTEPHYSICALTHIRDBODYACCELERATION Evaluate target-relative differential gravity.
 %
-% The 3x1 positions are inertial vectors [m] measured from the main body and
-% dBodyGM is [m^3/s^2]. The output is [m/s^2]. This test oracle is independent
-% of production gravity helpers, owns no state, and is not generated flight code.
+% The 3x1 positions are inertial vectors measured from the main body. Position
+% and GM must use one consistent length scale; acceleration follows that scale
+% per second squared. This oracle is independent of production gravity helpers,
+% owns no state, and is not generated flight code.
 dBodyFromSpacecraft_IN = dBodyPosition_IN - dSpacecraftPosition_IN;
 dAcceleration_IN = dBodyGM .* ( ...
     dBodyFromSpacecraft_IN ./ norm(dBodyFromSpacecraft_IN).^3 - ...
