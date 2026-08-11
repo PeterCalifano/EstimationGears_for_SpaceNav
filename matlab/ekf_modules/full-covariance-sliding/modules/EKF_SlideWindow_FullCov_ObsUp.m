@@ -120,10 +120,6 @@ ui16StateSize            = coder.const(strFilterConstConfig.ui16StateSize);
 ui32FullStateSize        = coder.const(strFilterConstConfig.ui32FullStateSize);
 ui32FullCovSize          = coder.const(strFilterConstConfig.ui32FullCovSize);
 
-% Define allocation indices
-ui16WindowPoseUpdatePtr   = uint16(0);
-ui16WindowCovUpdatePtr    = uint16(0);
-
 ui16LastStateEntryPtr   = ui16StateSize + uint16(strFilterMutabConfig.ui16WindowStateCounter * strFilterConstConfig.ui16WindowPoseSize);
 ui16LastCovEntryPtr     = ui16StateSize + uint16(strFilterMutabConfig.ui16WindowStateCounter * strFilterConstConfig.ui16WindowStateCovSize);
 
@@ -804,34 +800,11 @@ if any(bMeasTypeFlags) % Run update step if measurements are available
     end
 
 
-    % State Correction (current state, assumed additive only for current implementation)
-    dxStatePost(1:ui16StateSize) = dxStatePrior(1:ui16StateSize) + dxErrState(1:ui16StateSize);
-    
-    %%% Sliding window states (additive + multiplicative) if any
-    if i8FeatTrackingMode >= 0
-
-        ui16WindowPoseUpdatePtr(1)   = ui16StateSize;
-        ui16WindowCovUpdatePtr(1)    = ui16StateSize;
-
-        ui16WindowPoseRelIdx        = coder.const(uint16(1:strFilterConstConfig.ui16WindowPoseSize));
-        ui16WindowErrStateRelIdx    = coder.const(uint16(1:strFilterConstConfig.ui16WindowStateCovSize));
-
-        ui16WindowPoseIdx   = coder.nullcopy(zeros(1, length(ui16WindowPoseRelIdx), 'uint16'));
-        ui16ErrStatePoseIdx = coder.nullcopy(zeros(1, length(ui16WindowErrStateRelIdx), 'uint16'));
-
-        for idWP = 1:(strFilterMutabConfig.ui16WindowStateCounter)
-
-            ui16WindowPoseIdx(:)   = ui16WindowPoseUpdatePtr + ui16WindowPoseRelIdx;
-            ui16ErrStatePoseIdx(:) = ui16WindowCovUpdatePtr  + ui16WindowErrStateRelIdx;
-
-            % Run update on idWPth pose
-            dxStatePost(ui16WindowPoseIdx) = ApplyWindowPoseUpdate(dxStatePost(ui16WindowPoseIdx), dxErrState(ui16ErrStatePoseIdx) );
-            
-            % Update pointers
-            ui16WindowPoseUpdatePtr = ui16WindowPoseUpdatePtr + uint16(strFilterConstConfig.ui16WindowPoseSize);
-            ui16WindowCovUpdatePtr  = ui16WindowCovUpdatePtr  + uint16(strFilterConstConfig.ui16WindowStateCovSize);
-        end
-    end
+    % Apply one error-state convention to the additive current state and all
+    % active window poses, regardless of which measurement created the gain.
+    dxStatePost = ApplySlidingWindowErrorState( ...
+        dxStatePrior, dxErrState, ...
+        strFilterMutabConfig.ui16WindowStateCounter, strFilterConstConfig);
 
     %%% Update covariance matrix using modified Joseph algorithm
     % TODO modify for static size!
