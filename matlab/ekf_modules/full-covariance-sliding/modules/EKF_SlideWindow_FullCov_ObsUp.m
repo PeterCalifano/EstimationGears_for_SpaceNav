@@ -802,9 +802,8 @@ if any(bMeasTypeFlags) % Run update step if measurements are available
 
     % Apply one error-state convention to the additive current state and all
     % active window poses, regardless of which measurement created the gain.
-    dxStatePost = ApplySlidingWindowErrorState( ...
-        dxStatePrior, dxErrState, ...
-        strFilterMutabConfig.ui16WindowStateCounter, strFilterConstConfig);
+    dxStatePost = ApplySlidingWindowErrorState(dxStatePrior, dxErrState, ...
+                                               strFilterMutabConfig.ui16WindowStateCounter, strFilterConstConfig);
 
     %%% Update covariance matrix using modified Joseph algorithm
     % TODO modify for static size!

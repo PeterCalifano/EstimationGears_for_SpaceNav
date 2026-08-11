@@ -46,10 +46,7 @@ if coder.const(strFilterConstConfig.ui16NumWindowPoses > 0)
 
     % Release the trailing fixed-allocation slot before shifting the retained
     % window poses and augmenting the newest pose.
-    [dxStateCov, strFilterMutabConfig] = ...
-        ReleaseTrailingWindowPoseSlot(dxStateCov, ...
-                                      strFilterMutabConfig, ...
-                                      strFilterConstConfig);
+    [dxStateCov, strFilterMutabConfig] = ReleaseTrailingWindowPoseSlot(dxStateCov, strFilterMutabConfig, strFilterConstConfig);
 
     % Run algorithm to store state into Sliding Window
     if strFilterMutabConfig.bStoreStateInSlidingWind && (i8FeatTrackingMode >= 0 || strFilterMutabConfig.bContinuousSlideMode)
