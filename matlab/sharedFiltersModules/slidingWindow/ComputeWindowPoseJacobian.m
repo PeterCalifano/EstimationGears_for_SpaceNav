@@ -32,6 +32,7 @@ end
 % -------------------------------------------------------------------------------------------------------------
 %% CHANGELOG
 % 05-02-2025    Pietro Califano     First prototype implementation for MSCKF.
+% 11-08-2026    Pietro Califano, Codex gpt-5.6     Make function code-generation.
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % [-]
@@ -41,9 +42,12 @@ dJacPoseCovFromState = zeros( strFilterConstConfig.ui16WindowPoseSize-1, strFilt
 
 if coder.target('MATLAB') || coder.target('MEX')
     assert(strFilterMutabConfig.i8FeatTrackingMode == 0 || strFilterMutabConfig.i8FeatTrackingMode == 1 || strFilterMutabConfig.bContinuousSlideMode)
-    mustBeMember(strFilterMutabConfig.charWindowRefFrame, ["TB", "IN"]);
+    assert(strcmpi(strFilterMutabConfig.charWindowRefFrame, 'TB') || ...
+        strcmpi(strFilterMutabConfig.charWindowRefFrame, 'IN'), ...
+        'Window reference frame must be TB or IN.');
 end
 
+% TODO (PC) change to switch case and coder.const moving window frame to constant for codegen.
 if strcmpi(strFilterMutabConfig.charWindowRefFrame, 'TF')
     % Mode 0: Tightly coupled feature tracking mode (MSCKF) --> Window poses in target fixed frame.
 

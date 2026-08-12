@@ -51,20 +51,20 @@ end
 % 06-02-2025    Pietro Califano     First prototype implementation for MSCKF.
 % 28-02-2025    Pietro Califano     Update of indexing logic to allocate poses.
 % 30-04-2025    Pietro Califano     Update to support pose augmentation in loosely coupled mode (inertial).
+% 11-08-2026    Pietro Califano, Codex gpt-5.6     Use code-generation-safe validation diagnostics.
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % [-]
 % -------------------------------------------------------------------------------------------------------------
 if coder.target('MATLAB') || coder.target('MEX')
 
-    % Size asserts
-    % assert( ui32WindowMaxSize > 0, 'Window size must be greater than 0.' );
-    assert( strFilterMutabConfig.ui16WindowStateCounter <= strFilterConstConfig.ui16NumWindowPoses, ...
-        sprintf('Window state pointer cannot be out of bounds of dxState. Found counter %s, max %s', ...
-        num2str(strFilterMutabConfig.ui16WindowStateCounter), num2str(strFilterConstConfig.ui16NumWindowPoses)) )
-    
-    assert( strFilterMutabConfig.bContinuousSlideMode || strFilterMutabConfig.i8FeatTrackingMode == 0 || strFilterMutabConfig.i8FeatTrackingMode == 1, ...
-        sprintf('ERROR: invalid feature tracking mode. Must be 0 or 1. Found %s', num2str(strFilterMutabConfig.i8FeatTrackingMode)) );
+    % Validate fixed-allocation capacity and the augmentation operating mode
+    % without runtime character construction unsupported by MATLAB Coder.
+    assert(strFilterMutabConfig.ui16WindowStateCounter <= strFilterConstConfig.ui16NumWindowPoses, ...
+        'Window state counter cannot exceed the configured pose capacity.');
+    assert(strFilterMutabConfig.bContinuousSlideMode || strFilterMutabConfig.i8FeatTrackingMode == 0 || ...
+        strFilterMutabConfig.i8FeatTrackingMode == 1, ...
+        'Feature tracking mode must be 0 or 1 unless continuous slide mode is enabled.');
 end
 
 

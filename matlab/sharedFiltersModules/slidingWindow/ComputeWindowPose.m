@@ -33,6 +33,7 @@ end
 % -------------------------------------------------------------------------------------------------------------
 %% CHANGELOG
 % 05-02-2025    Pietro Califano     First prototype implementation for MSCKF.
+% 11-08-2026    Pietro Califano, Codex gpt-5.6     Use code-generation-safe frame validation.
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % [-]
@@ -69,7 +70,9 @@ dQuat_TBfromCam = DCM2quat(dTmpDCM_TBfromCam, false);
 
 if coder.target('MATLAB') || coder.target('MEX')
     assert(strFilterMutabConfig.i8FeatTrackingMode == 0 || strFilterMutabConfig.i8FeatTrackingMode == 1 || strFilterMutabConfig.bContinuousSlideMode)
-    mustBeMember(strFilterMutabConfig.charWindowRefFrame, ["TB", "IN"]);
+    assert(strcmpi(strFilterMutabConfig.charWindowRefFrame, 'TB') || ...
+        strcmpi(strFilterMutabConfig.charWindowRefFrame, 'IN'), ...
+        'Window reference frame must be TB or IN.');
 end
 
 if strcmpi(strFilterMutabConfig.charWindowRefFrame, 'TF')

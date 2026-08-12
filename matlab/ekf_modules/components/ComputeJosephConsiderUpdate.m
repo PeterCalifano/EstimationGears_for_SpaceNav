@@ -15,7 +15,7 @@ function [dxErrorState, dStateCovPost, bUpdateAccepted, ...
 % autocovariance remain fixed through the same covariance equation.
 % -------------------------------------------------------------------------------------------------------------
 %% INPUT
-% dStateCovPrior                  Active prior covariance.
+% dStateCovPrior                  Finite symmetric active prior covariance.
 % dMeasurementResidual            Measurement minus predicted measurement.
 % dMeasurementCov                 Independent measurement covariance.
 % dStateObservationMatrix         Active-state measurement Jacobian.
@@ -33,6 +33,7 @@ function [dxErrorState, dStateCovPost, bUpdateAccepted, ...
 %% CHANGELOG
 % 05-08-2026  Pietro Califano, Codex gpt-5.6     First implementation.
 % 06-08-2026  Pietro Califano, Codex gpt-5.6     Clarify update contracts, algebra, and naming.
+% 12-08-2026  Pietro Califano, Codex gpt-5.6     Allow semidefinite covariances without validation-only factors.
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % None.
@@ -60,19 +61,24 @@ ui32MeasurementCount = numel(dMeasurementResidual);
 dPriorCovScale = max(1.0, norm(dStateCovPrior, 'fro'));
 dPriorCovSymTolerance = 100.0 * eps(dPriorCovScale);
 
-% Validate the active prior before projecting it into measurement space. This
-% helper accepts a dense active block rather than fixed-allocation padding.
+% Validate the inexpensive active-prior contract before projecting it into
+% measurement space. Positive definiteness is not required: deterministic or
+% perfectly correlated active states can produce a valid semidefinite prior.
 if size(dStateCovPrior, 2) ~= ui32StateCount || any(~isfinite(dStateCovPrior), 'all') || ...
         norm(dStateCovPrior - transpose(dStateCovPrior), 'fro') > dPriorCovSymTolerance
     error('ComputeJosephConsiderUpdate:InvalidPriorCovariance', ...
           'Active prior covariance must be finite, square, and symmetric.');
 end
 
-[~, dPriorCovCholStatus] = chol(dStateCovPrior, 'lower');
-if dPriorCovCholStatus ~= 0.0
-    error('ComputeJosephConsiderUpdate:PriorCovarianceNotPositiveDefinite', ...
-          'Active prior covariance must be positive definite.');
-end
+% DEVNOTE: Keep validation-only full-covariance factorizations disabled in the
+% runtime path. They are costly for a sliding-window state and reject valid
+% positive-semidefinite covariances. Innovation factorization below remains
+% mandatory because the update equations use its triangular solves.
+% [~, dPriorCovCholStatus] = chol(dStateCovPrior, 'lower');
+% if dPriorCovCholStatus ~= 0.0
+%     error('ComputeJosephConsiderUpdate:PriorCovarianceNotPositiveDefinite', ...
+%           'Active prior covariance must be positive definite.');
+% end
 
 % Enforce one dimension/finiteness contract across the residual, measurement
 % covariance, observation matrix, and full active-state consider mask.
@@ -94,8 +100,8 @@ if ~isfinite(dMeasurementUnderweightCoeff) || dMeasurementUnderweightCoeff < 0.0
           'Underweight coefficient must be nonnegative and rejection threshold must be positive.');
 end
 
-% Require the independent measurement covariance R to be a valid covariance
-% before augmenting it with the underweighting contribution.
+% Validate measurement-covariance symmetry before augmenting it with the
+% underweighting contribution.
 dMeasurementCovScale = max(1.0, norm(dMeasurementCov, 'fro'));
 dMeasurementCovSymTolerance = 100.0 * eps(dMeasurementCovScale);
 if norm(dMeasurementCov - transpose(dMeasurementCov), 'fro') > dMeasurementCovSymTolerance
@@ -103,11 +109,11 @@ if norm(dMeasurementCov - transpose(dMeasurementCov), 'fro') > dMeasurementCovSy
           'Measurement covariance must be symmetric.');
 end
 
-[~, dMeasurementCovCholStatus] = chol(dMeasurementCov, 'lower');
-if dMeasurementCovCholStatus ~= 0.0
-    error('ComputeJosephConsiderUpdate:MeasurementCovarianceNotPositiveDefinite', ...
-          'Measurement covariance must be positive definite.');
-end
+% [~, dMeasurementCovCholStatus] = chol(dMeasurementCov, 'lower');
+% if dMeasurementCovCholStatus ~= 0.0
+%     error('ComputeJosephConsiderUpdate:MeasurementCovarianceNotPositiveDefinite', ...
+%           'Measurement covariance must be positive definite.');
+% end
 
 % Form the prior-induced measurement covariance P_z = H*P*H'. Represent
 % underweighting once as R_eff = R + alpha*P_z so innovation gating, gain, and
@@ -148,8 +154,8 @@ dKalmanGain(bConsiderStateMask, :) = 0.0;
 dxErrorState = dKalmanGain * dMeasurementResidual;
 
 % Propagate covariance with the same masked gain and R_eff used above. The
-% Joseph form preserves symmetry/positive definiteness without restoring any
-% consider-state block after the update.
+% Joseph form preserves symmetry and positive semidefiniteness in exact
+% arithmetic without restoring any consider-state block after the update.
 dJosephStateTransform = eye(ui32StateCount) - dKalmanGain * dStateObservationMatrix;
 dStateCovPost = dJosephStateTransform * dStateCovPrior * transpose(dJosephStateTransform) + ...
     dKalmanGain * dEffectiveMeasurementCov * transpose(dKalmanGain);
@@ -162,10 +168,10 @@ if any(~isfinite(dStateCovPost), 'all')
           'Joseph update produced a non-finite posterior covariance.');
 end
 
-[~, dPosteriorCovCholStatus] = chol(dStateCovPost, 'lower');
-if dPosteriorCovCholStatus ~= 0.0
-    error('ComputeJosephConsiderUpdate:PosteriorCovarianceNotPositiveDefinite', ...
-          'Joseph posterior covariance must be positive definite.');
-end
+% [~, dPosteriorCovCholStatus] = chol(dStateCovPost, 'lower');
+% if dPosteriorCovCholStatus ~= 0.0
+%     error('ComputeJosephConsiderUpdate:PosteriorCovarianceNotPositiveDefinite', ...
+%           'Joseph posterior covariance must be positive definite.');
+% end
 
 end

@@ -3,8 +3,8 @@ function tests = testComputeJosephConsiderUpdate
 % tests = testComputeJosephConsiderUpdate
 % -------------------------------------------------------------------------------------------------------------
 %% DESCRIPTION
-% Validate standard, underweighted, rejected, and Schmidt-consider Joseph
-% measurement updates against independent dense-matrix references.
+% Validate standard, positive-semidefinite, underweighted, rejected, and
+% Schmidt-consider Joseph updates against independent dense-matrix references.
 % -------------------------------------------------------------------------------------------------------------
 %% INPUT
 % None.
@@ -15,6 +15,7 @@ function tests = testComputeJosephConsiderUpdate
 %% CHANGELOG
 % 05-08-2026  Pietro Califano, Codex gpt-5.6     First implementation.
 % 06-08-2026  Pietro Califano, Codex gpt-5.6     Align reference names with Joseph update algebra.
+% 12-08-2026  Pietro Califano, Codex gpt-5.6     Cover positive-semidefinite prior covariance.
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % ComputeJosephConsiderUpdate.
@@ -49,6 +50,25 @@ function testStandardJosephUpdateMatchesIndependentReference(testCase)
     dMeasurementCov, dStateObservationMatrix, 0.0, false(8, 1));
 
 verifyTrue(testCase, bUpdateAccepted);
+verifyEqual(testCase, dxErrorState, dxExpectedErrorState, 'AbsTol', 4.0e-13);
+verifyEqual(testCase, dStateCovPost, dExpectedStateCovPost, 'AbsTol', 5.0e-13);
+verifyEqual(testCase, dSquaredMahalanobisDistance, dExpectedMahalanobisDistanceSq, 'AbsTol', 2.0e-14);
+end
+
+function testPositiveSemidefinitePriorMatchesIndependentReference(testCase)
+[dStateCovPrior, dMeasurementResidual, dMeasurementCov, dStateObservationMatrix] = BuildUpdateFixture_();
+dStateCovPrior(:, 8) = 0.0;
+dStateCovPrior(8, :) = 0.0;
+
+[dxErrorState, dStateCovPost, bUpdateAccepted, dSquaredMahalanobisDistance] = ...
+    ComputeJosephConsiderUpdate(dStateCovPrior, dMeasurementResidual, dMeasurementCov, ...
+                                dStateObservationMatrix, 0.0, false(8, 1), false, 10.0);
+[dxExpectedErrorState, dExpectedStateCovPost, dExpectedMahalanobisDistanceSq] = ...
+    ComputeJosephReference_(dStateCovPrior, dMeasurementResidual, dMeasurementCov, ...
+                            dStateObservationMatrix, 0.0, false(8, 1));
+
+verifyTrue(testCase, bUpdateAccepted);
+verifyTrue(testCase, all(isfinite(dStateCovPost), 'all'));
 verifyEqual(testCase, dxErrorState, dxExpectedErrorState, 'AbsTol', 4.0e-13);
 verifyEqual(testCase, dStateCovPost, dExpectedStateCovPost, 'AbsTol', 5.0e-13);
 verifyEqual(testCase, dSquaredMahalanobisDistance, dExpectedMahalanobisDistanceSq, 'AbsTol', 2.0e-14);
@@ -124,25 +144,20 @@ function testRejectsInvalidCovarianceAndMeasurementInputs(testCase)
 [dStateCovPrior, dMeasurementResidual, dMeasurementCov, dStateObservationMatrix] = BuildUpdateFixture_();
 dNonSymmetricPriorCov = dStateCovPrior;
 dNonSymmetricPriorCov(1, 2) = dNonSymmetricPriorCov(1, 2) + 0.2;
-dIndefinitePriorCov = eye(8);
-dIndefinitePriorCov(1:2, 1:2) = [1.0, 2.0; 2.0, 1.0];
-dIndefiniteMeasurementCov = eye(3);
-dIndefiniteMeasurementCov(1:2, 1:2) = [1.0, 2.0; 2.0, 1.0];
+dNonSymmetricMeasurementCov = dMeasurementCov;
+dNonSymmetricMeasurementCov(1, 2) = dNonSymmetricMeasurementCov(1, 2) + 0.2;
 
 verifyError(testCase, @() ComputeJosephConsiderUpdate(dNonSymmetricPriorCov, dMeasurementResidual, ...
     dMeasurementCov, dStateObservationMatrix, 0.0, false(8, 1), false, 10.0), ...
     'ComputeJosephConsiderUpdate:InvalidPriorCovariance');
-verifyError(testCase, @() ComputeJosephConsiderUpdate(dIndefinitePriorCov, dMeasurementResidual, ...
-    dMeasurementCov, dStateObservationMatrix, 0.0, false(8, 1), false, 10.0), ...
-    'ComputeJosephConsiderUpdate:PriorCovarianceNotPositiveDefinite');
 verifyError(testCase, @() ComputeJosephConsiderUpdate(dStateCovPrior, ...
     [NaN; dMeasurementResidual(2:3)], dMeasurementCov, ...
     dStateObservationMatrix, 0.0, false(8, 1), false, 10.0), ...
     'ComputeJosephConsiderUpdate:InvalidMeasurement');
 verifyError(testCase, @() ComputeJosephConsiderUpdate(dStateCovPrior, dMeasurementResidual, ...
-    dIndefiniteMeasurementCov, ...
+    dNonSymmetricMeasurementCov, ...
     dStateObservationMatrix, 0.0, false(8, 1), false, 10.0), ...
-    'ComputeJosephConsiderUpdate:MeasurementCovarianceNotPositiveDefinite');
+    'ComputeJosephConsiderUpdate:InvalidMeasurement');
 verifyError(testCase, @() ComputeJosephConsiderUpdate(dStateCovPrior, dMeasurementResidual, ...
     dMeasurementCov, dStateObservationMatrix, -0.1, false(8, 1), false, 10.0), ...
     'ComputeJosephConsiderUpdate:InvalidUpdatePolicy');
