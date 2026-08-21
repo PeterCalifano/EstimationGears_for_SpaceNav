@@ -5,7 +5,8 @@ function tests = testEKF_SlideWindow_StateManagementStep
 %% DESCRIPTION
 % Validate that sliding-window state augmentation consumes only attitude history synchronized with the
 % current filter-state epoch. The suite covers the expected empty startup history, normal augmentation,
-% timestamp tolerance, stale-history diagnostics, and storage-policy no-op paths.
+% complete repeated/full-window covariance, past-clone Joseph updates, timestamp tolerance, stale-history
+% diagnostics, and storage-policy no-op paths.
 % -------------------------------------------------------------------------------------------------------------
 %% INPUT
 % None.
@@ -15,9 +16,11 @@ function tests = testEKF_SlideWindow_StateManagementStep
 % -------------------------------------------------------------------------------------------------------------
 %% CHANGELOG
 % 11-08-2026  Pietro Califano, Codex gpt-5.6     First implementation.
+% 21-08-2026  Pietro Califano, Codex gpt-5.6     Cover full clone covariance and past-clone updates.
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % EKF_SlideWindow_StateManagementStep.
+% ComputeJosephConsiderUpdate.
 % filter_tailoring.BuildArchitectureTemplate.
 % filter_tailoring.BuildInputStructsTemplate.
 % -------------------------------------------------------------------------------------------------------------
@@ -73,6 +76,105 @@ verifyEqual(testCase, dxStatePost(ui32PoseStateIdx), [strScenario.dxState(ui8Pos
 verifyEqual(testCase, dStateCovPost(1:ui16StateSize, 1:ui16StateSize), ...
     strScenario.dStateCov(1:ui16StateSize, 1:ui16StateSize), 'AbsTol', 0.0);
 verifyGreaterThan(testCase, norm(dStateCovPost(ui32PoseCovIdx, ui32PoseCovIdx), 'fro'), 0.0);
+end
+
+function testRepeatedAugmentationPreservesRetainedCloneCrossCovariance(testCase)
+[dStateCovSecond, dExpectedActiveCov, strFilterConstConfig] = CreateRepeatedAugmentationFixture_();
+ui32StateSize = uint32(strFilterConstConfig.ui16StateSize);
+ui32CloneCovSize = uint32(strFilterConstConfig.ui16WindowStateCovSize);
+ui32ActiveAfterSize = ui32StateSize + uint32(2) * ui32CloneCovSize;
+ui32FirstCloneCovIdx = ui32StateSize + (uint32(1):ui32CloneCovSize);
+ui32RetainedCloneCovIdx = ui32StateSize + ui32CloneCovSize + (uint32(1):ui32CloneCovSize);
+dActualActiveCov = dStateCovSecond(1:ui32ActiveAfterSize, 1:ui32ActiveAfterSize);
+dCovTolerance = 100.0 * eps(max(1.0, norm(dExpectedActiveCov, 'fro')));
+
+verifyGreaterThan(testCase, ...
+    norm(dExpectedActiveCov(ui32FirstCloneCovIdx, ui32RetainedCloneCovIdx), 'fro'), 0.0);
+verifyEqual(testCase, ...
+    dActualActiveCov(ui32FirstCloneCovIdx, ui32RetainedCloneCovIdx), ...
+    dExpectedActiveCov(ui32FirstCloneCovIdx, ui32RetainedCloneCovIdx), 'AbsTol', dCovTolerance);
+verifyEqual(testCase, dActualActiveCov, dExpectedActiveCov, 'AbsTol', dCovTolerance);
+verifyEqual(testCase, dActualActiveCov, transpose(dActualActiveCov), 'AbsTol', dCovTolerance);
+verifyGreaterThanOrEqual(testCase, min(eig((dActualActiveCov + transpose(dActualActiveCov)) ./ 2.0)), ...
+    -dCovTolerance);
+
+ui32InactiveCovIdx = ui32ActiveAfterSize + uint32(1):uint32(size(dStateCovSecond, 1));
+verifyEqual(testCase, dStateCovSecond(ui32InactiveCovIdx, :), ...
+    zeros(numel(ui32InactiveCovIdx), size(dStateCovSecond, 2)), 'AbsTol', 0.0);
+verifyEqual(testCase, dStateCovSecond(:, ui32InactiveCovIdx), ...
+    zeros(size(dStateCovSecond, 1), numel(ui32InactiveCovIdx)), 'AbsTol', 0.0);
+end
+
+function testPastCloneJosephUpdateCorrectsCurrentAndSiblingClone(testCase)
+[dStateCovFull, dExpectedPriorCov, strFilterConstConfig] = CreateRepeatedAugmentationFixture_();
+ui32StateSize = uint32(strFilterConstConfig.ui16StateSize);
+ui32CloneCovSize = uint32(strFilterConstConfig.ui16WindowStateCovSize);
+ui32ActiveAfterSize = ui32StateSize + uint32(2) * ui32CloneCovSize;
+ui32RetainedPositionIdx = ui32StateSize + ui32CloneCovSize + uint32(1:3);
+dActualPriorCov = dStateCovFull(1:ui32ActiveAfterSize, 1:ui32ActiveAfterSize);
+dObservationMatrix = zeros(3, double(ui32ActiveAfterSize));
+dObservationMatrix(:, ui32RetainedPositionIdx) = eye(3);
+dMeasurementResidual = [0.8; -0.35; 0.2];
+dMeasurementCov = diag([0.3, 0.5, 0.7]);
+
+% Form the direct Joseph reference from the independently augmented prior.
+dInnovationCov = dObservationMatrix * dExpectedPriorCov * transpose(dObservationMatrix) + ...
+    dMeasurementCov;
+dExpectedGain = dExpectedPriorCov * transpose(dObservationMatrix) / dInnovationCov;
+dxExpectedErrorState = dExpectedGain * dMeasurementResidual;
+dExpectedAuxMatrix = eye(double(ui32ActiveAfterSize)) - dExpectedGain * dObservationMatrix;
+dExpectedPostCov = dExpectedAuxMatrix * dExpectedPriorCov * transpose(dExpectedAuxMatrix) + ...
+    dExpectedGain * dMeasurementCov * transpose(dExpectedGain);
+dExpectedPostCov = 0.5 .* (dExpectedPostCov + transpose(dExpectedPostCov));
+
+[dxActualErrorState, dActualPostCov, bUpdateAccepted] = ComputeJosephConsiderUpdate( ...
+    dActualPriorCov, dMeasurementResidual, dMeasurementCov, dObservationMatrix, ...
+    0.0, false(double(ui32ActiveAfterSize), 1), false, 10.0);
+dCovTolerance = 300.0 * eps(max(1.0, norm(dExpectedPostCov, 'fro')));
+ui8CurrentPositionIdx = strFilterConstConfig.strStatesIdx.ui8posVelIdx(1:3);
+ui32SiblingPositionIdx = ui32StateSize + uint32(1:3);
+
+verifyTrue(testCase, bUpdateAccepted);
+verifyEqual(testCase, dxActualErrorState, dxExpectedErrorState, 'AbsTol', dCovTolerance);
+verifyEqual(testCase, dActualPostCov, dExpectedPostCov, 'AbsTol', dCovTolerance);
+verifyGreaterThan(testCase, norm(dxActualErrorState(ui8CurrentPositionIdx)), 0.0);
+verifyGreaterThan(testCase, norm(dxActualErrorState(ui32SiblingPositionIdx)), 0.0);
+verifyGreaterThan(testCase, norm(dxActualErrorState(ui32RetainedPositionIdx)), 0.0);
+verifyGreaterThanOrEqual(testCase, min(eig(dActualPostCov)), -dCovTolerance);
+end
+
+function testFullWindowReplacementPreservesCompleteJointCovariance(testCase)
+strScenario = CreateStateManagementScenario_();
+strFilterConstConfig = strScenario.strFilterConstConfig;
+ui32StateSize = uint32(strFilterConstConfig.ui16StateSize);
+ui32CloneCovSize = uint32(strFilterConstConfig.ui16WindowStateCovSize);
+ui32NumWindowPoses = uint32(strFilterConstConfig.ui16NumWindowPoses);
+dInitialCurrentCov = strScenario.dStateCov(1:ui32StateSize, 1:ui32StateSize);
+
+for ui32AugmentIdx = uint32(1):(ui32NumWindowPoses + uint32(1))
+    strScenario.dStateTimetag(1) = 0.25 + 0.1 * double(ui32AugmentIdx - uint32(1));
+    strScenario.dTargetTimetag = strScenario.dStateTimetag(1) + 1.0;
+    strScenario.strMeasModelParams.dDCM_SCBiFromIN(:, :, 2) = eye(3);
+    strScenario.strMeasModelParams.dBufferTimestamps(2) = strScenario.dStateTimetag(1);
+
+    [strScenario.dxState, strScenario.dStateCov, strScenario.dStateTimetag, ...
+        strScenario.strDynParams, strScenario.strFilterMutabConfig] = RunStateManagement_(strScenario);
+end
+
+% Every retained clone is the same deterministic map of the unchanged current
+% state, including the replacement inserted after the oldest full-window slot.
+dJacCloneFromCurrent = BuildIdentityCloneJacobian_(strFilterConstConfig);
+dExpectedTransform = [eye(double(ui32StateSize)); ...
+    repmat(dJacCloneFromCurrent, double(ui32NumWindowPoses), 1)];
+dExpectedFullCov = dExpectedTransform * dInitialCurrentCov * transpose(dExpectedTransform);
+dCovTolerance = 300.0 * eps(max(1.0, norm(dExpectedFullCov, 'fro')));
+
+verifyEqual(testCase, strScenario.dStateCov, dExpectedFullCov, 'AbsTol', dCovTolerance);
+verifyEqual(testCase, strScenario.strFilterMutabConfig.ui16WindowStateCounter, ...
+    strFilterConstConfig.ui16NumWindowPoses);
+verifyTrue(testCase, strScenario.strFilterMutabConfig.bIsSlidingWindFull);
+verifyGreaterThanOrEqual(testCase, min(eig((strScenario.dStateCov + ...
+    transpose(strScenario.dStateCov)) ./ 2.0)), -dCovTolerance);
 end
 
 function testMissingAttitudeDoesNotReleaseFullWindow(testCase)
@@ -190,6 +292,61 @@ strScenario.strMeasModelParams = strMeasModelParams;
 strScenario.strDynParams = strDynParams;
 strScenario.strFilterMutabConfig = strFilterMutabConfig;
 strScenario.strFilterConstConfig = strFilterConstConfig;
+end
+
+function [dStateCovSecond, dExpectedActiveCov, strFilterConstConfig] = ...
+    CreateRepeatedAugmentationFixture_()
+strFirstScenario = CreateStateManagementScenario_();
+strFirstScenario.strMeasModelParams.dDCM_SCBiFromIN(:, :, 2) = eye(3);
+strFirstScenario.strMeasModelParams.dBufferTimestamps(2) = strFirstScenario.dStateTimetag(1);
+
+[dxStateFirst, dStateCovFirst, dTimetagFirst, strDynParamsFirst, strMutabConfigFirst] = ...
+    RunStateManagement_(strFirstScenario);
+
+strFilterConstConfig = strFirstScenario.strFilterConstConfig;
+ui32StateSize = uint32(strFilterConstConfig.ui16StateSize);
+ui32CloneCovSize = uint32(strFilterConstConfig.ui16WindowStateCovSize);
+ui32ActiveBeforeSize = ui32StateSize + ui32CloneCovSize;
+ui32ActiveAfterSize = ui32StateSize + uint32(2) * ui32CloneCovSize;
+ui32CurrentCovIdx = uint32(1):ui32StateSize;
+ui32FirstCloneCovIdx = ui32StateSize + (uint32(1):ui32CloneCovSize);
+ui32RetainedCloneCovIdx = ui32StateSize + ui32CloneCovSize + (uint32(1):ui32CloneCovSize);
+
+% Map [current; retained clone] to [current; new clone; retained clone]
+% using the analytical identity-frame clone Jacobian.
+dAugmentTransform = zeros(double(ui32ActiveAfterSize), double(ui32ActiveBeforeSize));
+dAugmentTransform(ui32CurrentCovIdx, ui32CurrentCovIdx) = eye(double(ui32StateSize));
+dAugmentTransform(ui32FirstCloneCovIdx, ui32CurrentCovIdx) = ...
+    BuildIdentityCloneJacobian_(strFilterConstConfig);
+dAugmentTransform(ui32RetainedCloneCovIdx, ...
+                  ui32StateSize + (uint32(1):ui32CloneCovSize)) = eye(double(ui32CloneCovSize));
+dActiveCovBefore = dStateCovFirst(1:ui32ActiveBeforeSize, 1:ui32ActiveBeforeSize);
+dExpectedActiveCov = dAugmentTransform * dActiveCovBefore * transpose(dAugmentTransform);
+
+% Advance only timestamp association before executing the real second
+% augmentation. The current marginal and first clone remain unchanged.
+strSecondScenario = strFirstScenario;
+strSecondScenario.dxState = dxStateFirst;
+strSecondScenario.dStateCov = dStateCovFirst;
+strSecondScenario.dStateTimetag = dTimetagFirst;
+strSecondScenario.dStateTimetag(1) = 0.75;
+strSecondScenario.dTargetTimetag = 1.25;
+strSecondScenario.strDynParams = strDynParamsFirst;
+strSecondScenario.strFilterMutabConfig = strMutabConfigFirst;
+strSecondScenario.strMeasModelParams.dDCM_SCBiFromIN(:, :, 2) = eye(3);
+strSecondScenario.strMeasModelParams.dBufferTimestamps(2) = strSecondScenario.dStateTimetag(1);
+
+[~, dStateCovSecond] = RunStateManagement_(strSecondScenario);
+end
+
+function dJacCloneFromCurrent = BuildIdentityCloneJacobian_(strFilterConstConfig)
+ui32StateSize = uint32(strFilterConstConfig.ui16StateSize);
+ui32CloneCovSize = uint32(strFilterConstConfig.ui16WindowStateCovSize);
+dJacCloneFromCurrent = zeros(double(ui32CloneCovSize), double(ui32StateSize));
+ui8PositionIdx = strFilterConstConfig.strStatesIdx.ui8posVelIdx(1:3);
+ui8AttitudeBiasIdx = strFilterConstConfig.strStatesIdx.ui8attBiasDeltaIdx;
+dJacCloneFromCurrent(1:3, ui8PositionIdx) = eye(3);
+dJacCloneFromCurrent(4:6, ui8AttitudeBiasIdx) = eye(3);
 end
 
 function [dxStatePost, dStateCovPost, dTimetagPost, strDynParamsPost, strMutabConfigPost] = RunStateManagement_(strScenario)
