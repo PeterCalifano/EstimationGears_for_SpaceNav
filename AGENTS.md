@@ -1,267 +1,143 @@
-# Agents instructions
+# Agent instructions
 
-Write to CONTEXT.md the context before compaction to prevent data loss.
-After auto-compaction, read again AGENTS.md and CONTEXT.md before restarting.
-<!-- ros2-overlay-begin -->
-## Optional ROS 2 Overlay
+## Continuity and authority
 
-See `doc/ros2_overlay.md` before changing the optional ROS 2 overlay. `./build_lib.sh` is the C++-first library entry point and never needs ROS. `./build_ros2.sh` is the optional ROS 2 overlay build and test entry point.
+- Before context compaction, summarize the active task, Git/index state, validation evidence, and next gate in `CONTEXT.md`.
+- After automatic compaction, reread `AGENTS.md` and `CONTEXT.md` before continuing.
+- The current user request overrides this file. Repository architecture and verified behavior override generic donor-template defaults.
+- `AGENTS.md` is normative. `CLAUDE.md` contains repository facts, commands, and architecture; do not duplicate policy there.
 
-Keep ROS-related changes confined to `ros2/` plus the documented root helpers, docs, tests, markers, and the single ROS overlay workflow.
-<!-- ros2-overlay-end -->
-For python: Use python standard >= 3.12, matplotlib is the backend for most plots, but for images PIL and opencv are also used. For any statistics-like plot prefer seaborn, my default choice. Use pytorch for machine learning applications, supported by sklearn. Function names beings with Capital letter, snake case, methods not. Classes Similarly. Internal methods (not public API) must start with _, local scope variables end with _. All methods of classes shall start with small letter. Prefer dataclasses instead of dicts and enums instead of Literals if more than two entries. Type Hints Must Always Be Present. Onnx Export Compatibility Is Generally Required. When Writing New Classes Or Functions, A Runnable Example Should Always Be Present With Output To Show Results.
-For C++/CUDA: C++17 and C++20 are the core standards. CUDA mainly >12.6. Answers should be on point without too many digressions, technical (for intermediate and advanced users) but simple enough to explain the concepts. Prefer using concepts over SFINAE. Unit tests using Catch2. Check files to see convention of names. Prefer Classes over structs.
+## Template provenance and tailoring
 
-### CMake and derived-project test policy
+Repository facilities are derived from the signed `cpp_cuda_template_project` tag `v2.0.1` at commit `1d87153b2d060bf03c2c9adcd1df6c6d4f40ea09`. Treat future refreshes as a three-way import:
 
-Do not copy template-conformance CMake verifiers into a derived project merely
-because the donor template has them. In particular, do not register tests that
-recursively configure and rebuild the same derived project inside its ordinary
-CTest suite when a fresh configure/build/install/consumer command or CI job
-already proves the contract.
-
-For a derived project:
-
-- prefer Catch2 or pytest for project runtime behavior;
-- validate CMake options, headless/full feature matrices, installation,
-  packaging, and external consumers through explicit fresh out-of-tree
-  acceptance commands owned by local CI;
-- use disposable consumer projects outside the normal test build when nested or
-  installed consumption must be proven;
-- add a permanent CMake-script test only when it is lightweight, target-owned,
-  isolates behavior unavailable through an existing target/test, and does not
-  recursively rebuild the project;
-- never import `VerifyTemplateProject*` or other donor self-validation tests as
-  product tests.
-
-The template repository may retain broader conformance tests because it owns
-generic generation and tailoring behavior. That exception does not make those
-tests part of the derived-project contract.
-
-### Build cleanup and wrapper packaging safety
-
-- `build_lib.sh --clean` may remove only a conventional in-repository build
-  path. An existing target must contain a `CMakeCache.txt` whose
-  `CMAKE_HOME_DIRECTORY` resolves to this exact checkout.
-- Never weaken clean-path or cache-ownership validation to accommodate an
-  unusual build layout; use a non-clean configure or remove that directory
-  explicitly after independent review.
-- Generated Python wheels and CMake Python installs must co-locate declared
-  non-system shared runtime targets and use loader-relative runtime paths.
-- `_wrapper_build.py` is checkout-only metadata and must not be installed or
-  included in a wheel.
-- Keep CMake Python install destinations relative to
-  `CMAKE_INSTALL_PREFIX`; pip owns installation into an active environment.
-- Wrapper checkout updates, submodule initialization, and submodule creation
-  are explicit maintenance operations. Ordinary configure and build commands
-  must not move the wrapper checkout or change the parent repository gitlinks.
-
-For MATLAB: Use classes a lot also in MATLAB, with a python style, but do it only when it makes sense. Functions in MATLAB are often more efficient. Evaluate whether it makes sense to have stateful implementation. Use "self" instead of "obj". All variables names must specify the datatype of the variable since MATLAB does not (hungarian notation). The following list applies: d for double, f for float, b for bool, str for struct and not for strings, char for strings and chars, ui8 for uint8, i8 for int8.  All the other integers are similar to the latter. Specify "obj" as prefix if an object, cell if a cell, table if a table; "bus_" if a Simulink bus. The names are always in Pascal case including the prefix, for instance ui8MyVariable. Never nest functions definitions within other functions, always do them separate or at most in the same file (after the main function implementation). Add them as local in the same function file only when not re-used elsewhere, otherwise prefer a single implementation. Function names and static methods of classes starts with Capital letter. Local functions names ends with underscore meaning "private". Names of variables must be explicative and tell what the variable does. Short names are not allowed unless "very local in scope". Use underscore for those variables and preferably Tmp within the name. For codes that are intended to be algorithms of some kind (e.g. not plots or things to run on the host PC), make them always MATLAB codegen safe (especially if codegen directive is used). In that case names should be limited to 31 chars. Add the same template of doc to functions as below and always specify arguments-end block for input and output:
-%% SIGNATURE
-%
-% -------------------------------------------------------------------------------------------------------------
-%% DESCRIPTION
-% -------------------------------------------------------------------------------------------------------------
-%% INPUT
-% -------------------------------------------------------------------------------------------------------------
-%% OUTPUT
-% -------------------------------------------------------------------------------------------------------------
-%% CHANGELOG
-% DD-MM-YYYY  Pietro Califano     First prototype.
-% -------------------------------------------------------------------------------------------------------------
-%% DEPENDENCIES
-%
-% -------------------------------------------------------------------------------------------------------------
-
-%% Function code
-
-## Staged-Code Review Quality Gate
-
-Before handing staged changes to the user for commit review, inspect the complete
-Git index with `git diff --cached`. Apply this gate to files staged by either the
-user or the agent. This review does not authorize staging, committing, or
-rewriting unrelated code.
-
-For every staged source file that is new or substantially modified:
-
-- Add or update both levels of applicable documentation: the file/module-level
-  header and the public class/function/method documentation. Follow the
-  established consolidated files for the relevant language and component.
-- Organize related statements into visually separated blocks. Each block must
-  implement one immediate objective or implementation step, not an entire broad
-  feature.
-- Introduce each non-obvious block with a concise comment explaining what it
-  accomplishes and, when relevant, why that approach is required.
-- Prefer purpose-, invariant-, and contract-oriented comments. Do not add
-  comments that merely translate individual statements into prose.
-- Preserve useful existing comments and documentation unless the staged change
-  makes them incorrect.
-- Review the staged result as a reader will receive it, rather than reviewing
-  only the individual lines edited during implementation.
-
-Limit cleanup to the intended scope of the staged work. Do not rewrite unrelated
-legacy code merely because the same file is staged. Do not report the changes as
-ready for review until this pass is complete; summarize any documentation or
-readability cleanup performed during the pass.
-
-### C++ and CUDA pattern
-
-Use Doxygen for both the file header and public API documentation:
-
-- Preserve compact grouped formatting when related call arguments or arithmetic
-  terms remain readable on one continuation line. Wrap at semantic expression
-  boundaries; do not mechanically place every argument on a separate line.
-- In a multiline function declaration, definition, or call, keep the first
-  argument on the same line as the function name and align later arguments with
-  it. Put the opening parenthesis at the end of a line only for a genuinely
-  multiline first argument whose own structure requires separation.
-- Follow the surrounding hand-formatted style and preserve intentional
-  whitespace used to separate functional blocks. Do not apply broad automatic
-  reformatting to staged or user-owned code.
-- Prefer this compact grouped layout:
-
-```cpp
-const float gx =
-    0.5F * (PixelOrZero(image, width, height, x + 1, y) -
-            PixelOrZero(image, width, height, x - 1, y));
-
-SPhotometricPatch(int id,
-                  const cv::Point2d &center,
-                  int64_t t_us,
-                  int patch_size);
+```text
+updated project = reviewed donor implementation + preserved EstimationGears tailoring
 ```
 
-  Do not expand the same calls into one line per argument unless an individual
-  argument is itself a multiline expression whose structure requires it.
+Preserve these contracts:
 
-```cpp
-/// @file observation_loader.cpp
-/// @brief Loads validated observations from a delimited input file.
-/// @details Owns parsing and validation; filtering policy remains with the
-///          caller.
+- project/package `EstimationGears_for_SpaceNav`;
+- C++ namespace `estimation_gears` and exported target `EstimationGears_for_SpaceNav::EstimationGears_for_SpaceNav`;
+- C++20, Python >=3.12, MATLAB default R2023b, and CUDA >=12.6;
+- optional CUDA, Python wrapping, MATLAB wrapping, TBB, OpenGL, sanitizers, documentation, install/export, and source packaging;
+- no OptiX, TensorRT, ZeroMQ, profiling-script suite, or project ROS overlay;
+- native builds do not recursively compose arbitrary `lib/*` checkouts;
+- one Linux CPU workflow and one documentation workflow; CUDA remains a local acceptance gate;
+- documentation artifacts build in CI, but the Pages `deploy` job remains disabled by `if: ${{ false }}` until the user explicitly changes release policy.
 
-/// @brief Load and validate observations from disk.
-/// @param inputPath Path to the delimited observation file.
-/// @return Valid observations in input order.
-/// @throws std::runtime_error When the file cannot be parsed.
-std::vector<CObservation> LoadValidObservations(
-    const std::filesystem::path& inputPath)
-{
-    // Parse the complete file first so malformed rows produce one consistent
-    // diagnostic path.
-    const std::vector<CObservation> parsedObservations =
-        ParseObservations(inputPath);
+Do not import donor template-development plans, reports, cleanup scripts, issue forms, pull-request templates, ROS/CUDA workflows, or template-conformance tests.
 
-    // Retain only observations satisfying the domain validity contract while
-    // preserving their original order.
-    std::vector<CObservation> validObservations;
-    validObservations.reserve(parsedObservations.size());
-    std::ranges::copy_if(parsedObservations,
-                         std::back_inserter(validObservations),
-                         IsObservationValid);
+## Git and dirty-worktree safety
 
-    return validObservations;
-}
-```
+- Treat all pre-existing modifications, untracked files, ignored artifacts, nested checkout changes, and staged paths as user-owned.
+- Never discard, overwrite, stage, commit, amend, rebase, or push unrelated work.
+- Use literal staging allowlists; never use broad `git add .` in a dirty checkout.
+- Inspect the complete index with `git diff --cached` before handoff.
+- Wrapper checkout updates, submodule initialization, and submodule creation are explicit maintenance operations. Ordinary configure/build commands must not move checkouts or change gitlinks.
+- Do not commit or push unless the user explicitly authorizes that action.
 
-### Python pattern
+## CMake, testing, and packaging
 
-Use Google-style module, class, method, and function docstrings. Keep type hints
-on every callable and follow the repository naming conventions:
+- `build_lib.sh` is the native library entry point. Use fresh out-of-tree CMake builds for acceptance matrices and consumers.
+- `build_lib.sh --clean` may remove only a conventional in-repository build directory. An existing directory must contain `CMakeCache.txt` whose `CMAKE_HOME_DIRECTORY` resolves to this exact checkout.
+- Never weaken clean-path or cache-ownership checks for unusual layouts.
+- Prefer Catch2 or pytest for runtime behavior.
+- Prove options, nested composition, shared/static matrices, installation, packaging, and consumers through explicit fresh commands or CI.
+- Disposable consumer projects stay outside the ordinary test build.
+- Add permanent CMake-script tests only when they are lightweight, target-owned, non-recursive, and cover behavior unavailable through normal targets/tests.
+- Never add `VerifyTemplateProject*` or other donor self-validation tests.
+- Generated Python wheels and CMake Python installs must co-locate declared non-system shared runtime targets and use loader-relative runtime paths.
+- `_wrapper_build.py` is checkout-only metadata and must not be installed or included in wheels.
+- CMake Python install destinations remain relative to `CMAKE_INSTALL_PREFIX`; pip owns active-environment installation.
+- Configure must not write tracked source files by default.
 
-```python
-"""Load and validate observation records.
+## Python
 
-This module owns file parsing and domain validation. Selection policy remains
-with the caller.
+- Use Python 3.12 or newer.
+- Type hints are mandatory on every callable and meaningful variable boundary. Use precise built-in generics and avoid untyped dictionaries.
+- Public functions begin with a capital letter and otherwise use snake case, for example `Load_valid_observations`.
+- Classes begin with a capital letter. Class methods begin with a lowercase letter. Internal methods begin with `_`. Local variables end with `_`.
+- Use Google-style module, class, method, and function docstrings.
+- New classes and functions include a runnable `Example` and expected `Output`.
+- Prefer dataclasses to ad-hoc dictionaries and enums to `Literal` when more than two values form a closed set.
+- Prefer pathlib, context managers, explicit exceptions, deterministic resource ownership, and dependency injection over hidden global state.
+- Use pytest for tests. Test public behavior and failure modes; avoid implementation-only assertions.
+- Use matplotlib for general plotting and seaborn by default for statistical plots. PIL and OpenCV are appropriate for image processing.
+- Use PyTorch for machine learning, supported by scikit-learn where appropriate.
+- ONNX export compatibility is normally required: avoid unsupported dynamic Python behavior in model forward paths and test export plus runtime parity.
 
-Example:
-    observations_ = Load_valid_observations(Path("observations.csv"))
-    print(len(observations_))
+## C++ and CUDA
 
-Output:
-    3
-"""
+- C++20 is the baseline. Do not lower code to C++17 or introduce a newer requirement without an explicit compatibility decision.
+- CUDA requires toolkit 12.6 or newer. Keep host/device ownership and error handling explicit.
+- Follow the surrounding naming conventions and prefer classes over structs unless a type is strictly a passive aggregate.
+- Prefer concepts over SFINAE and standard-library facilities over custom metaprogramming.
+- Apply modern C++/Jason Turner practices:
+  - use RAII and the Rule of Zero; never use naked `new`/`delete` for ownership;
+  - prefer value semantics, composition, narrow scopes, and explicit lifetime boundaries;
+  - make values `const` and computations `constexpr` when their semantics allow it;
+  - initialize every object and avoid undefined behavior, implicit narrowing, dangling views, and unchecked ownership;
+  - use strong enums/types, `std::optional` for optional values, and `[[nodiscard]]` for results callers must inspect;
+  - use algorithms and ranges when they make intent clearer than index-based loops;
+  - use `std::span` and `std::string_view` only when the referenced lifetime is unambiguous;
+  - include what each file uses, minimize macros, and keep headers self-contained;
+  - keep interfaces small, dependencies directional, and abstractions zero-overhead and measurable;
+  - enable warnings and sanitizers during development; optimize only from profiler or benchmark evidence.
+- Use Catch2 for unit tests. Add a failing behavioral test before new production behavior.
+- Use Doxygen `@file` headers and Doxygen documentation for every public class, function, and method.
+- Preserve compact grouped formatting. In multiline calls/declarations, keep the first argument beside the function name and align continuation arguments.
+- Separate statements into small functional blocks. Comment purpose, invariants, and non-obvious decisions—not line-by-line syntax.
+- Do not apply broad automatic formatting to staged or user-owned code.
 
+## MATLAB
 
-def Load_valid_observations(input_path_: Path) -> list[Observation]:
-    """Load valid observations while preserving their input order.
-
-    Args:
-        input_path_: Path to the delimited observation file.
-
-    Returns:
-        Valid observations in input order.
-
-    Raises:
-        ValueError: If an input row cannot be parsed.
-
-    Example:
-        observations_ = Load_valid_observations(Path("observations.csv"))
-        print(len(observations_))
-
-    Output:
-        3
-    """
-    # Parse all rows through one path so malformed input produces consistent
-    # diagnostics.
-    parsed_observations_ = Parse_observations(input_path_)
-
-    # Enforce the domain validity contract without changing source ordering.
-    valid_observations_ = [
-        observation_
-        for observation_ in parsed_observations_
-        if observation_.isValid()
-    ]
-
-    return valid_observations_
-```
-
-### MATLAB pattern
-
-For a primary MATLAB function file, the leading sectioned function
-documentation is also the file-level entry documentation. Scripts require an
-opening sectioned description, while class files require class help text plus
-the same sectioned documentation on public methods. Keep the existing
-`SIGNATURE`, `DESCRIPTION`, `INPUT`, `OUTPUT`, `CHANGELOG`, and `DEPENDENCIES`
-template:
+- Prefer functions unless persistent state or an object lifecycle materially improves the design. Use classes when stateful behavior is genuinely useful.
+- Use `self` rather than `obj` for the instance argument.
+- Function names and static class methods begin with a capital letter. Local helper functions end with `_` and are placed after the primary function; never nest function definitions.
+- Use explicit, descriptive Hungarian-style datatype prefixes:
+  - `d` double, `f` single, `b` logical;
+  - `char` character/string data and `str` structures;
+  - `ui8`/`ui16`/`ui32` and `i8`/`i16`/`i32` for integers;
+  - `obj` objects, `cell` cell arrays, `table` tables, and `bus_` Simulink buses.
+- Names use PascalCase after the prefix, for example `ui8MeasurementCount`. Avoid short names except in a very small local scope; temporary names should include `Tmp`.
+- Use `arguments` and `arguments (Output)` blocks for public inputs and outputs where code-generation constraints allow them.
+- Algorithmic MATLAB intended for deployment must remain MATLAB Coder safe. When codegen applies, keep identifiers within 31 characters and avoid dynamic constructs unsupported by Coder.
+- Primary function files use this documentation structure:
 
 ```matlab
-function tableValidObservations = LoadValidObservations(charInputPath)
 %% SIGNATURE
-% tableValidObservations = LoadValidObservations(charInputPath)
+%
 % -------------------------------------------------------------------------------------------------------------
 %% DESCRIPTION
-% Load and validate observations while preserving their input order.
 % -------------------------------------------------------------------------------------------------------------
 %% INPUT
-% charInputPath             Path to the delimited observation file.
 % -------------------------------------------------------------------------------------------------------------
 %% OUTPUT
-% tableValidObservations    Valid observations in input order.
 % -------------------------------------------------------------------------------------------------------------
 %% CHANGELOG
 % DD-MM-YYYY  Pietro Califano     First prototype.
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
-% ParseObservations
+%
 % -------------------------------------------------------------------------------------------------------------
-
-arguments
-    charInputPath (1, :) char
-end
-
-arguments (Output)
-    tableValidObservations table
-end
-
-% Parse all rows through one path so malformed input produces consistent
-% diagnostics.
-tableParsedObservations = ParseObservations(charInputPath);
-
-% Enforce the domain validity contract without changing source ordering.
-bValidObservation = tableParsedObservations.bIsValid;
-tableValidObservations = tableParsedObservations(bValidObservation, :);
-
-end
 ```
+
+- Keep dependencies explicit and preserve established `coder.const`, `coder.mustBeConst`, `coder.nullcopy`, and `coder.target` patterns.
+- Validate numerical changes against an independent oracle where possible; same-implementation finite differences do not independently prove correctness.
+
+## Staged-code review gate
+
+Before presenting staged changes:
+
+- inspect `git diff --cached --name-status`, `git diff --cached --check`, and the full `git diff --cached`;
+- confirm every staged path belongs to the approved allowlist;
+- confirm mixed files contain only approved hunks;
+- add/update file-level and public API documentation for new or substantially modified source;
+- organize related statements into readable blocks with concise intent/invariant comments;
+- preserve useful existing documentation unless the change makes it false;
+- search for stale donor identities, OptiX/TensorRT/ROS overlay references, generated artifacts, conflict markers, and absolute machine paths;
+- rerun the applicable fresh build/test/install/wrapper/docs/package gates;
+- summarize documentation/readability cleanup and any unavailable or known-red gate.
+
+Limit cleanup to the intended facility or feature scope even when a file also contains unrelated legacy code.

@@ -1,7 +1,7 @@
 /**
  * @file config.h.in
  * @author PeterC (petercalifano.gs@gmail.com)
- * @brief Configuration header file for library src, with variables set by CMake
+ * @brief Declares configured EstimationGears version information.
  * @version 0.1
  * @date 2025-01-04
  */
@@ -15,7 +15,7 @@
 #define PROJECT_VERSION_PATCH @PROJECT_VERSION_PATCH@
 #define PROJECT_VERSION "@PROJECT_VERSION@"
 #define FULL_VERSION "@FULL_VERSION@"
-
+/// @brief Print configured version and build information.
 inline void PrintVersion()
 {
     std::printf("Application Version: %s\n", PROJECT_VERSION);
@@ -28,7 +28,9 @@ inline void PrintVersion()
     std::printf("Build Time: %s\n", __TIME__);
 }
 
-inline std::string GetVersionString()
+/// @brief Return the configured core semantic version.
+/// @return Version string without Git metadata.
+[[nodiscard]] inline std::string GetVersionString()
 {
     return std::string(PROJECT_VERSION);
 }
