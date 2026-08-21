@@ -42,16 +42,17 @@ end
 % strFilterConstConfig   (1,1) {isstruct}
 % -------------------------------------------------------------------------------------------------------------
 %% OUTPUT
-% out1 [dim] description
-% Name1                     []
-% Name2                     []
-% Name3                     []
+% dxState                Fixed-allocation nominal state with the new camera pose.
+% dxStateCov             Joint covariance with complete current/clone and clone/clone cross terms.
+% dStateTimetag          Current and window timestamps with the new pose epoch in the free slot.
+% strFilterMutabConfig   Mutable configuration with the incremented active-window count.
 % -------------------------------------------------------------------------------------------------------------
 %% CHANGELOG
 % 06-02-2025    Pietro Califano     First prototype implementation for MSCKF.
 % 28-02-2025    Pietro Califano     Update of indexing logic to allocate poses.
 % 30-04-2025    Pietro Califano     Update to support pose augmentation in loosely coupled mode (inertial).
 % 11-08-2026    Pietro Califano, Codex gpt-5.6     Use code-generation-safe validation diagnostics.
+% 21-08-2026    Pietro Califano, Codex gpt-5.6     Preserve full clone cross-covariance during augmentation.
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % [-]
@@ -107,7 +108,7 @@ dJacPoseCovFromState = coder.nullcopy( zeros( strFilterConstConfig.ui16WindowPos
 % Mode 1: Loosely coupled feature tracking mode (Direction of motion) --> Position in Inertial frame, attitude wrt target fixed frame
 
 % Compute window pose entries
-[dCamPosition_Frame, dQuat_TBfromCam, dQuatAttitudeBias_TBfromCam] = ComputeWindowPose(dCamPosition_IN, ...
+[dCamPosition_Frame, dQuat_TBfromCam, ~] = ComputeWindowPose(dCamPosition_IN, ...
                                                                                     dQuat_INfromSC, ...
                                                                                     dQuat_TBfromIN, ...
                                                                                     dQuat_SCfromCam, ...
@@ -128,44 +129,20 @@ dJacPoseCovFromState(:, :) = ComputeWindowPoseJacobian(dxState, ...
 dStateTimetag(ui16DefaultFreePoseSlotPtr + 1) = dStateTimetag(1);
 
 %% Process covariance
-% Compute and store covariance of window pose entries
-% DEVNOTE: memory footprint may be optimized by reducing auxiliary variables, with lower readability TBD
+% Map the deterministic clone against every allocated covariance column. The
+% fixed-allocation invariant keeps inactive current-state cross terms zero,
+% while retained clone columns carry the correlations required by delayed
+% updates and subsequent propagation.
+dNewPoseCrossCov = dJacPoseCovFromState * ...
+    dxStateCov(1:strFilterConstConfig.ui16StateSize, :);
+dWindowPoseCov = dNewPoseCrossCov(:, 1:strFilterConstConfig.ui16StateSize) * ...
+    transpose(dJacPoseCovFromState);
 
-dCurrentStateCov = dxStateCov(1:strFilterConstConfig.ui16StateSize, 1:strFilterConstConfig.ui16StateSize);
-
-% Compute left-bottom cross terms J * Pstate
-% TODO: review this by doing operations on paper
-dCrossCovLeftBottom = dJacPoseCovFromState * dCurrentStateCov;
-
-% Compute right-top cross terms Pstate * J^T
-% DEVNOTE: the covariance must be transposed to obtain the correct result!
-% dCrossCovRightTop   = dCurrentStateCov' * transpose(dJacPoseCovFromState);
-dCrossCovRightTop = dCrossCovLeftBottom';
-
-% Compute (optimized) window pose covariance J * Pstate * J^T
-dWindowPoseCov      = dCrossCovLeftBottom * transpose(dJacPoseCovFromState);
-
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%% DEBUG %%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% dCheckCov = [eye(14); dJacPoseCovFromState] * dCurrentStateCov * [eye(14); dJacPoseCovFromState]';
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-%%%%%%%%%%% DEBUG %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-if coder.target('MATLAB') || coder.target('MEX')
-
-    % Size asserts
-    % assert( ui32WindowMaxSize > 0, 'Window size must be greater than 0.' );
-    assert( all(abs(dCrossCovRightTop - dCrossCovLeftBottom') < 1.5*eps, 'all'), 'Window state pointer cannot be out of bounds of dxState.' )
-
-end
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-% Allocate new covariance entries (NOTE: assumes current state is always first entries)
-dxStateCov(ui16CovAllocPtr, ui16CovAllocPtr) = dWindowPoseCov;                            % J * Pstate * J^T
-dxStateCov(ui16CovAllocPtr, 1:strFilterConstConfig.ui16StateSize) = dCrossCovLeftBottom;  % J * Pstate
-dxStateCov(1:strFilterConstConfig.ui16StateSize, ui16CovAllocPtr) = dCrossCovRightTop;    % Pstate * J^T
-
-% Null-out numerical zeros
-% dxStateCov(abs(dxStateCov) < eps) = 0.0;
+% Overwrite the complete free-slot rows and columns so no covariance from the
+% pose shifted out of this slot survives. Assign the deterministic marginal
+% last because the free-slot columns are zero before augmentation.
+dxStateCov(ui16CovAllocPtr, :) = dNewPoseCrossCov;
+dxStateCov(:, ui16CovAllocPtr) = transpose(dNewPoseCrossCov);
+dxStateCov(ui16CovAllocPtr, ui16CovAllocPtr) = dWindowPoseCov;
 
 end
