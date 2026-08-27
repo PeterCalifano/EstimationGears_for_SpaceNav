@@ -1,30 +1,19 @@
-# Basic usage of catch2 for build config:
-# These tests can use the Catch2-provided main
-#add_executable(tests test.cpp)
-#target_link_libraries(tests PRIVATE Catch2::Catch2WithMain)
+# Starter runtime tests inherited unchanged by tailored projects.
+include(CTest)
 
-# These tests need their own main
-#add_executable(custom-main-tests test.cpp test-main.cpp)
-#target_link_libraries(custom-main-tests PRIVATE Catch2::Catch2)
-
-# Set additional properties for Catch2 test targets
-set(CATCH2_TEST_PROPERTIES "--output-on-failure;--reporter=compact")
-
-# Exclude EXCLUDED_LIST from the list of tests
+# Exclude project-specific files by filename or stem.
 set(EXCLUDED_LIST "test_to_exclude")
 set(TESTS_LIST "")
 
+# Make reusable fixture headers available to starter tests.
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 
-# Add subdirectories
-if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/template_test/CMakeLists.txt")
-  add_subdirectory(template_test)
-endif()
-if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/template_fixtures/CMakeLists.txt")
-  add_subdirectory(template_fixtures)
-endif()
+# Register C++, Python, fixture, and optional CUDA runtime tests.
+add_subdirectory(template_test)
+add_subdirectory(template_fixtures)
+add_subdirectory(template_cuda)
 
-# Add tests to build
+# Register any test files placed directly under tests/.
 add_tests(${project_name} EXCLUDED_LIST TESTS_LIST ${CUDA_COMPILE_TARGET} CATCH2_TEST_PROPERTIES Catch2::Catch2WithMain)
 
 message(STATUS "List of test targets: ${TESTS_LIST}")

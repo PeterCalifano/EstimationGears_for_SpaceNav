@@ -1,10 +1,15 @@
+/// @file example_project.cpp
+/// @brief Demonstrates consuming an installed EstimationGears package.
+
 #include "example_project.h"
 
 int main()
 {
-    spdlog_utils::ConfigureDefaultLogging();
-    auto objLogger_ = spdlog_utils::GetLogger("example_consumer_project");
-    objLogger_->info("Hello, World! This is an example of project using the EstimationGears_for_SpaceNav as library, integrating it through cmake.");
+    using namespace estimation_gears::logging;
+
+    CLogger objLogger_("example_consumer_project", ELogLevel::Info);
+    objLogger_.setLevelFromEnvironment();
+    objLogger_.info("Hello, World! This project consumes EstimationGears through CMake.");
 
     // Call the placeholder function from the template_src library
     placeholder::placeholder_fcn();

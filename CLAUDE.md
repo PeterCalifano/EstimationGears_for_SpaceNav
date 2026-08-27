@@ -2,20 +2,22 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+Read `AGENTS.md` first. It is the authoritative source for language conventions, template tailoring, Git safety, testing ownership, and staged-review requirements. This file records repository facts and commands only.
+
 ## Project Overview
 
 EstimationGears_for_SpaceNav is a dual-language (MATLAB + C++) library of general-purpose estimation algorithm building blocks for spacecraft navigation. It provides filter implementations (EKF, UKF, SRIF, batch least squares), shared filter infrastructure, and evaluation utilities. The MATLAB side is the actively maintained and developed part; the C++ side is a scaffold/template.
 
 ## Build Commands (C++)
 
-The C++ part uses CMake (>=3.15) with C++17. Dependencies: Eigen3 (required), GTSAM CMake tools, Catch2 (fetched if not found), Doxygen (optional).
+The native library uses CMake >=3.15 and C++20. Eigen 3.4 is required; Catch2 and pytest own runtime tests, Doxygen is optional, and CUDA >=12.6 is optional. Native CMake configuration does not recursively add the MATLAB-only checkouts under `lib/`.
 
 ```bash
 # Full configure + build + test (default: RelWithDebInfo)
-./build_lib.sh
+./build_lib.sh -N
 
 # Debug build with Ninja
-./build_lib.sh -t debug -N
+./build_lib.sh -N -t debug
 
 # Build only (skip configure)
 ./build_lib.sh -r
@@ -24,17 +26,24 @@ The C++ part uses CMake (>=3.15) with C++17. Dependencies: Eigen3 (required), GT
 ./build_lib.sh --skip-tests
 
 # Clean rebuild
-./build_lib.sh --clean
+./build_lib.sh -N --clean
 
 # With Python/MATLAB wrappers
-./build_lib.sh -p   # Python
-./build_lib.sh -m   # MATLAB
+./build_lib.sh -N -p --gtwrap-root lib/wrap   # Python
+./build_lib.sh -N -m --gtwrap-root /path/to/fixed/wrap  # MATLAB; see doc/wrappers.md
 
 # Pass extra CMake defines
-./build_lib.sh -DENABLE_OMP=ON
+./build_lib.sh -N -D ENABLE_TBB=ON
+
+# Optional CUDA (canonical project-qualified option)
+./build_lib.sh -N -D EstimationGears_for_SpaceNav_ENABLE_CUDA=ON
+
+# Documentation
+cmake --preset docs
+cmake --build --preset docs
 ```
 
-Tests run automatically via CTest after build (forced on for Release). To run tests manually:
+Tests run automatically unless `--skip-tests` is given. To run them manually:
 
 ```bash
 ctest --test-dir build --output-on-failure
@@ -95,7 +104,7 @@ Organized into subdirectories:
 
 ### C++ (`src/`)
 
-Template/scaffold using GTSAM CMake conventions. Not actively developed. Source modules: `utils/`, `template_src/`, `template_src_kernels/`, `wrapped_impl/`, `bin/`. Tests in `tests/` use Catch2 with `catch_discover_tests()`.
+C++20/CUDA scaffold with install/export support and optional Python/MATLAB gtwrap bindings. Source modules are `utils/`, `template_src/`, `template_src_kernels/`, `wrapped_impl/`, and `bin/`. Tests use Catch2, pytest, and wrapper-specific MATLAB regression cases.
 
 ## Key Conventions
 
@@ -115,9 +124,11 @@ Template/scaffold using GTSAM CMake conventions. Not actively developed. Source 
 - Functions use `arguments` blocks for input validation where applicable
 - Numerical noise trimming pattern: `dMatrix(abs(dMatrix) < eps) = 0`
 
-### CMake / C++
+### Native facilities
 
-- The CMake variable `project_name` is set externally (by `build_lib.sh` or parent CMake) and flows through `${project_name}` in CMakeLists.txt
-- Build output goes to `build/` (gitignored)
-- The `cmake/` directory contains reusable CMake modules (FindMKL, HandleCUDA, HandleOpenMP, etc.) adapted from a shared template
-- Devcontainer support via `configure_devcontainer.sh` (Ubuntu/Debian base, optional CUDA/ROS)
+- CMake project/package: `EstimationGears_for_SpaceNav`; exported target: `EstimationGears_for_SpaceNav::EstimationGears_for_SpaceNav`
+- Canonical CUDA option: `EstimationGears_for_SpaceNav_ENABLE_CUDA`; top-level `ENABLE_CUDA` remains a compatibility alias
+- Python package: `EstimationGears_for_SpaceNav`; wrapper namespace: `estimation_gears`
+- Build output defaults to `build/`; fresh acceptance builds and consumers use disposable out-of-tree directories
+- `configure_devcontainer.sh` configures Ubuntu/Debian images with optional CUDA and generic ROS tooling; the project itself has no ROS overlay
+- `build_linux.yml` owns portable CPU CI. `docs_pages.yml` builds documentation, while its `deploy` job is manually disabled with `if: ${{ false }}`

@@ -1,34 +1,20 @@
-#include <iostream>
+/// @file example_build.cpp
+/// @brief Demonstrates EstimationGears logging and placeholder usage.
 
 #include <template_src/placeholder.h>
-
-#ifndef SPDLOG_UTILS_ENABLED
-#define SPDLOG_UTILS_ENABLED 0
-#endif
-
-#if SPDLOG_UTILS_ENABLED
-#include <utils/logging/SpdlogUtils.h>
-#endif
+#include <utils/logging/CLogger.h>
 
 int main()
 {
-#if SPDLOG_UTILS_ENABLED
-    if (!spdlog_utils::InitializeLogLevelFromEnvironment())
-    {
-        spdlog_utils::ConfigureDefaultLogging();
-    }
+    using namespace estimation_gears::logging;
 
-    auto objLogger_ = spdlog_utils::GetLogger("example_build");
-    objLogger_->info("Hello, World! This is an example file for the template.");
+    CLogger objLogger_("example_build", ELogLevel::Info);
+    objLogger_.setLevelFromEnvironment();
+    objLogger_.info("Hello, World! This is an EstimationGears example.");
     placeholder::placeholder_fcn();
-#else
-    std::cout << "Hello, World! This is an example file for the template." << std::endl;
-    placeholder::placeholder_fcn();
-#endif
 
-    // Example output with spdlog enabled:
-    // [12:34:56] [info] [example_build] Hello, World! This is an example file for the template.
-    // [12:34:56] [info] [placeholder] Hello, World! I'm a placeholder function, yuppy.
+    // Example output:
+    // [example_build][INFO] Hello, World! This is an EstimationGears example.
 
     return 0;
 }
