@@ -6,7 +6,7 @@ function tests = testEKF_SlideWindow_StateManagementStep
 % Validate that sliding-window state augmentation consumes only attitude history synchronized with the
 % current filter-state epoch. The suite covers the expected empty startup history, normal augmentation,
 % complete repeated/full-window covariance, past-clone Joseph updates, timestamp tolerance, stale-history
-% diagnostics, and storage-policy no-op paths.
+% diagnostics, and image-request/legacy storage policies, including feature-free full-window replacement.
 % -------------------------------------------------------------------------------------------------------------
 %% INPUT
 % None.
@@ -17,6 +17,8 @@ function tests = testEKF_SlideWindow_StateManagementStep
 %% CHANGELOG
 % 11-08-2026  Pietro Califano, Codex gpt-5.6     First implementation.
 % 21-08-2026  Pietro Califano, Codex gpt-5.6     Cover full clone covariance and past-clone updates.
+% 07-09-2026  Pietro Califano, Codex gpt-6       Cover image requests, no-ops and full-window covariance.
+% 07-09-2026  Pietro Califano, Codex gpt-6       Verify -1 request clearing and admission at epoch zero.
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % EKF_SlideWindow_StateManagementStep.
@@ -55,6 +57,58 @@ verifyEqual(testCase, strDynParamsPost, strScenario.strDynParams);
 verifyFalse(testCase, strMutabConfigPost.bStoreStateInSlidingWind);
 verifyEqual(testCase, strMutabConfigPost.ui16WindowStateCounter, uint16(0));
 verifyFalse(testCase, strMutabConfigPost.bIsSlidingWindFull);
+end
+
+function testImagePoseRequestStoresOnlyItsExactEpoch(testCase)
+% Navigation-only propagation must not consume a slot, even with continuous sliding requested.
+strScenario = CreateStateManagementScenario_();
+strScenario.strMeasModelParams.dBufferTimestamps(2) = strScenario.dStateTimetag(1);
+strScenario.strMeasModelParams.dDCM_SCBiFromIN(:, :, 2) = eye(3);
+strScenario.strFilterMutabConfig.dPendingImagePoseTime = -1.0;
+[dxStatePost, dCovPost, dTimetagPost, ~, strAfter] = RunStateManagement_(strScenario);
+verifyEqual(testCase, dxStatePost, strScenario.dxState);
+verifyEqual(testCase, dCovPost, strScenario.dStateCov);
+verifyEqual(testCase, dTimetagPost, strScenario.dStateTimetag);
+verifyEqual(testCase, strAfter.ui16WindowStateCounter, uint16(0));
+verifyEqual(testCase, strAfter.dPendingImagePoseTime, -1.0);
+
+% Empty-feature and centroid-only acquisitions still store a pose at the image timestamp.
+strScenario.strFilterMutabConfig.dPendingImagePoseTime = strScenario.dStateTimetag(1);
+strScenario.strFilterMutabConfig.bContinuousSlideMode = false;
+strScenario.strFilterMutabConfig.bNewImageAcquisition = false;
+strScenario.strFilterMutabConfig.i8FeatTrackingMode = int8(-1);
+[~, ~, dTimes, ~, strAfter] = RunStateManagement_(strScenario);
+verifyEqual(testCase, strAfter.ui16WindowStateCounter, uint16(1));
+verifyEqual(testCase, dTimes(2), strScenario.dStateTimetag(1));
+verifyEqual(testCase, strAfter.dPendingImagePoseTime, -1.0);
+end
+
+function testImagePoseRequestAtEpochZeroIsStored(testCase)
+strScenario = CreateStateManagementScenario_();
+strScenario.dStateTimetag(1) = 0.0;
+strScenario.strMeasModelParams.dBufferTimestamps(2) = 0.0;
+strScenario.strMeasModelParams.dDCM_SCBiFromIN(:, :, 2) = eye(3);
+strScenario.strFilterMutabConfig.bContinuousSlideMode = false;
+strScenario.strFilterMutabConfig.dPendingImagePoseTime = 0.0;
+
+[~, ~, dTimetagPost, ~, strAfter] = RunStateManagement_(strScenario);
+verifyEqual(testCase, dTimetagPost(2), 0.0);
+verifyEqual(testCase, strAfter.ui16WindowStateCounter, uint16(1));
+verifyEqual(testCase, strAfter.dPendingImagePoseTime, -1.0);
+end
+
+function testImagePoseRequestRejectsAStaleEpoch(testCase)
+strScenario = CreateStateManagementScenario_();
+strScenario.strFilterMutabConfig.dPendingImagePoseTime = strScenario.dStateTimetag(1) - 5;
+verifyError(testCase, @() RunStateManagement_(strScenario), ...
+    'EKF_SlideWindow_StateManagementStep:ImageEpochMismatch');
+end
+
+function testImagePoseRequestRequiresAttitudeHistory(testCase)
+strScenario = CreateStateManagementScenario_();
+strScenario.strFilterMutabConfig.dPendingImagePoseTime = strScenario.dStateTimetag(1);
+verifyError(testCase, @() RunStateManagement_(strScenario), ...
+    'EKF_SlideWindow_StateManagementStep:AttitudeTimestampMismatch');
 end
 
 function testSynchronizedAttitudeAugmentsWindow(testCase)
@@ -144,10 +198,22 @@ verifyGreaterThanOrEqual(testCase, min(eig(dActualPostCov)), -dCovTolerance);
 end
 
 function testFullWindowReplacementPreservesCompleteJointCovariance(testCase)
+VerifyFullWindowReplacement_(testCase, false);
+end
+
+function testImageRequestFullWindowPreservesJointCovariance(testCase)
+VerifyFullWindowReplacement_(testCase, true);
+end
+
+function VerifyFullWindowReplacement_(testCase, bImagePoseMode)
+% Exercise both admission policies against the same independent joint-covariance oracle.
 strScenario = CreateStateManagementScenario_();
+if bImagePoseMode
+    strScenario.strFilterMutabConfig.bContinuousSlideMode = false;
+    strScenario.strFilterMutabConfig.dPendingImagePoseTime = -1.0;
+end
 strFilterConstConfig = strScenario.strFilterConstConfig;
 ui32StateSize = uint32(strFilterConstConfig.ui16StateSize);
-ui32CloneCovSize = uint32(strFilterConstConfig.ui16WindowStateCovSize);
 ui32NumWindowPoses = uint32(strFilterConstConfig.ui16NumWindowPoses);
 dInitialCurrentCov = strScenario.dStateCov(1:ui32StateSize, 1:ui32StateSize);
 
@@ -156,9 +222,15 @@ for ui32AugmentIdx = uint32(1):(ui32NumWindowPoses + uint32(1))
     strScenario.dTargetTimetag = strScenario.dStateTimetag(1) + 1.0;
     strScenario.strMeasModelParams.dDCM_SCBiFromIN(:, :, 2) = eye(3);
     strScenario.strMeasModelParams.dBufferTimestamps(2) = strScenario.dStateTimetag(1);
+    if bImagePoseMode
+        strScenario.strFilterMutabConfig.dPendingImagePoseTime = strScenario.dStateTimetag(1);
+    end
 
     [strScenario.dxState, strScenario.dStateCov, strScenario.dStateTimetag, ...
         strScenario.strDynParams, strScenario.strFilterMutabConfig] = RunStateManagement_(strScenario);
+    if bImagePoseMode
+        verifyEqual(testCase, strScenario.strFilterMutabConfig.dPendingImagePoseTime, -1.0);
+    end
 end
 
 % Every retained clone is the same deterministic map of the unchanged current

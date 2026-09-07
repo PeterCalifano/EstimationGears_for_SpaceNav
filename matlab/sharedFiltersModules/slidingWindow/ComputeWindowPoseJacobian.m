@@ -7,8 +7,8 @@ arguments
     dxState         % TBC if not needed
     dQuat_TBfromIN          (1,4)
     dQuat_TBfromCam         (1,4)
-    strFilterMutabConfig    (1,1) {isstruct}
-    strFilterConstConfig    (1,1) {isstruct}
+    strFilterMutabConfig    (1,1) struct
+    strFilterConstConfig    (1,1) struct
 end
 %% SIGNATURE
 % [dCamPosition_TB, dQuat_TBfromCam] = ComputeWindowPose(dCamPosition_IN, ...
@@ -33,6 +33,8 @@ end
 %% CHANGELOG
 % 05-02-2025    Pietro Califano     First prototype implementation for MSCKF.
 % 11-08-2026    Pietro Califano, Codex gpt-5.6     Make function code-generation.
+% 06-09-2026  Pietro Califano, Codex gpt-6    Leave acquisition admission to the caller.
+% 07-09-2026  Pietro Califano, Codex gpt-6    Use type and size contracts instead of predicate validators.
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % [-]
@@ -41,7 +43,6 @@ end
 dJacPoseCovFromState = zeros( strFilterConstConfig.ui16WindowPoseSize-1, strFilterConstConfig.ui16StateSize);
 
 if coder.target('MATLAB') || coder.target('MEX')
-    assert(strFilterMutabConfig.i8FeatTrackingMode == 0 || strFilterMutabConfig.i8FeatTrackingMode == 1 || strFilterMutabConfig.bContinuousSlideMode)
     assert(strcmpi(strFilterMutabConfig.charWindowRefFrame, 'TB') || ...
         strcmpi(strFilterMutabConfig.charWindowRefFrame, 'IN'), ...
         'Window reference frame must be TB or IN.');

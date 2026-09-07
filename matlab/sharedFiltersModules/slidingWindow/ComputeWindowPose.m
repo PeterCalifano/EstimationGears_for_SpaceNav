@@ -9,7 +9,7 @@ arguments
     dQuat_INfromSC
     dQuat_TBfromIN
     dQuat_SCfromCam
-    strFilterMutabConfig (1,1) {isstruct}
+    strFilterMutabConfig (1,1) struct
     dxAttitudeBiasStates = [0;0;0];
 end
 %% SIGNATURE
@@ -34,6 +34,8 @@ end
 %% CHANGELOG
 % 05-02-2025    Pietro Califano     First prototype implementation for MSCKF.
 % 11-08-2026    Pietro Califano, Codex gpt-5.6     Use code-generation-safe frame validation.
+% 06-09-2026  Pietro Califano, Codex gpt-6    Leave tracking-independent pose admission to the caller.
+% 07-09-2026  Pietro Califano, Codex gpt-6    Use type and size contracts instead of predicate validators.
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % [-]
@@ -69,7 +71,6 @@ dQuat_TBfromCam = DCM2quat(dTmpDCM_TBfromCam, false);
 %%%%%%%%%%%%%%%%
 
 if coder.target('MATLAB') || coder.target('MEX')
-    assert(strFilterMutabConfig.i8FeatTrackingMode == 0 || strFilterMutabConfig.i8FeatTrackingMode == 1 || strFilterMutabConfig.bContinuousSlideMode)
     assert(strcmpi(strFilterMutabConfig.charWindowRefFrame, 'TB') || ...
         strcmpi(strFilterMutabConfig.charWindowRefFrame, 'IN'), ...
         'Window reference frame must be TB or IN.');

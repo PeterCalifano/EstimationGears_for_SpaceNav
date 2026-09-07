@@ -22,6 +22,9 @@ function [dStateCovPost, strFilterMutabPost] = ReleaseTrailingWindowPoseSlot(dSt
 %% CHANGELOG
 % 08-07-2025  Pietro Califano                      Implement from previous code.
 % 06-08-2026  Pietro Califano, Codex gpt-5.6      Separate slot release from conditioning.
+% 06-09-2026  Pietro Califano, Codex gpt-6    Release a full window for an admitted feature-free image.
+% 07-09-2026  Pietro Califano, Codex gpt-6    Resolve optional image-request schema at compile time.
+% 07-09-2026  Pietro Califano, Codex gpt-6    Exclude the -1 image-pose request sentinel.
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % None.
@@ -42,11 +45,14 @@ dStateCovPost = dStateCovPrior;
 strFilterMutabPost = strFilterMutabConfig;
 
 % A slot is released only when a new pose must enter a full window in an
-% active feature-tracking or continuous-sliding mode.
+% active feature-tracking mode, continuous mode, or for an explicit image request.
 bReleaseTrailingSlot = strFilterMutabConfig.bIsSlidingWindFull && ...
     strFilterMutabConfig.bStoreStateInSlidingWind && ...
     (strFilterMutabConfig.i8FeatTrackingMode >= 0 || ...
-     strFilterMutabConfig.bContinuousSlideMode);
+     strFilterMutabConfig.bContinuousSlideMode || ...
+     (coder.const(isfield(strFilterMutabConfig, 'dPendingImagePoseTime')) && ...
+      strFilterMutabConfig.dPendingImagePoseTime ~= -1.0 && ...
+      isfinite(strFilterMutabConfig.dPendingImagePoseTime)));
 
 if ~bReleaseTrailingSlot
     return

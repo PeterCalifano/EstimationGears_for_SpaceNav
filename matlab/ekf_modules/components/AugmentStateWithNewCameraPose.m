@@ -1,30 +1,10 @@
 function [dxState, dxStateCov, dStateTimetag, strFilterMutabConfig] = AugmentStateWithNewCameraPose(dxState, ...
-                                                                                        dxStateCov, ...
-                                                                                        dStateTimetag, ...
-                                                                                        dQuat_INfromSC, ...
-                                                                                        dQuat_TBfromIN, ...
-                                                                                        dQuat_SCfromCam, ...
-                                                                                        strFilterMutabConfig, ...
-                                                                                        strFilterConstConfig)%#codegen
-arguments
-    dxState                (:,1) double {isnumeric, isvector}
-    dxStateCov             (:,:) double {isnumeric, ismatrix}
-    dStateTimetag          (:,1) double {isnumeric, isvector}
-    dQuat_INfromSC         (4,1) double {isnumeric, isvector}
-    dQuat_TBfromIN         (4,1) double {isnumeric, isvector}
-    dQuat_SCfromCam        (4,1) double {isnumeric, isvector}
-    strFilterMutabConfig   (1,1) {isstruct}
-    strFilterConstConfig   (1,1) {isstruct}
-end
+    dxStateCov, dStateTimetag, dQuat_INfromSC, dQuat_TBfromIN, dQuat_SCfromCam, ...
+    strFilterMutabConfig, strFilterConstConfig) %#codegen
 %% SIGNATURE
 % [dxState, dxStateCov, dStateTimetag, strFilterMutabConfig] = AugmentStateWithNewCameraPose(dxState, ...
-%                                                                                         dxStateCov, ...
-%                                                                                         dStateTimetag, ...
-%                                                                                         dQuat_INfromSC, ...
-%                                                                                         dQuat_TBfromIN, ...
-%                                                                                         dQuat_SCfromCam, ...
-%                                                                                         strFilterMutabConfig, ...
-%                                                                                         strFilterConstConfig)%#codegen
+%     dxStateCov, dStateTimetag, dQuat_INfromSC, dQuat_TBfromIN, dQuat_SCfromCam, ...
+%     strFilterMutabConfig, strFilterConstConfig)
 % -------------------------------------------------------------------------------------------------------------
 %% DESCRIPTION
 % Function executing sliding window pose computation and assignment based on current state and pointer to
@@ -32,14 +12,14 @@ end
 % either in target fixed or in inertial frame.
 % -------------------------------------------------------------------------------------------------------------
 %% INPUT
-% dxState                (:,1) double {isnumeric, isvector}
-% dxStateCov             (:,:) double {isnumeric, ismatrix}
-% dStateTimetag          (:,1) double {isnumeric, isvector}
-% dQuat_INfromSC         (4,1) double {isnumeric, isvector}
-% dQuat_TBfromIN         (4,1) double {isnumeric, isvector}
-% dQuat_SCfromCam        (4,1) double {isnumeric, isvector}
-% strFilterMutabConfig   (1,1) {isstruct}
-% strFilterConstConfig   (1,1) {isstruct}
+% dxState                (:,1) double
+% dxStateCov             (:,:) double
+% dStateTimetag          (:,1) double
+% dQuat_INfromSC         (4,1) double
+% dQuat_TBfromIN         (4,1) double
+% dQuat_SCfromCam        (4,1) double
+% strFilterMutabConfig   (1,1) struct
+% strFilterConstConfig   (1,1) struct
 % -------------------------------------------------------------------------------------------------------------
 %% OUTPUT
 % dxState                Fixed-allocation nominal state with the new camera pose.
@@ -53,19 +33,47 @@ end
 % 30-04-2025    Pietro Califano     Update to support pose augmentation in loosely coupled mode (inertial).
 % 11-08-2026    Pietro Califano, Codex gpt-5.6     Use code-generation-safe validation diagnostics.
 % 21-08-2026    Pietro Califano, Codex gpt-5.6     Preserve full clone cross-covariance during augmentation.
+% 06-09-2026  Pietro Califano, Codex gpt-6    Allow requested image poses without tracking measurements.
+% 07-09-2026  Pietro Califano, Codex gpt-6    Use type and size contracts instead of predicate validators.
+% 07-09-2026  Pietro Califano, Codex gpt-6    Resolve optional image-request schema at compile time.
+% 07-09-2026  Pietro Califano, Codex gpt-6    Exclude the -1 image-pose request sentinel.
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
-% [-]
+% ComputeWindowPose, ComputeWindowPoseJacobian.
 % -------------------------------------------------------------------------------------------------------------
+
+arguments (Input)
+    dxState                (:,1) double
+    dxStateCov             (:,:) double
+    dStateTimetag          (:,1) double
+    dQuat_INfromSC         (4,1) double
+    dQuat_TBfromIN         (4,1) double
+    dQuat_SCfromCam        (4,1) double
+    strFilterMutabConfig   (1,1) struct
+    strFilterConstConfig   (1,1) struct
+end
+
+arguments (Output)
+    dxState                (:,1) double
+    dxStateCov             (:,:) double
+    dStateTimetag          (:,1) double
+    strFilterMutabConfig   (1,1) struct
+end
+
+% Resolve schema at compile time; the pending image timestamp remains runtime state.
+bImagePoseRequested = coder.const(isfield(strFilterMutabConfig, 'dPendingImagePoseTime')) && ...
+    strFilterMutabConfig.dPendingImagePoseTime ~= -1.0 && ...
+    isfinite(strFilterMutabConfig.dPendingImagePoseTime);
 if coder.target('MATLAB') || coder.target('MEX')
 
     % Validate fixed-allocation capacity and the augmentation operating mode
     % without runtime character construction unsupported by MATLAB Coder.
     assert(strFilterMutabConfig.ui16WindowStateCounter <= strFilterConstConfig.ui16NumWindowPoses, ...
         'Window state counter cannot exceed the configured pose capacity.');
-    assert(strFilterMutabConfig.bContinuousSlideMode || strFilterMutabConfig.i8FeatTrackingMode == 0 || ...
+    assert(bImagePoseRequested || strFilterMutabConfig.bContinuousSlideMode || ...
+        strFilterMutabConfig.i8FeatTrackingMode == 0 || ...
         strFilterMutabConfig.i8FeatTrackingMode == 1, ...
-        'Feature tracking mode must be 0 or 1 unless continuous slide mode is enabled.');
+        'Pose augmentation requires active tracking, continuous sliding or an admitted image.');
 end
 
 
@@ -75,7 +83,8 @@ ui16DefaultFreePoseSlotPtr = strFilterMutabConfig.ui16DefaultFreePoseSlotPtr;
 % augmentation (slide-down strategy). This is to keep the latest on top of the state vector.
 
 if (strFilterMutabConfig.ui16WindowStateCounter < strFilterConstConfig.ui16NumWindowPoses && ...
-        strFilterMutabConfig.i8FeatTrackingMode >= 0) || strFilterMutabConfig.bContinuousSlideMode ||  strFilterMutabConfig.ui16WindowStateCounter == 0 
+        (strFilterMutabConfig.i8FeatTrackingMode >= 0 || bImagePoseRequested)) || ...
+        strFilterMutabConfig.bContinuousSlideMode || strFilterMutabConfig.ui16WindowStateCounter == 0
 
     strFilterMutabConfig.ui16WindowStateCounter = strFilterMutabConfig.ui16WindowStateCounter + uint16(1);
 
@@ -109,20 +118,13 @@ dJacPoseCovFromState = coder.nullcopy( zeros( strFilterConstConfig.ui16WindowPos
 
 % Compute window pose entries
 [dCamPosition_Frame, dQuat_TBfromCam, ~] = ComputeWindowPose(dCamPosition_IN, ...
-                                                                                    dQuat_INfromSC, ...
-                                                                                    dQuat_TBfromIN, ...
-                                                                                    dQuat_SCfromCam, ...
-                                                                                    strFilterMutabConfig, ...
-                                                                                    dxAttitudeBiasStates);
+    dQuat_INfromSC, dQuat_TBfromIN, dQuat_SCfromCam, strFilterMutabConfig, dxAttitudeBiasStates);
 % Allocate window pose state
 dxState(ui16StateAllocPtr) = [dCamPosition_Frame; dQuat_TBfromCam];
 
 % Evaluate 1st order map from state covariance to window pose covariance
-dJacPoseCovFromState(:, :) = ComputeWindowPoseJacobian(dxState, ...
-                                                    dQuat_TBfromIN, ...
-                                                    dQuat_TBfromCam, ...
-                                                    strFilterMutabConfig, ...
-                                                    strFilterConstConfig);
+dJacPoseCovFromState(:, :) = ComputeWindowPoseJacobian(dxState, dQuat_TBfromIN, ...
+    dQuat_TBfromCam, strFilterMutabConfig, strFilterConstConfig);
 
 
 %% Process timetag
