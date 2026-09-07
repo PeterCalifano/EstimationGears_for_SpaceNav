@@ -8,6 +8,7 @@ function setupOnce(~)
 charThisDir = fileparts(mfilename('fullpath'));
 addpath(fullfile(charThisDir, "../../../"));
 SetupPaths_EstimationGears;
+addpath(fullfile(charThisDir, '..', 'test_helpers'), '-begin');
 end
 
 function testJacobian_IndependentCorrectionDir(testCase)

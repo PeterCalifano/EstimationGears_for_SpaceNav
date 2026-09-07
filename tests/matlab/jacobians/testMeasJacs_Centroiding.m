@@ -7,6 +7,7 @@ function setupOnce(~)
 charThisDir = fileparts(mfilename('fullpath'));
 addpath(fullfile(charThisDir, "../../../"));
 SetupPaths_EstimationGears;
+addpath(fullfile(charThisDir, '..', 'test_helpers'), '-begin');
 end
 
 function testCentroidingJacobian_atTargetOrigin(testCase)
@@ -58,7 +59,7 @@ end
 ui16StateSize = cfg.strFilterConstConfig.ui16StateSize;
 
 dX0diff = cfg.dxStatePost(cfg.strFilterConstConfig.strStatesIdx.ui8posVelIdx(1:3));
-dFeatPos_CAM = cfg.dTargetPosition_IN - cfg.dDCM_CiFromIN(:,:,1) * dX0diff;
+dFeatPos_CAM = cfg.dDCM_CiFromIN(:,:,1) * (cfg.dTargetPosition_IN - dX0diff);
 
 % Analytical jacobian wrt current state (position block should match FDM)
 dJ_analytic = diag([cfg.dKcam(1,1), cfg.dKcam(2,2)]) ...

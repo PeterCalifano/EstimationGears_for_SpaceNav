@@ -640,6 +640,13 @@ end
 %% UPDATE equations module with/without delayed-state
 if any(bMeasTypeFlags) % Run update step if measurements are available
     %%% Residual, Innovation and Cross covariance computation
+
+    % DEVNOTE (Pietro Califano): Benchmark the fixed-size, inactive-row-
+    % regularized Kalman algebra used by rcs-1-gnc-simulator against the
+    % active-block implementation below using generated code and representative
+    % measurement counts. Compare numerical equivalence, execution time, memory
+    % footprint, and generated-code size. Import the fixed-size implementation
+    % here only if it demonstrates a net performance or memory benefit.
     
     % Perform Least Squares problem squeeze
     % [dTriangularObsMatrix, dOrthogonalQ] = GivensEliminateQR(dAllObservJac);
