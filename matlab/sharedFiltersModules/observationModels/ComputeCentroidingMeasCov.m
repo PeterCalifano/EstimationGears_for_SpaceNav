@@ -55,13 +55,15 @@ switch strFilterMutabConfig.ui8CenMeasCovModel
         dRmeasCovMatrix(:,:) = diag(strFilterMutabConfig.dCentroidingPixSigmas).^2;
     
     case 1
-        % Use the same predicted state and camera geometry as the observation model.
+        % Use predicted camera range to scale uncertainty with apparent target size.
         ui8PositionIdx = strFilterConstConfig.strStatesIdx.ui8posVelIdx(1:3);
         dCameraPosition_IN = dxState(ui8PositionIdx) + ...
             strMeasModelParams.dDCM_SCBiFromIN(:, :, 1)' * strFilterMutabConfig.dCameraPosition_SCB;
+
         dCameraRange = norm(dCameraPosition_IN);
         assert(isfinite(dCameraRange) && dCameraRange >= 0, ...
             'Camera range must be finite and nonnegative.');
+
         dIFOVxy = atan(1.0 ./ [strFilterMutabConfig.dKcam(1,1); strFilterMutabConfig.dKcam(2,2)] );
 
         dApparentDiamInPix_XY = atan( 2.0 * strDynParams.strMainData.dRefRadius ./ dCameraRange) ./ dIFOVxy;

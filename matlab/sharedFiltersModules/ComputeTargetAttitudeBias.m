@@ -31,8 +31,9 @@ arguments (Output)
     dQuaternion   (4,1) double
 end
 
-% MathCore owns the exponential and its differential. The negative argument
+% NOTE: MathCore owns the exponential and its differential. The negative argument
 % selects the passive correction; local passive error is J_l(-b)*db.
 [dCorrection, dBiasJacobian] = RotationVectorToDCM(-dBias_TF);
 dQuaternion = DCM2quat(dCorrection,false);
+
 end
