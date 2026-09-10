@@ -15,21 +15,12 @@ function [dxStatePost, ...
                                                     strMeasModelParams, ...
                                                     strFilterMutabConfig, ...
                                                     strFilterConstConfig)%#codegen
-arguments
-    dxStatePrior            (:,1) {mustBeNumeric}
-    dxStateCovPrior         (:,:) {mustBeNumeric}
-    dStateTimetag           (:,1) {mustBeNumeric}
-    strMeasBus              (1,1) struct
-    strDynParams            (1,1) struct
-    strMeasModelParams      (1,1) struct
-    strFilterMutabConfig    (1,1) struct
-    strFilterConstConfig    (1,1) struct {coder.mustBeConst}
-end
 %% SIGNATURE
 % [dxStatePost, ...
 %  dxStateCovPost, ...
 %  dStateTimetag, ...
 %  strFilterMutabConfig, ...
+%  strDynParams, ...
 %  dAllPriorResVector, ...
 %  dAllObservJac, ...
 %  dKalmanGain, ...
@@ -44,41 +35,40 @@ end
 %                                               strFilterConstConfig)%#codegen
 % -------------------------------------------------------------------------------------------------------------
 %% DESCRIPTION
-% Performs the measurement update step for an Extended Kalman Filter (EKF) with a sliding window and full covariance.
-% This function fuses available measurements (LIDAR, centroiding, feature tracking as relative direction) to update the state and covariance.
-% It supports multiple measurement types, handles measurement Jacobians, and manages windowed state updates.
-% The implementation is tailored for spacecraft navigation and supports both additive and multiplicative state corrections.
-% Ellipsoidal LiDAR uses a TF-axis rotation-vector bias [rad]. Its sensitivity
-% contributes to the update in both estimated and consider modes.
-% Relative direction uses EvaluateRelativeDirectionObs for current/clone geometry and noise maps.
+% Fuse navigation observations through fixed-capacity assembly and a full-covariance update.
+% Sensor predictors return unwhitened residual/H/R/N blocks. The numerical modules own innovation,
+% gain and Joseph algebra; this entry point owns prior diagnostics, current/window state retraction
+% and dynamics synchronization. PREVIOUS timestamps and full window cross-covariances are retained.
+% Failed LiDAR prediction does not discard another sensor. Centroid geometry remains active when
+% its optional bias model is absent. Inputs and the ten-output public API are unchanged.
 % -------------------------------------------------------------------------------------------------------------
 %% INPUT
-% dxStatePrior            (:,1) {mustBeNumeric}
-% dxStateCovPrior         (:,:) {mustBeNumeric}
-% dStateTimetag           (:,1) {mustBeNumeric}
-% strMeasBus              (1,1) struct
-% strDynParams            (1,1) struct
-% strMeasModelParams      (1,1) struct
-% strFilterMutabConfig    (1,1) struct
-% strFilterConstConfig    (1,1) struct {coder.mustBeConst}
+% dxStatePrior            (:, 1) {mustBeNumeric}
+% dxStateCovPrior         (:, :) {mustBeNumeric}
+% dStateTimetag           (:, 1) {mustBeNumeric}
+% strMeasBus              (1, 1) struct
+% strDynParams            (1, 1) struct
+% strMeasModelParams      (1, 1) struct
+% strFilterMutabConfig    (1, 1) struct
+% strFilterConstConfig    Constant state/storage layout; bUseMeasNoiseCrossCov selects N handling.
 % -------------------------------------------------------------------------------------------------------------
 %% OUTPUT
-% dxStatePost
-% dxStateCovPost
-% dStateTimetag
-% strFilterMutabConfig
-% strDynParams
-% dAllPriorResVector
-% dAllObservJac
-% dKalmanGain
-% dxErrState
-% dPyyResCov
+% dxStatePost             Corrected current/window nominal state; unused slots retain their prior.
+% dxStateCovPost          Full covariance with current/window cross terms and consider handling.
+% dStateTimetag           Input epochs, unchanged by the observation update.
+% strFilterMutabConfig    Updated sensor-failure, consider-mode and measurement-editing fields.
+% strDynParams            Dynamics parameters synchronized with estimated state values.
+% dAllPriorResVector      Unwhitened assembled residual, before editing; unused rows are zero.
+% dAllObservJac           Assembled prediction Jacobian in the full error-state layout.
+% dKalmanGain             Applied gain; rejected columns and consider/inactive rows are zero.
+% dxErrState              Applied additive error; consider entries receive no correction.
+% dPyyResCov              Innovation covariance before editing; unused entries are zero.
 % -------------------------------------------------------------------------------------------------------------
 %% CHANGELOG
 % 03-03-2025    Pietro Califano     First prototype implemented.
 % 05-03-2025    Pietro Califano     Update and debug of implementation.
-% 30-04-2025    Pietro Califano     Refactoring and update to support combined measurements 
-%                                   and relative direction from feature tracking algorithm. 
+% 30-04-2025    Pietro Califano     Refactoring and update to support combined measurements
+%                                   and relative direction from feature tracking algorithm.
 % 20-05-2025    Pietro Califano     Update for SLX compatibility. Reduced version of MSCKF.
 % 01-06-2025    Pietro Califano     Complete implementation of observation models (add VO measurement)
 % 06-06-2025    Pietro Califano     Update observation module with measurement rejection
@@ -86,57 +76,69 @@ end
 % 30-04-2026    Pietro Califano     Extend default implementation with ACOB correction jacobian support
 % 04-08-2026    Pietro Califano, Codex gpt-5.6    Add MATLAB-only finite-value diagnostics at core update boundaries
 % 09-09-2026    Pietro Califano, Codex gpt-6    Correct LiDAR target-bias mean and consider sensitivity.
+% 09-09-2026    Pietro Califano, Codex gpt-6    Supply corrected feature attitudes and bias differentials.
+% 09-09-2026    Pietro Califano, Codex gpt-6    Use fixed measurement dimensions in rejection checks.
+% 09-09-2026    Pietro Califano, Codex gpt-6    Keep update workspaces at compiled input capacity.
+% 09-09-2026    Pietro Califano, Codex gpt-6    Preserve failed-sensor and bias-free centroid assembly.
+% 09-09-2026    Pietro Califano, Codex gpt-6    Separate sensor assembly, editing and update algebra.
+% 09-09-2026    Pietro Califano, Codex gpt-6    Configure correlated-noise updates and applied gain masks.
 % 10-09-2026    Pietro Califano, Codex gpt-6    Use the shared relative-direction observation model.
 % 10-09-2026    Pietro Califano, Codex gpt-6    Remove the obsolete orbit-only ablation selector.
+% 10-09-2026    Pietro Califano, Codex gpt-6    Exclude unused capacity from covariance checks.
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
-% ComputeTargetAttitudeBias, EvalChbvAttInterp_InFromTarget, RayEllipsoidIntersection,
-% ApplySlidingWindowErrorState, EvaluateRelativeDirectionObs.
+% BuildNavObservationBatch, ComputeFullCovObsGain, EvaluateNavMeasEditing,
+% ApplyFullCovObsCorrection, ApplySlidingWindowErrorState.
 % -------------------------------------------------------------------------------------------------------------
 
-% Coder directives
-coder.inline("always");
+arguments (Input)
+    dxStatePrior            (:, 1) {mustBeNumeric}
+    dxStateCovPrior         (:, :) {mustBeNumeric}
+    dStateTimetag           (:, 1) {mustBeNumeric}
+    strMeasBus              (1, 1) struct
+    strDynParams            (1, 1) struct
+    strMeasModelParams      (1, 1) struct
+    strFilterMutabConfig    (1, 1) struct
+    strFilterConstConfig    (1, 1) struct {coder.mustBeConst}
+end
+arguments (Output)
+    dxStatePost (:, 1) double
+    dxStateCovPost (:, :) double
+    dStateTimetag (:, 1) double
+    strFilterMutabConfig (1, 1) struct
+    strDynParams (1, 1) struct
+    dAllPriorResVector (:, 1) double
+    dAllObservJac (:, :) double
+    dKalmanGain (:, :) double
+    dxErrState (:, 1) double
+    dPyyResCov (:, :) double
+end
 
-% Enforce constraint on constness of struct;
+%% Function code
+% Specialize the update for the configured state layout and noise model.
 strFilterConstConfig = coder.const(strFilterConstConfig);
 
-bMeasTypeFlags          = strMeasBus.bMeasTypeFlags;
-dMeasTimetags           = strMeasBus.dMeasTimetags ;
-
-if coder.target('MATLAB') || coder.target('MEX')
-
-    % Size asserts
-    if any(bMeasTypeFlags)
-        % assert(strFilterMutabConfig.i8FeatTrackingMode >= 0 || bMeasTypeFlags(2:3) == true, 'ERROR: measurements provided as input, but fusion mode not correctly set.')
-    
-        if bMeasTypeFlags(1) == true
-            % assert(strFilterMutabConfig.i8FeatTrackingMode >= 0, 'ERROR: feature tracking measurements provided as input, but feature tracking mode not correctly set. Expected >=0.')
-        end
-    end
-
-end
+bMeasTypeFlags = strMeasBus.bMeasTypeFlags;
 
 % Mean state and covariance (default values: skip update, copy)
 dxStatePost     = dxStatePrior;
-dxStateCovPost  = dxStateCovPrior;  
+dxStateCovPost  = dxStateCovPrior;
 
-% Get configuration variables 
-% ui16MaxTrackLength       = coder.const(strFilterConstConfig.ui16MaxTrackLength);
-% ui16MaxFeatureCount      = coder.const(strFilterConstConfig.ui16MaxFeatureCount);
-ui16MaxResidualsVecSize  = coder.const(strFilterConstConfig.ui16MaxResidualsVecSize); % TODO understand if possible to modify this at inducing generation of two functions.
-ui32MeasAllocIndex = zeros(3,2, 'uint32');
+% Get configuration variables
+ui16MaxResidualsVecSize = coder.const(strFilterConstConfig.ui16MaxResidualsVecSize);
 
 ui16StateSize            = coder.const(strFilterConstConfig.ui16StateSize);
-ui32FullStateSize        = coder.const(strFilterConstConfig.ui32FullStateSize);
 ui32FullCovSize          = coder.const(strFilterConstConfig.ui32FullCovSize);
 
-ui16LastStateEntryPtr   = ui16StateSize + uint16(strFilterMutabConfig.ui16WindowStateCounter * strFilterConstConfig.ui16WindowPoseSize);
-ui16LastCovEntryPtr     = ui16StateSize + uint16(strFilterMutabConfig.ui16WindowStateCounter * strFilterConstConfig.ui16WindowStateCovSize);
+ui16LastStateEntryPtr = ui16StateSize + ...
+    uint16(strFilterMutabConfig.ui16WindowStateCounter * strFilterConstConfig.ui16WindowPoseSize);
+ui16LastCovEntryPtr = ui16StateSize + ...
+    uint16(strFilterMutabConfig.ui16WindowStateCounter * strFilterConstConfig.ui16WindowStateCovSize);
 
 % Reject an invalid active prior before any measurement-model computation.
 % This distinguishes pre-existing window contamination from corruption
 % generated by the observation update itself.
-if coder.target('MATLAB')
+if coder.target('MATLAB') || coder.target('MEX')
     if any(bMeasTypeFlags)
         if not(all(isfinite(dxStatePrior(1:ui16LastStateEntryPtr)), 'all'))
             error('EKF_SlideWindow_FullCov_ObsUp:NonFinitePriorState', ...
@@ -150,607 +152,50 @@ if coder.target('MATLAB')
     end
 end
 
-% Get execution mode
-% ui8SqueezeMode          = strFilterMutabConfig.ui8SqueezeMode; 
-i8FeatTrackingMode      = strFilterMutabConfig.i8FeatTrackingMode;
+% Assemble sensor outputs before selecting a numerical update representation.
+[strBatch, dxStatePost, strFilterMutabConfig] = BuildNavObservationBatch(dxStatePost, ...
+    dStateTimetag, strMeasBus, strDynParams, strMeasModelParams, strFilterMutabConfig, strFilterConstConfig);
 
-% Build measurement auto-covariance [meas, meas] and cross-covariance [prior state, meas]
-dMeasCrossCovN = zeros(ui32FullCovSize, ui16MaxResidualsVecSize);
-dMeasAutoCovR  = zeros(ui16MaxResidualsVecSize, ui16MaxResidualsVecSize); % DEVNOTE: can be largely optimized in terms of memory, left as TODO
+dAllObservJac = strBatch.dJacobian;
+dAllPriorResVector = strBatch.dResidual;
 
-ui32ResStartAllocPtr = uint32(1); % Pointer to start allocation blocks for centroiding OR feature tracking
+% Public diagnostic arrays retain their configured capacities even for an empty batch.
+dPyyResCov = zeros(ui16MaxResidualsVecSize, ui16MaxResidualsVecSize);
+dKalmanGain = zeros(ui32FullCovSize, ui16MaxResidualsVecSize);
+dxErrState = zeros(ui32FullCovSize, 1);
 
-if any(bMeasTypeFlags)
+%% Measurement update step
+if strBatch.ui32RowCount > 0
+
+    %% Process measurements and build update matrices
+    [dKalmanGain, dPyyResCov, dEffectiveNoise, dActivePriorCov, ...
+        dJacMatrixRedux, dObsVectorRedux, dNoiseCrossCov] = ...
+        ComputeFullCovObsGain(dxStateCovPrior, strBatch, uint32(ui16LastCovEntryPtr), ...
+            strFilterMutabConfig.dMeasUnderweightCoeff, ...
+            coder.const(strFilterConstConfig.bUseMeasNoiseCrossCov));
     
-    if bMeasTypeFlags(3) == true
-        % LIDAR rangefinder
-        % ui32IndexDelta = 0;
-        % Allocate measurement covariance for lidar
-        dMeasAutoCovR(ui32ResStartAllocPtr,ui32ResStartAllocPtr) = strFilterMutabConfig.dRangeLidarSigma.^2;
-        ui32ResStartAllocPtr = ui32ResStartAllocPtr + uint32(1);
-    end
-
-    if bMeasTypeFlags(2) == true
-        
-        % Centroiding
-        ui32IndexDelta = uint32(1);
-
-        % Compute covariance of centroiding measurement
-        dMeasAutoCovR(ui32ResStartAllocPtr:ui32ResStartAllocPtr+ui32IndexDelta, ...
-            ui32ResStartAllocPtr:ui32ResStartAllocPtr+ui32IndexDelta) = ComputeCentroidingMeasCov(dxStatePost, ...
-                strFilterMutabConfig, strDynParams, strFilterConstConfig, strMeasModelParams);
-
-        ui32ResStartAllocPtr = ui32ResStartAllocPtr + ui32IndexDelta + uint32(1);
-    end
-
-    if bMeasTypeFlags(1)
-        ui32IndexDelta = uint32(2);
-        ui32ResStartAllocPtr = ui32ResStartAllocPtr + ui32IndexDelta + uint32(1); %#ok<NASGU>
-        
-    else
-        i8FeatTrackingMode = int8(-1); % Override tracking mode
-    end
-end
-
-
-% Define auxiliary variables
-dMeasUnderweightCoeff   = strFilterMutabConfig.dMeasUnderweightCoeff;
-dTargetPosition_IN      = [0;0;0]; % Assumed in zero for now
-
-dKcam              = strFilterMutabConfig.dKcam;
-dDCM_CiFromIN      = zeros(3,3, strFilterConstConfig.ui16NumWindowPoses + 1);
-
-for idP = 1:strFilterMutabConfig.ui16WindowStateCounter + 1
-    dDCM_CiFromIN(:,:,idP) = strFilterMutabConfig.dDCM_CamFromSCB * ...
-                                strMeasModelParams.dDCM_SCBiFromIN(:,:,idP); % Attitude knowledge from ADCS assumed
-end
-
-
-% Reset pointer to one for residuals and jacobians allocation
-ui32ResStartAllocPtr = uint32(1); % Pointer to start allocation blocks for centroiding OR feature tracking
-
-%% Pre-processing
-% Variables definition
-% Initialize default values for error flags and masks (MAX SIZE)
-dPyyResCov           = zeros(ui16MaxResidualsVecSize, ui16MaxResidualsVecSize);
-dPxyCrossCov         = zeros(ui32FullCovSize, ui16MaxResidualsVecSize); % DEVNOTE, dimension of state is actually smaller!
-dAllObservJac        = zeros(ui16MaxResidualsVecSize, ui32FullCovSize);
-dAllPriorResVector   = zeros(ui16MaxResidualsVecSize, 1);
-% dTimeDelays       = zeros(ui32NumOfMeasArrays, 1); 
-dJacMatrixRedux     = zeros(ui16MaxResidualsVecSize, ui32FullCovSize);
-dObsVectorRedux     = zeros(ui16MaxResidualsVecSize, 1);
-dKalmanGain         = zeros(ui32FullCovSize, ui16MaxResidualsVecSize);
-dxErrState          = zeros(ui32FullCovSize, 1);
-
-% Perform input checks
-% NOTE: delay of images for feature tracking in MSCKF does not matter in practice. Poses are stored at each
-% image. However, it could be extended to enable fusion of tracks at current state as well.
-
-
-%% LIDAR measurement processing
-if bMeasTypeFlags(3) == true
-    
-    bEvaluateJacs = [true, true];
-
-    dRayOrigin_IN       = dxStatePost(strFilterConstConfig.strStatesIdx.ui8posVelIdx(1:3));
-    dRayDirection_IN    = strMeasModelParams.dDCM_SCBiFromIN(:,:,1)' * strFilterMutabConfig.dLidarBeamDirection_SCB;    
-
-    % Default values: set rotation matrices to Identity (evaluation occurs in Inertial)
-    dCurrentDCM_TBfromIN    = eye(3);
-    dCurrentDCM_EstTBfromIN = eye(3);
-    dBiasJacobian_TF        = eye(3);
-    dEllipsoidCentre        = [0; 0; 0];
-
-
-    % Spherical: default case
-    dInvDiagShapeCoeffs = strFilterMutabConfig.dSphericalInvDiagShapeCoeffs;
-    dEllipsoidCentre(:) = [0; 0; 0];
-
-    if strFilterMutabConfig.ui8LidarShapeModelMode == 1
-        bEvaluateJacs(2)    = false;
-
-    elseif strFilterMutabConfig.ui8LidarShapeModelMode == 2
-        % Ellipsoidal
-        dInvDiagShapeCoeffs = strFilterMutabConfig.dEllipsoidInvDiagShapeCoeffs;
-        dCurrentDCM_TBfromIN = transpose(EvalChbvAttInterp_InFromTarget( ...
-            dStateTimetag(1), strDynParams.strMainData.strAttData));
-        dCurrentDCM_EstTBfromIN = dCurrentDCM_TBfromIN;
-
-        % Compose the passive bias on the target side, using radians in TF axes.
-        [dTargetCorrection, dBiasJacobian_TF] = ComputeTargetAttitudeBias( ...
-            dxStatePost(strFilterConstConfig.strStatesIdx.ui8attBiasDeltaIdx));
-        dCurrentDCM_EstTBfromIN = dTargetCorrection * dCurrentDCM_TBfromIN;
-
-    end
-
-    % Compute range prediction evaluating ray-ellipsoid intersection
-    % DEVNOTE: conversion to target fixed frame is performed inside
-    if coder.target('MATLAB') || coder.target('MEX')
-        assert(any(abs(dInvDiagShapeCoeffs) > 0.0,'all'))
-    end
-
-    if any(abs(dInvDiagShapeCoeffs) > 0.0, 'all')
-        [bIntersectFlag, dIntersectDistance, bFailureFlag, ~, ...
-            dJacIntersectDistance_RayOrigin, dJacIntersectDistance_TargetAttErr] = RayEllipsoidIntersection(dRayOrigin_IN, ...
-                                                                                                            dRayDirection_IN, ...
-                                                                                                            dEllipsoidCentre, ...
-                                                                                                            dInvDiagShapeCoeffs, ...
-                                                                                                            dCurrentDCM_TBfromIN, ...
-                                                                                                            dCurrentDCM_EstTBfromIN, ...
-                                                                                                            bEvaluateJacs);
-    else
-        % DEVNOTE Invalid shape coefficients!
-        bIntersectFlag = false;
-        bFailureFlag = true;
-    end
-
-    if bIntersectFlag && not(bFailureFlag)
-        
-        % Compute range residual
-        dRangeLidarPredict = dIntersectDistance + dxStatePost(strFilterConstConfig.strStatesIdx.ui8LidarMeasBiasIdx); % TODO
-
-        % Residual computation
-        dRangeLidarResidual = strMeasBus.dRangeLidarCentroid(1) - dRangeLidarPredict; % TODO generalize indexing by adding measurement vectors index if needed
-
-        % Jacobian evaluation
-        dRangeLidarObsMatrix = zeros(1, ui16StateSize);
-        dRangeLidarObsMatrix(1, strFilterConstConfig.strStatesIdx.ui8posVelIdx(1:3))    = dJacIntersectDistance_RayOrigin;
-
-        % The ray routine differentiates positive local rotations. Map these
-        % to additive passive bias, including uncertainty held in consider mode.
-        if bEvaluateJacs(2)
-            dRangeLidarObsMatrix(1, strFilterConstConfig.strStatesIdx.ui8attBiasDeltaIdx) = ...
-                -dJacIntersectDistance_TargetAttErr * dBiasJacobian_TF;
-        end
-
-        dRangeLidarObsMatrix(1, strFilterConstConfig.strStatesIdx.ui8LidarMeasBiasIdx)  = 1.0;
-
-        % DEVNOTE: add latency management here
-        % dBackwardSTM = eye(ui16StateSize);
-        % dRangeLidarObsMatrix = dRangeLidarObsMatrix * dBackwardSTM;
-
-        % Compute and allocation global Jacobian and residuals entry
-        dAllObservJac(ui32ResStartAllocPtr, 1:ui16StateSize )  = dRangeLidarObsMatrix; %#ok<*UNRCH> % TODO
-        dAllPriorResVector( ui32ResStartAllocPtr )             = dRangeLidarResidual;
-        ui32MeasAllocIndex(1,:) = [ui32ResStartAllocPtr, ui32ResStartAllocPtr];
-
-        % Increment residual allocation pointer
-        ui32ResStartAllocPtr = ui32ResStartAllocPtr + uint32(1);
-
-        if coder.target("MATLAB") || coder.target("MEX")
-            fprintf('Lidar: OK.\t')
-        end
-    elseif (bFailureFlag || not(bIntersectFlag)) && not(strFilterMutabConfig.bEnableLidarFallbackPrediction)
-
-        % Set failure flag
-        strFilterMutabConfig.bLidarIntersectFailure = true;
-
-        if coder.target('MATLAB') || coder.target('MEX')
-            warning('ERROR: Lidar measurement received but not processed due to error in filter prediction model (Ray Ellipsoid intersection test)!')
-        end
-
-        bMeasTypeFlags(2) = false;
-    else
-        if coder.target('MATLAB') || coder.target('MEX')
-            % Lidar fallback model (range only)
-            warning('WARNING: Lidar measurement received but ellipsoid intersection test failed. Processing using fallback (range) model.')
-        end
-
-        % Reset bias to zero if false (switch from intersection)
-        if strFilterMutabConfig.bLidarIntersectFailure == false
-            dxStatePost(strFilterConstConfig.strStatesIdx.ui8LidarMeasBiasIdx) = 0.0;
-        end
-
-        % Set failure flag
-        strFilterMutabConfig.bLidarIntersectFailure = true;
-
-        % Compute range residual
-        dIntersectDistance = norm(dRayOrigin_IN) - strDynParams.strMainData.dRefRadius;
-        dRangeLidarPredict = dIntersectDistance + dxStatePost(strFilterConstConfig.strStatesIdx.ui8LidarMeasBiasIdx);
-
-        % Residual computation
-        dRangeLidarResidual = strMeasBus.dRangeLidarCentroid(1) - dRangeLidarPredict;
-
-        % Increase autocovariance of measurement to account for simplified model
-        dMeasAutoCovR(ui32ResStartAllocPtr,ui32ResStartAllocPtr) = strFilterMutabConfig.dRangeLidarSigma.^2 + strFilterMutabConfig.dRangeLidarShapeSigma^2;
-
-        % Jacobian evaluation
-        dRangeLidarObsMatrix = zeros(1, ui16StateSize);
-        dRangeLidarObsMatrix(1, strFilterConstConfig.strStatesIdx.ui8posVelIdx(1:3))    = dRayOrigin_IN / norm(dRayOrigin_IN);
-
-        dRangeLidarObsMatrix(1, strFilterConstConfig.strStatesIdx.ui8LidarMeasBiasIdx)  = 1.0;
-
-        % Compute and allocation global Jacobian and residuals entry
-        dAllObservJac(ui32ResStartAllocPtr, 1:ui16StateSize )  = dRangeLidarObsMatrix; %#ok<*UNRCH> % TODO
-        dAllPriorResVector( ui32ResStartAllocPtr )             = dRangeLidarResidual;
-        ui32MeasAllocIndex(1,:) = [ui32ResStartAllocPtr, ui32ResStartAllocPtr];
-
-        % Increment residual allocation pointer
-        ui32ResStartAllocPtr = ui32ResStartAllocPtr + uint32(1);
-
-        if coder.target("MATLAB") || coder.target("MEX")
-            fprintf('Lidar: OK.  ')
-        end
-    end
-end
-
-%% Centroiding measurement processing
-if bMeasTypeFlags(2) == true
-    if not(isempty(strFilterConstConfig.strStatesIdx.ui8CenMeasBiasIdx))
-        strFilterMutabConfig.bConsiderStatesMode(strFilterConstConfig.strStatesIdx.ui8CenMeasBiasIdx) = false;
-    end
-
-    ui32CentrAllocPtr   = uint32([0,1]) + ui32ResStartAllocPtr;
-
-    % Compute centroiding measurement prediction in image place
-    dCentroidCoord_uv   = pinholeProjectHP(dKcam, ...
-        dDCM_CiFromIN(:,:,1), ...
-        dxStatePost( strFilterConstConfig.strStatesIdx.ui8posVelIdx(1:3) ), ...
-        dTargetPosition_IN);
-
-    % Jacobian evaluation
-    dCentroidObsMatrix = zeros(2, ui16StateSize);
-    dCentroidObsMatrix(:,:) = diag([dKcam(1,1), dKcam(2,2)]) ...
-                                * evalJAC_NormProject_FeatPos([0;0;0] - dDCM_CiFromIN(:,:,1) * dxStatePost(strFilterConstConfig.strStatesIdx.ui8posVelIdx(1:3))) ...
-                                * evalJAC_FeatProj_CurrentState(dxStatePost(1:ui16StateSize), ...
-                                zeros(3,1), ...
-                                zeros(3,3), ...
-                                zeros(3,3), ...
-                                strMeasModelParams.dDCM_SCBiFromIN(:,:,1), ...
-                                strFilterMutabConfig, ...
-                                strFilterConstConfig); % Size: [2, ui16StateSize]
-
-    % DEVNOTE: add latency management here
-    % dBackwardSTM = eye(ui16StateSize);
-    % dCentroidObsMatrix = dCentroidObsMatrix * dBackwardSTM;
-    if strFilterMutabConfig.i8CentroidingAlgorithmMode == uint8(1)
-        % ACoB uses the filter-predicted range/pose to correct CoB into CoF.
-        % Account for that state dependence in the centroid residual Jacobian.
-        assert(strFilterMutabConfig.dReferenceMetricRadius > 0.0, ...
-            'ACoB centroiding requires strFilterMutabConfig.dReferenceMetricRadius > 0.');
-        assert(strFilterMutabConfig.dMeanInstFOVinRadPx > 0.0, ...
-            'ACoB centroiding requires strFilterMutabConfig.dMeanInstFOVinRadPx > 0.');
-
-        % Evaluate current sun position in inertial frame
-        dSunPosition_IN = evalChbvPolyWithCoeffs(strDynParams.strBody3rdData(1).strOrbitData.ui32PolyDeg, ...
-                                            3, dStateTimetag(1), ...
-                                            strDynParams.strBody3rdData(1).strOrbitData.dChbvPolycoeffs, ...
-                                            strDynParams.strBody3rdData(1).strOrbitData.dTimeLowBound, ...
-                                            strDynParams.strBody3rdData(1).strOrbitData.dTimeUpBound);
-
-        % Evaluate phase angle between sun and camera
-        dCameraPosition_IN = dxStatePost(strFilterConstConfig.strStatesIdx.ui8posVelIdx(1:3));
-        dPhaseAngleInRad = acos(max(-1.0, min(1.0, dot(dCameraPosition_IN / norm(dCameraPosition_IN), ...
-                                                       dSunPosition_IN / norm(dSunPosition_IN)))));
-
-        ui8PosIdx = coder.const(strFilterConstConfig.strStatesIdx.ui8posVelIdx(1:3));
-
-        % Subtract from the Jacobian the contribution of the CoB to CoF correction
-        dCentroidObsMatrix(:, ui8PosIdx) = dCentroidObsMatrix(:, ui8PosIdx) ...
-            - evalJAC_AnalyticCOB_CamPosition(dCameraPosition_IN, ...
-                                              dPhaseAngleInRad, ...
-                                              dSunPosition_IN, ...
-                                              dDCM_CiFromIN(:,:,1), ...
-                                              strFilterMutabConfig.dReferenceMetricRadius, ...
-                                              strFilterMutabConfig.dMeanInstFOVinRadPx, ...
-                                              coder.const(0.0062), ...
-                                              coder.const(false));
-    end
-
-    dCentroidBiasObsMatrix = zeros(2, ui16StateSize);
-    dCentroidBiasObsSubMat = zeros(2,2);
-    dCorrectionVector = zeros(2,1);
-
-    if not(isempty(strFilterConstConfig.strStatesIdx.ui8CenMeasBiasIdx))
-        % dAllObservJac(ui32CentrAllocPtr, strFilterConstConfig.strStatesIdx.ui8CenMeasBiasIdx )  ; %#ok<*UNRCH> % TODO
-
-        % Compute sun direction in image place
-        dSunPosition_CAM =  dDCM_CiFromIN(:,:,1) * evalChbvPolyWithCoeffs(strDynParams.strBody3rdData(1).strOrbitData.ui32PolyDeg, ...
-                                            3, dStateTimetag(1),...
-                                            strDynParams.strBody3rdData(1).strOrbitData.dChbvPolycoeffs, ...
-                                            strDynParams.strBody3rdData(1).strOrbitData.dTimeLowBound, ...
-                                            strDynParams.strBody3rdData(1).strOrbitData.dTimeUpBound);
-
-        dSunDir_uv = dSunPosition_CAM(1:2)./norm(dSunPosition_CAM(1:2));
-        
-        % Compute correction vector and bias jacobian
-        [dCorrectionVector(:), dCentroidBiasObsSubMat(:,:)] = ComputeCenMeasEstCorrection(dxStatePost, ...
-                                                                            dSunDir_uv, ...
-                                                                            strFilterMutabConfig, ...
-                                                                            strFilterConstConfig);
-        %%%% DEBUG
-        if coder.target('MATLAB')
-            if 0
-                figure(435)
-                hold on
-                plot(strMeasBus.dRangeLidarCentroid(ui32CentrAllocPtr(1)) + dCorrectionVector(1), ...
-                    strMeasBus.dRangeLidarCentroid(ui32CentrAllocPtr(2)) + dCorrectionVector(2), ...
-                    'bo', 'MarkerSize', 10, 'LineWidth', 2, 'DisplayName', 'Meas. + bias');
-                hold on
-                plot(dCentroidCoord_uv(1), dCentroidCoord_uv(2) , ...
-                    'co', 'MarkerSize', 10, 'LineWidth', 2, 'DisplayName', 'Prediction.');
-                plot(dCentroidCoord_uv(1) - dCorrectionVector(1), ...
-                    dCentroidCoord_uv(2) - dCorrectionVector(2), ...
-                    'yo', 'MarkerSize', 10, 'LineWidth', 2, 'DisplayName', 'Prediction. + bias');
-            end
-        end
-        %%%%%
-
-        % TODO: add safety limit to centroding bias!
-        % if any(abs(dCorrectionVector) > [200; 200])
-        %     warning('Centroiding correction vector equal to %s, larger than limiter. Correction prevented.', mat2str(dCorrectionVector))
-        %     dCorrectionVector = zeros(2,1);
-        %     dCentroidBiasObsMatrix = zeros(2, ui16StateSize);
-        % end
-
-        % Compute residual and allocate measurement
-        dCentroidResidual = strMeasBus.dRangeLidarCentroid(ui32CentrAllocPtr) - (dCentroidCoord_uv(1:2) + dCorrectionVector);
-
-        % Compute and allocation global Jacobian and residuals entry
-        dCentroidBiasObsMatrix(1:2, strFilterConstConfig.strStatesIdx.ui8CenMeasBiasIdx) = dCentroidBiasObsSubMat;
-
-        dAllObservJac(ui32CentrAllocPtr, 1:ui16StateSize )  = dCentroidObsMatrix + dCentroidBiasObsMatrix; %#ok<*UNRCH> % TODO
-        dAllPriorResVector( ui32CentrAllocPtr )             = dCentroidResidual;
-        ui32MeasAllocIndex(2,:) = [ui32CentrAllocPtr(1), ui32CentrAllocPtr(end)];
-    end
-
-    % Increment residual allocation pointer
-    ui32ResStartAllocPtr = ui32ResStartAllocPtr + uint32(2);
-
-    if coder.target("MATLAB") || coder.target("MEX")
-        fprintf('Centroiding: OK.\t')
-    end
-else
-    % Reset centroiding bias and enable consider mode
-    if not(isempty(strFilterConstConfig.strStatesIdx.ui8CenMeasBiasIdx))
-        dxStatePost(strFilterConstConfig.strStatesIdx.ui8CenMeasBiasIdx) = [0; 0];
-        strFilterMutabConfig.bConsiderStatesMode(strFilterConstConfig.strStatesIdx.ui8CenMeasBiasIdx) = true;
-    end
-end
-
-%% Feature-based measurement processing
-if bMeasTypeFlags(1) == true
-
-    % Use the shared prediction and bias maps for current and retained camera poses.
-    ui32DirOfMotionAllocPtr = uint32([0, 1, 2]) + ui32ResStartAllocPtr;
-    [dDirVectorResidual, dDirOfMotionJac_CkFromCkprev_Ck, ...
-        dDirMotionMeasAutoCovR, dDirMotionMeasCrossCovN] = EvaluateRelativeDirectionObs( ...
-        dxStatePost, dStateTimetag, strMeasBus.dDirectionOfMotion_CurrentCamFromPrevCam_Cam, ...
-        strDynParams, strMeasModelParams, strFilterMutabConfig, strFilterConstConfig);
-
-    % Allocate measurement autocovariance [meas, meas] and cross-covariance [prior state, meas]
-    dMeasAutoCovR(ui32ResStartAllocPtr:ui32ResStartAllocPtr + 2, ...
-        ui32ResStartAllocPtr:ui32ResStartAllocPtr + 2) = dDirMotionMeasAutoCovR;
-    
-    dMeasCrossCovN(1:ui16StateSize, ui32ResStartAllocPtr:ui32ResStartAllocPtr + 2) = dDirMotionMeasCrossCovN; % DEVNOTE: correlation can only be with current state
-
-    % Allocate global Jacobian and residuals entry
-    dAllObservJac(ui32DirOfMotionAllocPtr, : ) = dDirOfMotionJac_CkFromCkprev_Ck; %#ok<*UNRCH> % TODO
-    dAllPriorResVector( ui32DirOfMotionAllocPtr ) = dDirVectorResidual;
-    ui32MeasAllocIndex(3, :) = [ui32DirOfMotionAllocPtr(1), ui32DirOfMotionAllocPtr(end)];
-
-    ui32ResStartAllocPtr = ui32ResStartAllocPtr + 3;
-
-    if coder.target("MATLAB") || coder.target("MEX")
-        fprintf('Direction of motion update: OK.\t')
-    end
-
-else
-    i8FeatTrackingMode = int8(-1);
-    if coder.target("MATLAB") || coder.target("MEX")
-        fprintf('No feature-based measurement available.')
-    end
-
-end
-
-
-if coder.target('MATLAB') || coder.target('MEX')
-    if any(bMeasTypeFlags)
-        fprintf('\n');
-    end
-end
-
-%% UPDATE equations module with/without delayed-state
-if any(bMeasTypeFlags) % Run update step if measurements are available
-    %%% Residual, Innovation and Cross covariance computation
-
-    % DEVNOTE (Pietro Califano): Benchmark the fixed-size, inactive-row-
-    % regularized Kalman algebra used by rcs-1-gnc-simulator against the
-    % active-block implementation below using generated code and representative
-    % measurement counts. Compare numerical equivalence, execution time, memory
-    % footprint, and generated-code size. Import the fixed-size implementation
-    % here only if it demonstrates a net performance or memory benefit.
-    
-    % Perform Least Squares problem squeeze
-    % [dTriangularObsMatrix, dOrthogonalQ] = GivensEliminateQR(dAllObservJac);
-    % ui16ResAllocIdx % TODO, indexing should be prior this point, i.e. all measurements here are already in
-    % place and only a 1:lastPtr should be needed.
-
-    % Perform projection on range of Observation matrix to reduce problem size
-    if i8FeatTrackingMode >= 0
-
-        ui32LastValidResEntryPtr = ui32ResStartAllocPtr - uint32(1);
-        dJacMatrixRedux(1:ui32LastValidResEntryPtr, :) = dAllObservJac(1:ui32LastValidResEntryPtr, :);
-        dObsVectorRedux(1:ui32LastValidResEntryPtr)    = dAllPriorResVector(1:ui32LastValidResEntryPtr);
-
-        % ui16LastStateEntryPtr = ui16StateSize + uint16(strFilterConstConfig.ui16WindowPoseSize);
-        % ui16LastCovEntryPtr   = ui16StateSize + uint16(strFilterConstConfig.ui16WindowStateCovSize);
-
-    else
-        % No active feature tracking 
-        ui32LastValidResEntryPtr = ui32ResStartAllocPtr - uint32(1);
-        dJacMatrixRedux(1:ui32LastValidResEntryPtr, :) = dAllObservJac(1:ui32LastValidResEntryPtr, :);
-        dObsVectorRedux(1:ui32LastValidResEntryPtr)    = dAllPriorResVector(1:ui32LastValidResEntryPtr);
-
-        % ui16LastStateEntryPtr = ui16StateSize;
-        % ui16LastCovEntryPtr   = ui16StateSize;
-    end
-
-    % Detect an invalid measurement or prediction before it can contaminate
-    % the Kalman algebra and the posterior state.
-    if coder.target('MATLAB')
-        if not(all(isfinite(dObsVectorRedux(1:ui32LastValidResEntryPtr)), 'all'))
-            error('EKF_SlideWindow_FullCov_ObsUp:NonFiniteResidual', ...
-                  'Active observation residual contains a non-finite value.');
-        end
-    end
-    
-    %%% Compute Cross covariance
-    dPxyCrossCov(1:ui16LastCovEntryPtr, 1:ui32LastValidResEntryPtr) = dxStateCovPost(1:ui16LastCovEntryPtr, 1:ui16LastCovEntryPtr) * ...
-                                                                            transpose(dJacMatrixRedux(1:ui32LastValidResEntryPtr, 1:ui16LastCovEntryPtr));
-    
-    % Modify state-meas cross covariance for delayed-state updates
-    if any(dMeasCrossCovN > 0.0, 'all')
-        dPxyCrossCov(1:ui16LastCovEntryPtr, 1:ui32LastValidResEntryPtr) = dPxyCrossCov(1:ui16LastCovEntryPtr, 1:ui32LastValidResEntryPtr) + ...
-                                                                                dMeasCrossCovN(1:ui16LastCovEntryPtr, 1:ui32LastValidResEntryPtr);
-    end
-
-    %%% Compute Innovation covariance
-    dPyyResCov(1:ui32LastValidResEntryPtr, 1:ui32LastValidResEntryPtr) = ( (1 + dMeasUnderweightCoeff) * ...
-                                                            dJacMatrixRedux(1:ui32LastValidResEntryPtr, 1:ui16LastCovEntryPtr) * dPxyCrossCov(1:ui16LastCovEntryPtr, 1:ui32LastValidResEntryPtr) )...
-                                                            + dMeasAutoCovR(1:ui32LastValidResEntryPtr, 1:ui32LastValidResEntryPtr) ;
-
-    % Modify Innovation covariance for delayed-state updates
-    if any(dMeasCrossCovN > 0.0, 'all')
-        dPyyResCov(1:ui32LastValidResEntryPtr, 1:ui32LastValidResEntryPtr) = dPyyResCov(1:ui32LastValidResEntryPtr, 1:ui32LastValidResEntryPtr) + ...
-                                                                                transpose( dMeasCrossCovN(1:ui16LastCovEntryPtr, 1:ui32LastValidResEntryPtr) ) * ...
-                                                                                    transpose( dJacMatrixRedux(1:ui32LastValidResEntryPtr, 1:ui16LastCovEntryPtr) );
-    end
-
-    if coder.target('MATLAB')
-        if not(all(isfinite(dPyyResCov(1:ui32LastValidResEntryPtr, 1:ui32LastValidResEntryPtr)), 'all'))
-            error('EKF_SlideWindow_FullCov_ObsUp:NonFiniteInnovationCovariance', ...
-                  'Active innovation covariance contains a non-finite value.');
+    %%% Evaluate editing gate
+    [bRejectionMask, strFilterMutabConfig] = ...
+        EvaluateNavMeasEditing(strBatch, dPyyResCov, strFilterMutabConfig);
+
+    % Apply rejection masks
+    for ui32Row = uint32(1):uint32(ui16MaxResidualsVecSize)
+        if bRejectionMask(ui32Row)
+            dKalmanGain(:, ui32Row) = 0;
+            dObsVectorRedux(ui32Row) = 0;
         end
     end
 
-    %%% Compute Kalman Gain
-    dKalmanGain(1:ui16LastCovEntryPtr, 1:ui32LastValidResEntryPtr) = dPxyCrossCov(1:ui16LastCovEntryPtr, 1:ui32LastValidResEntryPtr) ...
-                                                                            / dPyyResCov(1:ui32LastValidResEntryPtr, 1:ui32LastValidResEntryPtr); % Matrix inversion
-    % dKalmanGain(abs(dKalmanGain) < 1*eps) = 0.0; % Zero out numerical zeros
+    %%% Apply measurement update
+    % Covariance update and error-state computation
+    [dxStateCovPost, dxErrState, dKalmanGain] = ApplyFullCovObsCorrection(dxStateCovPrior, dActivePriorCov, ...
+        dJacMatrixRedux, dObsVectorRedux, dKalmanGain, dEffectiveNoise, dNoiseCrossCov, ...
+        uint32(ui16LastCovEntryPtr), strFilterMutabConfig.bConsiderStatesMode(:), ...
+        coder.const(strFilterConstConfig.bUseMeasNoiseCrossCov));
 
-    %%% Apply measurement editing if enabled
-    if strFilterMutabConfig.bEnableEditing
-
-        bRejectionMask = false(1, size(dKalmanGain, 2));
-
-        if strMeasBus.bMeasTypeFlags(3) && all(ui32MeasAllocIndex(1,:) > 0)
-            % Compute NIS (Lidar)
-            dM2dist = dAllPriorResVector(ui32MeasAllocIndex(1,1))' * ...
-                            ( dPyyResCov(ui32MeasAllocIndex(1,1):ui32MeasAllocIndex(1,2), ui32MeasAllocIndex(1,1):ui32MeasAllocIndex(1,2)) \ ...
-                            dAllPriorResVector(ui32MeasAllocIndex(1,1)) );
-
-            bRejectionMask(ui32MeasAllocIndex(1,1)) = dM2dist >= strFilterMutabConfig.dMahaDist2MeasThr;
-
-            if dM2dist >= strFilterMutabConfig.dMahaDist2MeasThr 
-                if coder.target('MATLAB') || coder.target('MEX')
-                    fprintf('\nLidar residual rejection proposal. Mdist2: %03f >= Mdist2Thr: %03f', dM2dist, strFilterMutabConfig.dMahaDist2MeasThr)
-                end
-            end
-        end
-
-        if strMeasBus.bMeasTypeFlags(2) && all(ui32MeasAllocIndex(2,:) > 0)
-            % Compute NIS (Centroiding)
-            dM2dist = dAllPriorResVector(ui32MeasAllocIndex(2,1):ui32MeasAllocIndex(2,2))' * ...
-                        (dPyyResCov(ui32MeasAllocIndex(2,1):ui32MeasAllocIndex(2,2), ui32MeasAllocIndex(2,1):ui32MeasAllocIndex(2,2)) \ ...
-                        dAllPriorResVector(ui32MeasAllocIndex(2,1):ui32MeasAllocIndex(2,2)) );
-
-            bRejectionMask(ui32MeasAllocIndex(2,1):ui32MeasAllocIndex(2,2)) = dM2dist >= strFilterMutabConfig.dMahaDist2MeasThr;
-
-            if dM2dist >= strFilterMutabConfig.dMahaDist2MeasThr
-                if coder.target('MATLAB') || coder.target('MEX')
-                    fprintf('\nCentroiding residual rejection proposal. Mdist2: %03f >= Mdist2Thr: %03f', dM2dist, strFilterMutabConfig.dMahaDist2MeasThr)
-                end
-            end
-        end
-
-        if strMeasBus.bMeasTypeFlags(1) && all(ui32MeasAllocIndex(3,:) > 0) 
-
-            % Compute NIS (Direction of motion)
-            dM2dist = dAllPriorResVector(ui32MeasAllocIndex(3,1):ui32MeasAllocIndex(3,2))' * ...
-                            (dPyyResCov(ui32MeasAllocIndex(3,1):ui32MeasAllocIndex(3,2), ui32MeasAllocIndex(3,1):ui32MeasAllocIndex(3,2)) \ ...
-                        dAllPriorResVector(ui32MeasAllocIndex(3,1):ui32MeasAllocIndex(3,2)) );
-
-            bRejectFlag = dM2dist >= strFilterMutabConfig.dMahaDist2MeasThr && ...
-                            max( abs(dAllPriorResVector(ui32MeasAllocIndex(3,1):ui32MeasAllocIndex(3,2)) )) >= 0.1;
-
-            bRejectionMask(ui32MeasAllocIndex(3,1):ui32MeasAllocIndex(3,2)) = bRejectFlag;
- 
-            if bRejectFlag
-                if coder.target('MATLAB') || coder.target('MEX')
-                    fprintf('\nDirection of motion residual rejection proposal. Mdist2: %03f >= Mdist2Thr: %03f', dM2dist, strFilterMutabConfig.dMahaDist2MeasThr)
-                end
-            end
-
-        end
-
-        % Decide for editing: if any rejection occurred, and counter is <= max (prevents filter stuck in rejection)
-        if any(bRejectionMask) && ...
-             strFilterMutabConfig.ui32MeasEditingCounter <= strFilterMutabConfig.ui32MaxMeasEditingOccurrence
-            % Zero out values in kalman gain, covariances and residuals
-            dKalmanGain(1:ui16LastCovEntryPtr, bRejectionMask) = 0.0;
-            dObsVectorRedux(bRejectionMask) = 0.0;
-            dPxyCrossCov(1:ui16LastCovEntryPtr, bRejectionMask) = 0.0;
-            
-            % Add 1 to editing counter
-            strFilterMutabConfig.ui32MeasEditingCounter = strFilterMutabConfig.ui32MeasEditingCounter + uint32(1);
-
-
-        else
-
-            if coder.target('MATLAB') || coder.target('MEX')
-                if strFilterMutabConfig.ui32MeasEditingCounter > strFilterMutabConfig.ui32MaxMeasEditingOccurrence
-                    warning('Measurement editing reached maximum consecutive counter. Rejection override: residuals will be used.')
-                end
-            end
-
-            strFilterMutabConfig.ui32MeasEditingCounter = uint32(0);
-        end
-    end
-
-    %%% Update Mean state
-    dxErrState(1:ui16LastCovEntryPtr)  = dKalmanGain(1:ui16LastCovEntryPtr, 1:ui32LastValidResEntryPtr) * dObsVectorRedux(1:ui32LastValidResEntryPtr); 
-    
-    % Set entries of error state to zero if consider
-    if any(strFilterMutabConfig.bConsiderStatesMode, 'all')
-
-        bConsiderStatesMode   = strFilterMutabConfig.bConsiderStatesMode;
-        strCurrentStateIndex = 1:ui16StateSize;
-        dxErrState(strCurrentStateIndex(bConsiderStatesMode)) = 0.0;
-    end
-
-
-    % Apply one error-state convention to the additive current state and all
-    % active window poses, regardless of which measurement created the gain.
+    % Apply mean state correction including window states
     dxStatePost = ApplySlidingWindowErrorState(dxStatePrior, dxErrState, ...
-                                               strFilterMutabConfig.ui16WindowStateCounter, strFilterConstConfig);
-
-    %%% Update covariance matrix using modified Joseph algorithm
-    % TODO modify for static size!
-    dAuxUpdateMat = eye(ui16LastCovEntryPtr) - dKalmanGain(1:ui16LastCovEntryPtr, 1:ui32LastValidResEntryPtr) * dJacMatrixRedux(1:ui32LastValidResEntryPtr, 1:ui16LastCovEntryPtr);
-    ui16MeasIndex = 1:ui32LastValidResEntryPtr; 
-
-    % TODO: evaluate whether a for loop to sum R may be better than forming the matrix, which is expensive
-    % and uselessly large.
-
-    %==========================================================================
-    % Delayed‐state underweighted Joseph‐form covariance update
-    %==========================================================================
-    %  P_prior_k  (prior covariance of state)
-    %  H         (measurement matrix for the delayed state)
-    %  N         (state‐to‐measurement‐noise cross‐covariance)
-    %  R         (measurement‐noise covariance)
-    %  w underweight factor (0 < w ≤ 1)
-    % Ppost = [I - HK] * Pprior * [I - HK]^T + K * (w*H*(Pprior*H^T + N) + w*N^T*H^T + R) * K^T
-    % Note that the term in the second part of the expression is in fact the Innovarion covariance Pyy
-    % accounting for all the contributions (cross and auto-covariance). Hence, it may be computed once.
-
-    dxStateCovPost(1:ui16LastCovEntryPtr, 1:ui16LastCovEntryPtr) = dAuxUpdateMat * dxStateCovPost(1:ui16LastCovEntryPtr, 1:ui16LastCovEntryPtr) * transpose(dAuxUpdateMat) ...
-                                    + dKalmanGain(1:ui16LastCovEntryPtr, ui16MeasIndex) * ( dMeasUnderweightCoeff .* dJacMatrixRedux(ui16MeasIndex, 1:ui16LastCovEntryPtr) * dPxyCrossCov(1:ui16LastCovEntryPtr, ui16MeasIndex) ...
-                                            + dMeasAutoCovR( ui16MeasIndex, ui16MeasIndex) ...
-                                            + dMeasUnderweightCoeff .* transpose(dMeasCrossCovN(1:ui16LastCovEntryPtr, 1:ui32LastValidResEntryPtr)) *...
-                                                                  transpose(dJacMatrixRedux(1:ui32LastValidResEntryPtr, 1:ui16LastCovEntryPtr)) ) * ...
-                            transpose(dKalmanGain(1:ui16LastCovEntryPtr, ui16MeasIndex));
+        strFilterMutabConfig.ui16WindowStateCounter, strFilterConstConfig);
 
     % Preserve the causal diagnostic before the legacy positivity assertion.
     if coder.target('MATLAB')
@@ -760,26 +205,19 @@ if any(bMeasTypeFlags) % Run update step if measurements are available
         end
     end
 
-    % Zero-out machine precision zeros ( TBC )
-    % dxStateCovPost(abs(dxStateCovPost) < 2*eps) = 0.0;
-
-    if (coder.target('MATLAB') || coder.target('MEX')) && ui16MeasIndex(end) > 2
-        assert(all(diag(dxStateCovPost) >= 0.0), 'ERROR: diagonal of a covariance matrix must be positive')
+    if (coder.target('MATLAB') || coder.target('MEX')) && strBatch.ui32RowCount > 2
+        % Unused covariance slots may contain stale values; validate only active states.
+        for ui32Row = uint32(1):uint32(ui16LastCovEntryPtr)
+            assert(dxStateCovPost(ui32Row, ui32Row) >= 0.0, ...
+                'Active covariance diagonal must be nonnegative.');
+        end
     end
 
-    %%% Consider states management
-    if any(strFilterMutabConfig.bConsiderStatesMode, 'all')
-        
-        bConsiderStatesMode   = strFilterMutabConfig.bConsiderStatesMode;
-        strCurrentStateIndex = 1:ui16StateSize; % TODO remove assumption by using concat of all current state indices
-
-        % Reset consider mean state
-        dxStatePost(strCurrentStateIndex(bConsiderStatesMode)) =  dxStatePrior(strCurrentStateIndex(bConsiderStatesMode));
-
-        % Reset consider states auto-covariance (NOTE: correlations are preserved)
-        dxStateCovPost(strCurrentStateIndex(bConsiderStatesMode), strCurrentStateIndex(bConsiderStatesMode)) = ...
-                        dxStateCovPrior(strCurrentStateIndex(bConsiderStatesMode), strCurrentStateIndex(bConsiderStatesMode));
-        
+    % Restore consider means explicitly, including any non-additive state convention.
+    for ui32Row = uint32(1):uint32(ui16StateSize)
+        if strFilterMutabConfig.bConsiderStatesMode(ui32Row)
+            dxStatePost(ui32Row) = dxStatePrior(ui32Row);
+        end
     end
 
     % Stop before returning a corrupted posterior to the next time update.
@@ -792,13 +230,12 @@ if any(bMeasTypeFlags) % Run update step if measurements are available
 
 end
 
-
+% Synchronize dynamical parameters in strDynParams with state vector
 if strFilterConstConfig.bEstimateGravParam
-    % Synchronize dynamical parameters in strDynParams with state vector
     strDynParams.strMainData.dGM = 10^(dxStatePost(strFilterConstConfig.strStatesIdx.ui8GravParamIdx)); % [m^3/s^2]
-    % strDynParams.strMainData.dGM = dxStatePost(strFilterConstConfig.strStatesIdx.ui8GravParamIdx);
     if coder.target('MATLAB') || coder.target('MEX')
         fprintf('\nGrav param: %6g\n', strDynParams.strMainData.dGM);
     end
+end
 
 end

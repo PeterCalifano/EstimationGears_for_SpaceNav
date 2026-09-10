@@ -1,4 +1,4 @@
-function strFilterConstConfig = BuildArchitectureTemplate(kwargs)
+function [strFilterConstConfig] = BuildArchitectureTemplate(kwargs)
 %% SIGNATURE
 % strFilterConstConfig = filter_tailoring.BuildArchitectureTemplate(Name=Value,...)
 % -------------------------------------------------------------------------------------------------------------

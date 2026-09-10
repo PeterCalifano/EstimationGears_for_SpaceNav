@@ -35,6 +35,7 @@ function [strFilterMutabConfig, strDynParams, strMeasModelParams, strMeasBus] = 
 %                                   UKF paths request prediction outputs only.
 % 09-09-2026    Pietro Califano, Codex gpt-6    Parameterize the fixed camera mounting transform.
 % 10-09-2026  Pietro Califano, Codex gpt-6    Use the constant window-frame enum.
+% 10-09-2026    Pietro Califano, Codex gpt-6    Include the full-covariance EKF editing limit.
 % -------------------------------------------------------------------------------------------------------------
 
 %% DEPENDENCIES
@@ -108,6 +109,7 @@ strFilterMutabConfig.bEnableEditing = false;
 strFilterMutabConfig.dMahaDist2MeasThr = inf;
 strFilterMutabConfig.ui32MeasEditingCounter = uint32(0);
 strFilterMutabConfig.ui32MaxNumMeasEditing = uint32(0);
+strFilterMutabConfig.ui32MaxMeasEditingOccurrence = uint32(0);
 strFilterMutabConfig.dMeasUnderweightCoeff = 0.0;
 strFilterMutabConfig.ui32MeasOutageCounter = uint32(0);
 strFilterMutabConfig.ui8UnderweightAdaptivCounter = uint8(0);
