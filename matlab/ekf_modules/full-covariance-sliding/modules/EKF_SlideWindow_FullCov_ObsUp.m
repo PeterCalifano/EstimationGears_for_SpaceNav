@@ -87,6 +87,7 @@ end
 % 04-08-2026    Pietro Califano, Codex gpt-5.6    Add MATLAB-only finite-value diagnostics at core update boundaries
 % 09-09-2026    Pietro Califano, Codex gpt-6    Correct LiDAR target-bias mean and consider sensitivity.
 % 10-09-2026    Pietro Califano, Codex gpt-6    Use the shared relative-direction observation model.
+% 10-09-2026    Pietro Califano, Codex gpt-6    Remove the obsolete orbit-only ablation selector.
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % ComputeTargetAttitudeBias, EvalChbvAttInterp_InFromTarget, RayEllipsoidIntersection,
@@ -229,7 +230,7 @@ dxErrState          = zeros(ui32FullCovSize, 1);
 %% LIDAR measurement processing
 if bMeasTypeFlags(3) == true
     
-    bEvaluateJacs = [true, not(strFilterConstConfig.bOrbitStateOnly)]; % False if bias is not added to filter design
+    bEvaluateJacs = [true, true];
 
     dRayOrigin_IN       = dxStatePost(strFilterConstConfig.strStatesIdx.ui8posVelIdx(1:3));
     dRayDirection_IN    = strMeasModelParams.dDCM_SCBiFromIN(:,:,1)' * strFilterMutabConfig.dLidarBeamDirection_SCB;    
@@ -256,11 +257,9 @@ if bMeasTypeFlags(3) == true
         dCurrentDCM_EstTBfromIN = dCurrentDCM_TBfromIN;
 
         % Compose the passive bias on the target side, using radians in TF axes.
-        if ~strFilterConstConfig.bOrbitStateOnly
-            [dTargetCorrection, dBiasJacobian_TF] = ComputeTargetAttitudeBias( ...
-                dxStatePost(strFilterConstConfig.strStatesIdx.ui8attBiasDeltaIdx));
-            dCurrentDCM_EstTBfromIN = dTargetCorrection * dCurrentDCM_TBfromIN;
-        end
+        [dTargetCorrection, dBiasJacobian_TF] = ComputeTargetAttitudeBias( ...
+            dxStatePost(strFilterConstConfig.strStatesIdx.ui8attBiasDeltaIdx));
+        dCurrentDCM_EstTBfromIN = dTargetCorrection * dCurrentDCM_TBfromIN;
 
     end
 
@@ -296,18 +295,15 @@ if bMeasTypeFlags(3) == true
         % Jacobian evaluation
         dRangeLidarObsMatrix = zeros(1, ui16StateSize);
         dRangeLidarObsMatrix(1, strFilterConstConfig.strStatesIdx.ui8posVelIdx(1:3))    = dJacIntersectDistance_RayOrigin;
-        
-        if not(strFilterConstConfig.bOrbitStateOnly) 
 
-            % The ray routine differentiates positive local rotations. Map these
-            % to additive passive bias, including uncertainty held in consider mode.
-            if bEvaluateJacs(2)
-                dRangeLidarObsMatrix(1, strFilterConstConfig.strStatesIdx.ui8attBiasDeltaIdx) = ...
-                    -dJacIntersectDistance_TargetAttErr * dBiasJacobian_TF;
-            end
-
-            dRangeLidarObsMatrix(1, strFilterConstConfig.strStatesIdx.ui8LidarMeasBiasIdx)  = 1.0;
+        % The ray routine differentiates positive local rotations. Map these
+        % to additive passive bias, including uncertainty held in consider mode.
+        if bEvaluateJacs(2)
+            dRangeLidarObsMatrix(1, strFilterConstConfig.strStatesIdx.ui8attBiasDeltaIdx) = ...
+                -dJacIntersectDistance_TargetAttErr * dBiasJacobian_TF;
         end
+
+        dRangeLidarObsMatrix(1, strFilterConstConfig.strStatesIdx.ui8LidarMeasBiasIdx)  = 1.0;
 
         % DEVNOTE: add latency management here
         % dBackwardSTM = eye(ui16StateSize);
@@ -362,9 +358,7 @@ if bMeasTypeFlags(3) == true
         dRangeLidarObsMatrix = zeros(1, ui16StateSize);
         dRangeLidarObsMatrix(1, strFilterConstConfig.strStatesIdx.ui8posVelIdx(1:3))    = dRayOrigin_IN / norm(dRayOrigin_IN);
 
-        if not(strFilterConstConfig.bOrbitStateOnly)
-            dRangeLidarObsMatrix(1, strFilterConstConfig.strStatesIdx.ui8LidarMeasBiasIdx)  = 1.0;
-        end
+        dRangeLidarObsMatrix(1, strFilterConstConfig.strStatesIdx.ui8LidarMeasBiasIdx)  = 1.0;
 
         % Compute and allocation global Jacobian and residuals entry
         dAllObservJac(ui32ResStartAllocPtr, 1:ui16StateSize )  = dRangeLidarObsMatrix; %#ok<*UNRCH> % TODO
@@ -382,7 +376,7 @@ end
 
 %% Centroiding measurement processing
 if bMeasTypeFlags(2) == true
-    if not(strFilterConstConfig.bOrbitStateOnly) && not(isempty(strFilterConstConfig.strStatesIdx.ui8CenMeasBiasIdx))
+    if not(isempty(strFilterConstConfig.strStatesIdx.ui8CenMeasBiasIdx))
         strFilterMutabConfig.bConsiderStatesMode(strFilterConstConfig.strStatesIdx.ui8CenMeasBiasIdx) = false;
     end
 
@@ -447,7 +441,7 @@ if bMeasTypeFlags(2) == true
     dCentroidBiasObsSubMat = zeros(2,2);
     dCorrectionVector = zeros(2,1);
 
-    if not(strFilterConstConfig.bOrbitStateOnly) && not(isempty(strFilterConstConfig.strStatesIdx.ui8CenMeasBiasIdx))
+    if not(isempty(strFilterConstConfig.strStatesIdx.ui8CenMeasBiasIdx))
         % dAllObservJac(ui32CentrAllocPtr, strFilterConstConfig.strStatesIdx.ui8CenMeasBiasIdx )  ; %#ok<*UNRCH> % TODO
 
         % Compute sun direction in image place
@@ -508,7 +502,7 @@ if bMeasTypeFlags(2) == true
     end
 else
     % Reset centroiding bias and enable consider mode
-    if not(strFilterConstConfig.bOrbitStateOnly) && not(isempty(strFilterConstConfig.strStatesIdx.ui8CenMeasBiasIdx))
+    if not(isempty(strFilterConstConfig.strStatesIdx.ui8CenMeasBiasIdx))
         dxStatePost(strFilterConstConfig.strStatesIdx.ui8CenMeasBiasIdx) = [0; 0];
         strFilterMutabConfig.bConsiderStatesMode(strFilterConstConfig.strStatesIdx.ui8CenMeasBiasIdx) = true;
     end

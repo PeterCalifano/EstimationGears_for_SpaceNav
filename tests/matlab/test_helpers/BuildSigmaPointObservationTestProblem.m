@@ -43,7 +43,6 @@ strFilterConstConfig.ui32FullCovSize = uint32(ui16StateSize);
 strFilterConstConfig.ui32AdditionalInputCh = uint32(0);
 strFilterConstConfig.ui8NumOfInputNoiseChannels = uint8(0);
 strFilterConstConfig.bUseGMbetaVariant = true;
-strFilterConstConfig.bOrbitStateOnly = false;
 strFilterConstConfig.bAddVelocityInputNoise = false;
 strFilterConstConfig.bUseKilometersScale = false;
 strFilterConstConfig.bIncludeAdaptivityStep = true;

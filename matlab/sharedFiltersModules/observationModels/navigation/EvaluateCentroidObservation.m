@@ -26,6 +26,7 @@ function [dCentroidResidual, dObservationJac, dObservationCov] = EvaluateCentroi
 %% CHANGELOG
 % 09-09-2026  Pietro Califano, Codex gpt-6    Extract observation-model ownership.
 % 09-09-2026  Pietro Califano, Codex gpt-6    Project from the configured camera origin.
+% 10-09-2026    Pietro Califano, Codex gpt-6    Remove the obsolete orbit-only ablation selector.
 % ---------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % pinholeProjectHP, evalJAC_NormProject_FeatPos, evalJAC_FeatProj_CurrentState,
@@ -68,8 +69,7 @@ dCentroidObsMatrix = diag([dKcam(1, 1), dKcam(2, 2)]) * ...
 
 % Both centroid corrections use the same Sun ephemeris. Its coefficient
 % shape fixes the polynomial workspace; epochs and coefficients remain inputs.
-bHasCentroidBias = coder.const(~strFilterConstConfig.bOrbitStateOnly && ...
-    ~isempty(strFilterConstConfig.strStatesIdx.ui8CenMeasBiasIdx));
+bHasCentroidBias = coder.const(~isempty(strFilterConstConfig.strStatesIdx.ui8CenMeasBiasIdx));
 
 % Evaluate ephemerides for Sun position in IN for centroiding correction models
 dSunPosition_IN = zeros(3, 1);

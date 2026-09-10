@@ -32,6 +32,7 @@ function [dDirVectorResidual, dObservationJac, dObservationCov, dCrossCovariance
 % 09-09-2026  Pietro Califano, Codex gpt-6    Honor clone position frames and augmentation noise ownership.
 % 09-09-2026  Pietro Califano, Codex gpt-6    Apply the current camera lever arm once.
 % 10-09-2026  Pietro Califano, Codex gpt-6    Use the constant window-frame enum.
+% 10-09-2026    Pietro Califano, Codex gpt-6    Remove the obsolete orbit-only ablation selector.
 % ---------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % EvaluateDirectionOfMotionModel, ComputeTargetAttitudeBias, EvalChbvAttInterp_InFromTarget,
@@ -70,12 +71,9 @@ dTargetBiasJacs         = zeros(3, 3, 2);
 % Use the same TF-axis bias convention as the stored camera poses.
 dDCM_TBiFromIN(:, :, 1) = transpose(EvalChbvAttInterp_InFromTarget( ...
     dStateTimetag(1), strDynParams.strMainData.strAttData));
-dDCM_EstTBiFromIN(:, :, 1) = dDCM_TBiFromIN(:, :, 1);
-if ~strFilterConstConfig.bOrbitStateOnly
-    [dTargetCorrection, dTargetBiasJacs(:, :, 1)] = ComputeTargetAttitudeBias( ...
-        dxStatePost(strFilterConstConfig.strStatesIdx.ui8attBiasDeltaIdx));
-    dDCM_EstTBiFromIN(:, :, 1) = dTargetCorrection * dDCM_TBiFromIN(:, :, 1);
-end
+[dTargetCorrection, dTargetBiasJacs(:, :, 1)] = ComputeTargetAttitudeBias( ...
+    dxStatePost(strFilterConstConfig.strStatesIdx.ui8attBiasDeltaIdx));
+dDCM_EstTBiFromIN(:, :, 1) = dTargetCorrection * dDCM_TBiFromIN(:, :, 1);
 
 dDCM_EstTBiFromCi(:, :, 1)  = dDCM_EstTBiFromIN(:, :, 1) * transpose(dDCM_CiFromIN(:, :, 1));
 
@@ -111,7 +109,7 @@ for ui16Pose = uint16(1):strFilterMutabConfig.ui16WindowStateCounter
     % Recover the previous local correction from its pose; bias states are
     % not stored in clones. The logarithm selects the small-bias branch.
     if coder.const(strFilterConstConfig.ui8RelDirDesign == uint8(1)) && ...
-            ui16Pose == 1 && ~strFilterConstConfig.bOrbitStateOnly
+            ui16Pose == 1
         dDCM_TBiFromIN(:, :, 2) = transpose(EvalChbvAttInterp_InFromTarget( ...
             dStateTimetag(2), strDynParams.strMainData.strAttData));
         dPreviousCorrection = dDCM_EstTBiFromIN(:, :, 2) * dDCM_TBiFromIN(:, :, 2)';

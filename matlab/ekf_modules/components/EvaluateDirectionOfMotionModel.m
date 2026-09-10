@@ -44,6 +44,7 @@ function [dRelDir_CkFromCi_Ck, dRelDirJac_CkFromCi, dRelPos_CkFromCi_EstTBi, ...
 % 09-09-2026  Pietro Califano, Codex gpt-6    Reuse covariance products and Jacobian output storage.
 % 09-09-2026  Pietro Califano, Codex gpt-6    Complete augmented pose derivatives and sensor-only noise.
 % 10-09-2026  Pietro Califano, Codex gpt-6    Use the constant window-frame enum.
+% 10-09-2026    Pietro Califano, Codex gpt-6    Remove the obsolete orbit-only ablation selector.
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % skewSymm.
@@ -100,11 +101,8 @@ dPositionJacMap = dNormalizeJac * dDCM_CkFromEstTBk;
 dAttitudeJacMap = dPositionJacMap * skewSymm(dPositionCam_EstTBi(:, 2));
 dRelDirJac_CkFromCi(:, ui8posVelIdx(1:3)) = dPositionJacMap * dDCM_EstTBiFromW(:, :, 1);
 
-if ~strFilterConstConfig.bOrbitStateOnly
-    % TODO (PC) remove this field. Was useful for ablation but no longer necessary.
-    ui8BiasIdx = strFilterConstConfig.strStatesIdx.ui8attBiasDeltaIdx;
-    dRelDirJac_CkFromCi(:, ui8BiasIdx) = dAttitudeJacMap * dBiasJacobians(:, :, 1);
-end
+ui8BiasIdx = strFilterConstConfig.strStatesIdx.ui8attBiasDeltaIdx;
+dRelDirJac_CkFromCi(:, ui8BiasIdx) = dAttitudeJacMap * dBiasJacobians(:, :, 1);
 
 switch coder.const(strFilterConstConfig.ui8RelDirDesign)
     case 0
@@ -137,9 +135,7 @@ switch coder.const(strFilterConstConfig.ui8RelDirDesign)
         dPreviousJac = zeros(3, ui16StateSize);
         dPreviousJac(:, ui8posVelIdx(1:3)) = dPositionJacMap * dDCM_EstTBiFromW(:, :, 2);
 
-        if ~strFilterConstConfig.bOrbitStateOnly
-            dPreviousJac(:, ui8BiasIdx) = dAttitudeJacMap * dBiasJacobians(:, :, 2);
-        end
+        dPreviousJac(:, ui8BiasIdx) = dAttitudeJacMap * dBiasJacobians(:, :, 2);
 
         % The previous-state map also carries bias process noise into the
         % observation and its correlation with the current prediction error.

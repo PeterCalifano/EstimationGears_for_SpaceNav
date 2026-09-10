@@ -30,6 +30,7 @@ function [dRangeLidarResidual, dRangeLidarObsMatrix, dRangeVariance, bPrediction
 % ---------------------------------------------------------------------------------------------------
 %% CHANGELOG
 % 09-09-2026  Pietro Califano, Codex gpt-6    Extract observation-model ownership.
+% 10-09-2026    Pietro Califano, Codex gpt-6    Remove the obsolete orbit-only ablation selector.
 % ---------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % RayEllipsoidIntersection, EvalChbvAttInterp_InFromTarget, ComputeTargetAttitudeBias.
@@ -60,7 +61,7 @@ dRangeLidarObsMatrix = zeros(1, ui16StateSize); % TODO determine if can be coder
 dRangeVariance = strFilterMutabConfig.dRangeLidarSigma^2;
 bPredictionValid = false;
 
-bEvaluateJacs = [true, not(strFilterConstConfig.bOrbitStateOnly)];
+bEvaluateJacs = [true, true];
 
 dRayOrigin_IN       = dxStatePost(strFilterConstConfig.strStatesIdx.ui8posVelIdx(1:3));
 dRayDirection_IN    = strMeasModelParams.dDCM_SCBiFromIN(:, :, 1)' * strFilterMutabConfig.dLidarBeamDirection_SCB;
@@ -84,14 +85,11 @@ elseif strFilterMutabConfig.ui8LidarShapeModelMode == 2
 
     dCurrentDCM_TBfromIN = transpose(EvalChbvAttInterp_InFromTarget(dStateTimetag(1), ...
                                     strDynParams.strMainData.strAttData));
-    dCurrentDCM_EstTBfromIN = dCurrentDCM_TBfromIN;
 
     % Compose the passive bias on the target side, using radians in TF axes.
-    if ~strFilterConstConfig.bOrbitStateOnly
-        [dTargetCorrection, dBiasJacobian_TF] = ComputeTargetAttitudeBias( ...
-            dxStatePost(strFilterConstConfig.strStatesIdx.ui8attBiasDeltaIdx));
-        dCurrentDCM_EstTBfromIN = dTargetCorrection * dCurrentDCM_TBfromIN;
-    end
+    [dTargetCorrection, dBiasJacobian_TF] = ComputeTargetAttitudeBias( ...
+        dxStatePost(strFilterConstConfig.strStatesIdx.ui8attBiasDeltaIdx));
+    dCurrentDCM_EstTBfromIN = dTargetCorrection * dCurrentDCM_TBfromIN;
 
 end
 
@@ -121,17 +119,14 @@ if bIntersectFlag && not(bFailureFlag)
     dRangeLidarResidual = dMeasurement - dRangeLidarPredict;
     dRangeLidarObsMatrix(1, strFilterConstConfig.strStatesIdx.ui8posVelIdx(1:3))    = dRangeOriginJac;
 
-    if not(strFilterConstConfig.bOrbitStateOnly)
-
-        % The ray routine differentiates positive local rotations. Map these
-        % to additive passive bias, including uncertainty held in consider mode.
-        if bEvaluateJacs(2)
-            dRangeLidarObsMatrix(1, strFilterConstConfig.strStatesIdx.ui8attBiasDeltaIdx) = ...
-                -dRangeAttitudeJac * dBiasJacobian_TF;
-        end
-
-        dRangeLidarObsMatrix(1, strFilterConstConfig.strStatesIdx.ui8LidarMeasBiasIdx)  = 1.0;
+    % The ray routine differentiates positive local rotations. Map these
+    % to additive passive bias, including uncertainty held in consider mode.
+    if bEvaluateJacs(2)
+        dRangeLidarObsMatrix(1, strFilterConstConfig.strStatesIdx.ui8attBiasDeltaIdx) = ...
+            -dRangeAttitudeJac * dBiasJacobian_TF;
     end
+
+    dRangeLidarObsMatrix(1, strFilterConstConfig.strStatesIdx.ui8LidarMeasBiasIdx)  = 1.0;
 
     bPredictionValid = true;
 
@@ -175,9 +170,7 @@ else
 
     dRangeLidarObsMatrix(1, strFilterConstConfig.strStatesIdx.ui8posVelIdx(1:3))    = dRayOrigin_IN/dOriginNorm;
 
-    if not(strFilterConstConfig.bOrbitStateOnly)
-        dRangeLidarObsMatrix(1, strFilterConstConfig.strStatesIdx.ui8LidarMeasBiasIdx)  = 1.0;
-    end
+    dRangeLidarObsMatrix(1, strFilterConstConfig.strStatesIdx.ui8LidarMeasBiasIdx)  = 1.0;
 
     bPredictionValid = true;
 

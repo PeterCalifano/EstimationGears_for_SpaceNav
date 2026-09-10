@@ -30,6 +30,7 @@ function strFilterConstConfig = BuildArchitectureTemplate(kwargs)
 % 27-04-2026    Pietro Califano     Add const-config backend and smoothing selectors.
 % 09-09-2026    Pietro Califano, Codex gpt-6    Default to augmentation and select noise handling at codegen.
 % 10-09-2026  Pietro Califano, Codex gpt-6    Use the constant window-frame enum.
+% 10-09-2026    Pietro Califano, Codex gpt-6    Remove the obsolete orbit-only ablation selector.
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % EnumFilterBackend, EnumSmoothingBackend, EnumSigmaPointResidualMode, EnumMeasDelayManagementMode,
@@ -64,7 +65,6 @@ strFilterConstConfig.dUnscentedKappa            = 0.0;
 strFilterConstConfig.enumSigmaPointResidualMode = EnumSigmaPointResidualMode.ADDITIVE;
 strFilterConstConfig.bAddExponentialAtmosphData = kwargs.bAddExponentialAtmosphData;
 strFilterConstConfig.bUseGMbetaVariant = true;
-strFilterConstConfig.bOrbitStateOnly = false;
 
 % Augmentation keeps interval uncertainty in the joint state covariance. The backward
 % alternative requires correlated-noise algebra when it supplies nonzero N.

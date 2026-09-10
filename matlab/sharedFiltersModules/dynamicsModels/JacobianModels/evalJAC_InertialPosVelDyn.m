@@ -40,6 +40,7 @@ end
 %% CHANGELOG
 % 24-02-2025    Pietro Califano     First version implemented from legacy code.
 % 30-05-2025    Pietro Califano     Review, gravity param. design change (to log space), documentation    
+% 10-09-2026    Pietro Califano, Codex gpt-6    Remove the obsolete orbit-only ablation selector.
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % [-]
@@ -116,11 +117,6 @@ if not(strDynParams.bIsInEclipse)
     else
         dDynMatrix_PosVel(ui8PosVelIdx, ui8PosVelIdx(1:3)) = dDynMatrix_PosVel(ui8PosVelIdx, ui8PosVelIdx(1:3)) + drvSRPwithBiasJac;
     end
-end
-
-% If no other state is estimated, return here
-if coder.const(strFilterConstConfig.bOrbitStateOnly)
-    return
 end
 
 %% Jacobian wrt main body attitude bias

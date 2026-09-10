@@ -20,8 +20,12 @@ end
 % integration can remain unchanged and still produce the requested FOGM discrete covariance for dDeltaTstep.
 % -------------------------------------------------------------------------------------------------------------
 
+%% CHANGELOG
+% 10-09-2026    Pietro Califano, Codex gpt-6    Remove the obsolete orbit-only ablation selector.
+% -------------------------------------------------------------------------------------------------------------
+
 %% Function code
-if dDeltaTstep <= eps || coder.const(GetFieldOrDefault_(strFilterConstConfig, 'bOrbitStateOnly', false))
+if dDeltaTstep <= eps
     return
 end
 

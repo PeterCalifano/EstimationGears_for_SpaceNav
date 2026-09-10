@@ -34,7 +34,6 @@ cfg = struct();
 
 % strFilterConstConfig
 cfg.strFilterConstConfig = struct();
-cfg.strFilterConstConfig.bOrbitStateOnly = true;
 cfg.strFilterConstConfig.bUseKilometersScale = false;
 cfg.strFilterConstConfig.strStatesIdx = struct();
 cfg.strFilterConstConfig.strStatesIdx.ui8posVelIdx = uint16(1:6);
