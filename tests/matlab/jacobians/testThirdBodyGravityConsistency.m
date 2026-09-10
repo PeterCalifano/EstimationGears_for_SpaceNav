@@ -8,24 +8,35 @@ function tests = testThirdBodyGravityConsistency
 % three-dimensional geometry, the separate Sun path, multi-body accumulation,
 % direct analytic Jacobians, and finite-difference consistency.
 % -------------------------------------------------------------------------------------------------------------
+%% INPUT
+% None.
+% -------------------------------------------------------------------------------------------------------------
 %% OUTPUT
 % tests    MATLAB function-test suite for third-body gravity consistency.
 % -------------------------------------------------------------------------------------------------------------
 %% CHANGELOG
 % 13-07-2026  Pietro Califano            Add axial RHS and finite-difference Jacobian regressions.
 % 22-07-2026  Pietro Califano, Codex     Extend independent physical-oracle coverage.
+% 09-09-2026  Pietro Califano, Codex gpt-6    Retain small physical derivatives and reuse MathCore differences.
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % evalRHS_DynLEO()
 % evalJAC_3rdBodyGrav()
+% ComputeFiniteDiffJacobian()
 % -------------------------------------------------------------------------------------------------------------
 tests = functiontests(localfunctions);
 end
 
-function setupOnce(~)
+function setupOnce(testCase)
+testCase.TestData.charOriginalPath = path;
 charTestDirectory = fileparts(mfilename('fullpath'));
 charRepositoryRoot = fileparts(fileparts(fileparts(charTestDirectory)));
-addpath(genpath(fullfile(charRepositoryRoot, 'matlab')));
+addpath(charRepositoryRoot);
+SetupPaths_EstimationGears;
+end
+
+function teardownOnce(testCase)
+path(testCase.TestData.charOriginalPath);
 end
 
 function testThirdBodyAccelerationMatchesAxialOracle(testCase)
@@ -114,6 +125,22 @@ testCase.verifyEqual(dActualJacobian(4:6, 1:3), dExpectedJacobian, ...
     'AbsTol', 1.0e-13);
 end
 
+function testSmallPhysicalJacobianEntriesAreRetained(testCase)
+dxState = [1; 0.2; -0.1; 0; 0; 0];
+dBodyPosition_IN = [10; -2; 1];
+dBodyGM = 1e-14;
+dActual = EvalThirdBodyJacobian_(dxState, dBodyPosition_IN, dBodyGM);
+dExpected = ComputePhysicalThirdBodyJacobian_(dxState(1:3), dBodyPosition_IN, dBodyGM);
+dNumeric = ComputeFiniteDiffJacobian(@(dPosition) ComputePhysicalThirdBodyAcceleration_( ...
+    dPosition, dBodyPosition_IN, dBodyGM), dxState(1:3), 1e-5);
+
+% Small values are valid derivatives; their scale does not make them numerical noise.
+verifyLessThan(testCase, max(abs(dExpected), [], 'all'), eps);
+verifyGreaterThan(testCase, norm(dActual(4:6, 1:3), 'fro'), 0);
+verifyEqual(testCase, dActual(4:6, 1:3), dExpected, 'RelTol', 1e-13, 'AbsTol', 1e-32);
+verifyEqual(testCase, dActual(4:6, 1:3), dNumeric, 'RelTol', 1e-8, 'AbsTol', 1e-28);
+end
+
 function testThirdBodyJacobianMatchesPhysicalFiniteDifference(testCase)
 dxState = zeros(6, 1);
 dxState(1:3) = [1.0; 0.2; -0.1];
@@ -122,19 +149,9 @@ dBodyGM = 100.0;
 
 dActualJacobian = EvalThirdBodyJacobian_( ...
     dxState, dBodyPosition_IN, dBodyGM);
-dStep = 1.0e-5;
-dExpectedJacobian = zeros(3, 3);
-for kAxis = 1:3
-    dPositionPlus = dxState(1:3);
-    dPositionMinus = dxState(1:3);
-    dPositionPlus(kAxis) = dPositionPlus(kAxis) + dStep;
-    dPositionMinus(kAxis) = dPositionMinus(kAxis) - dStep;
-    dExpectedJacobian(:, kAxis) = ( ...
-        ComputePhysicalThirdBodyAcceleration_( ...
-            dPositionPlus, dBodyPosition_IN, dBodyGM) - ...
-        ComputePhysicalThirdBodyAcceleration_( ...
-            dPositionMinus, dBodyPosition_IN, dBodyGM)) ./ (2.0 * dStep);
-end
+dExpectedJacobian = ComputeFiniteDiffJacobian(@(dPosition) ...
+    ComputePhysicalThirdBodyAcceleration_(dPosition, dBodyPosition_IN, dBodyGM), ...
+    dxState(1:3), 1e-5);
 
 testCase.verifyEqual(dActualJacobian(4:6, 1:3), dExpectedJacobian, ...
     'AbsTol', 1.0e-10);
