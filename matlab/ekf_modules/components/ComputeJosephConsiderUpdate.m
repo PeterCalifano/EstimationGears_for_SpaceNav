@@ -1,10 +1,10 @@
 function [dxErrorState, dStateCovPost, bUpdateAccepted, ...
-    dSquaredMahalanobisDistance] = ComputeJosephConsiderUpdate(dStateCovPrior, dMeasurementResidual, ...
+    dSquaredMahalanobisDistance, dInnovationCov] = ComputeJosephConsiderUpdate(dStateCovPrior, dMeasurementResidual, ...
     dMeasurementCov, dStateObservationMatrix, dMeasurementUnderweightCoeff, ...
     bConsiderStateMask, bEnableRejection, dSquaredMahalanobisThreshold) %#codegen
 %% SIGNATURE
 % [dxErrorState, dStateCovPost, bUpdateAccepted, ...
-%     dSquaredMahalanobisDistance] = ComputeJosephConsiderUpdate(dStateCovPrior, dMeasurementResidual, ...
+%     dSquaredMahalanobisDistance, dInnovationCov] = ComputeJosephConsiderUpdate(dStateCovPrior, dMeasurementResidual, ...
 %     dMeasurementCov, dStateObservationMatrix, dMeasurementUnderweightCoeff, ...
 %     bConsiderStateMask, bEnableRejection, dSquaredMahalanobisThreshold) %#codegen
 % -------------------------------------------------------------------------------------------------------------
@@ -12,7 +12,8 @@ function [dxErrorState, dStateCovPost, bUpdateAccepted, ...
 % Apply an active-state Joseph-form Kalman update with independent effective
 % measurement noise, optional whole-measurement Mahalanobis rejection, and
 % Schmidt/consider gain-row masking. Consider means and their complete
-% autocovariance remain fixed through the same covariance equation.
+% autocovariance remain fixed through the same covariance equation. Delegate the correction to
+% the shared full-covariance kernel; retain this entrypoint's validation and Cholesky innovation solve.
 % -------------------------------------------------------------------------------------------------------------
 %% INPUT
 % dStateCovPrior                  Finite symmetric active prior covariance.
@@ -29,14 +30,17 @@ function [dxErrorState, dStateCovPost, bUpdateAccepted, ...
 % dStateCovPost                   Active Joseph-form posterior covariance.
 % bUpdateAccepted                 True when the measurement update was applied.
 % dSquaredMahalanobisDistance     Squared Mahalanobis distance using the innovation covariance.
+% dInnovationCov                  Effective covariance used by gating and the gain solve.
 % -------------------------------------------------------------------------------------------------------------
 %% CHANGELOG
 % 05-08-2026  Pietro Califano, Codex gpt-5.6     First implementation.
 % 06-08-2026  Pietro Califano, Codex gpt-5.6     Clarify update contracts, algebra, and naming.
 % 12-08-2026  Pietro Califano, Codex gpt-5.6     Allow semidefinite covariances without validation-only factors.
+% 09-09-2026  Pietro Califano, Codex gpt-6    Reuse the shared Joseph/consider correction kernel.
+% 09-09-2026  Pietro Califano, Codex gpt-6    Expose the innovation covariance already used by the gate and gain.
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
-% None.
+% ApplyFullCovObsCorrection.
 % -------------------------------------------------------------------------------------------------------------
 arguments (Input)
     dStateCovPrior                  (:,:) double
@@ -54,6 +58,7 @@ arguments (Output)
     dStateCovPost                  (:,:) double
     bUpdateAccepted                (1,1) logical
     dSquaredMahalanobisDistance    (1,1) double
+    dInnovationCov                 (:,:) double
 end
 
 ui32StateCount = size(dStateCovPrior, 1);
@@ -145,20 +150,12 @@ if bEnableRejection && dSquaredMahalanobisDistance >= dSquaredMahalanobisThresho
     return
 end
 
-% Apply the Schmidt/consider policy to K before both update equations. Zeroed
-% gain rows freeze consider-state means and autocovariance while retaining the
-% statistically consistent active/consider cross-covariance update.
+% Reuse the innovation factor for the gain; the shared kernel owns consider masking and Joseph algebra.
 dStateMeasurementCrossCov = dStateCovPrior * transpose(dStateObservationMatrix);
 dKalmanGain = transpose(dInnovationCholFactor' \ (dInnovationCholFactor \ transpose(dStateMeasurementCrossCov)));
-dKalmanGain(bConsiderStateMask, :) = 0.0;
-dxErrorState = dKalmanGain * dMeasurementResidual;
-
-% Propagate covariance with the same masked gain and R_eff used above. The
-% Joseph form preserves symmetry and positive semidefiniteness in exact
-% arithmetic without restoring any consider-state block after the update.
-dJosephStateTransform = eye(ui32StateCount) - dKalmanGain * dStateObservationMatrix;
-dStateCovPost = dJosephStateTransform * dStateCovPrior * transpose(dJosephStateTransform) + ...
-    dKalmanGain * dEffectiveMeasurementCov * transpose(dKalmanGain);
+[dStateCovPost, dxErrorState] = ApplyFullCovObsCorrection(dStateCovPrior, dStateCovPrior, ...
+    dStateObservationMatrix, dMeasurementResidual, dKalmanGain, dEffectiveMeasurementCov, ...
+    zeros(ui32StateCount, ui32MeasurementCount), uint32(ui32StateCount), bConsiderStateMask, false);
 dStateCovPost = 0.5 * (dStateCovPost + transpose(dStateCovPost));
 
 % Reject numerical failure explicitly rather than returning a covariance that

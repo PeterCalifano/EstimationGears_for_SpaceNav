@@ -16,6 +16,7 @@ function tests = testComputeJosephConsiderUpdate
 % 05-08-2026  Pietro Califano, Codex gpt-5.6     First implementation.
 % 06-08-2026  Pietro Califano, Codex gpt-5.6     Align reference names with Joseph update algebra.
 % 12-08-2026  Pietro Califano, Codex gpt-5.6     Cover positive-semidefinite prior covariance.
+% 10-09-2026  Pietro Califano, Codex gpt-6       Verify reported innovation on acceptance and rejection.
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % ComputeJosephConsiderUpdate.
@@ -200,4 +201,29 @@ dStateCovPost = dJosephStateTransform * dStateCovPrior * transpose(dJosephStateT
     dEffectiveMeasurementCov * transpose(dKalmanGain);
 dStateCovPost = 0.5 .* (dStateCovPost + transpose(dStateCovPost));
 dSquaredMahalanobisDistance = transpose(dMeasurementResidual) / dInnovationCov * dMeasurementResidual;
+end
+
+function testInnovationOutputMatchesGateAndGain(testCase)
+[dPrior, dResidual, dNoise, dJacobian] = BuildUpdateFixture_();
+dUnderweight = 0.4;
+dExpectedInnovation = (1 + dUnderweight) * dJacobian * dPrior * dJacobian' + dNoise;
+dExpectedDistance = dResidual' * (dExpectedInnovation \ dResidual);
+
+% Gating must report the same uncertainty whether it accepts or rejects the update.
+for bReject = [false, true]
+    dThreshold = dExpectedDistance * (2 - 1.5 * bReject);
+    [dxError, dPosterior, bAccepted, dDistance, dInnovation] = ...
+        ComputeJosephConsiderUpdate(dPrior, dResidual, dNoise, dJacobian, ...
+            dUnderweight, false(8, 1), true, dThreshold);
+    verifyEqual(testCase, bAccepted, ~bReject);
+    verifyEqual(testCase, dInnovation, dExpectedInnovation, 'AbsTol', 5e-13);
+    verifyEqual(testCase, dDistance, dExpectedDistance, 'AbsTol', 5e-13);
+    if bReject
+        verifyEqual(testCase, dxError, zeros(8, 1));
+        verifyEqual(testCase, dPosterior, dPrior);
+    else
+        dExpectedGain = (dPrior * dJacobian') / dExpectedInnovation;
+        verifyEqual(testCase, dxError, dExpectedGain * dResidual, 'AbsTol', 5e-13);
+    end
+end
 end
