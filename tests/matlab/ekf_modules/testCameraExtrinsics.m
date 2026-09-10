@@ -18,7 +18,7 @@ function tests = testCameraExtrinsics
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % BuildFullCovObservationTestProblem, AugmentStateWithNewCameraPose, EvaluateCentroidObservation,
-% ComputeFiniteDiffJacobian, RotationVectorToDCM, LogMap_SO3toR3.
+% EvaluateRelativeDirectionObs, ComputeFiniteDiffJacobian, RotationVectorToDCM, LogMap_SO3toR3.
 % -------------------------------------------------------------------------------------------------------------
 tests = functiontests(localfunctions);
 end
@@ -103,6 +103,24 @@ verifyEqual(testCase, dNoise, dExpectedNoise, 'AbsTol', 1e-13);
 dNumeric = ComputeFiniteDiffJacobian(@(dPosition) Centroid_(dPosition, strScenario), ...
     strScenario.dxState(1:3), 1e-6);
 verifyEqual(testCase, dJacobian(:, 1:3), dNumeric, 'AbsTol', 2e-7);
+end
+
+function testDirectionUsesCameraOrigin(testCase)
+strScenario = BuildFullCovObservationTestProblem();
+strScenario.strMutable.dCameraPosition_SCB = [.7;-.3;.2];
+dMeasurement = [1;0;0];
+dResidual = EvaluateRelativeDirectionObs(strScenario.dxState, strScenario.dTimestamps, ...
+    dMeasurement, strScenario.strDynamics, strScenario.strModel, strScenario.strMutable, strScenario.strConstant);
+dCameraFromIN = strScenario.strMutable.dDCM_CamFromSCB * strScenario.strModel.dDCM_SCBiFromIN(:, :, 1);
+dCurrentTarget = ComputeTargetAttitudeBias(strScenario.dxState(7:9)) * strScenario.dNominalRotation;
+dCurrentCameraPosition = strScenario.dxState(1:3) + ...
+    strScenario.strModel.dDCM_SCBiFromIN(:, :, 1)' * strScenario.strMutable.dCameraPosition_SCB;
+dPreviousTarget = Quat2DCM(strScenario.dxState(21:24), false)* ...
+    strScenario.strMutable.dDCM_CamFromSCB * strScenario.strModel.dDCM_SCBiFromIN(:, :, 2);
+dExpected = dCameraFromIN * dCurrentTarget' * ...
+    (dCurrentTarget * dCurrentCameraPosition-dPreviousTarget * strScenario.dxState(18:20));
+dExpected = dExpected / norm(dExpected);
+verifyEqual(testCase, dMeasurement-dResidual, dExpected, 'AbsTol', 1e-13);
 end
 
 function [dxPose, dJointCov] = Augment_(dxState, strScenario)

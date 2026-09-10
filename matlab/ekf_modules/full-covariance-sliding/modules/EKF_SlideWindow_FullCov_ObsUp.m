@@ -50,6 +50,7 @@ end
 % The implementation is tailored for spacecraft navigation and supports both additive and multiplicative state corrections.
 % Ellipsoidal LiDAR uses a TF-axis rotation-vector bias [rad]. Its sensitivity
 % contributes to the update in both estimated and consider modes.
+% Relative direction uses EvaluateRelativeDirectionObs for current/clone geometry and noise maps.
 % -------------------------------------------------------------------------------------------------------------
 %% INPUT
 % dxStatePrior            (:,1) {mustBeNumeric}
@@ -85,10 +86,11 @@ end
 % 30-04-2026    Pietro Califano     Extend default implementation with ACOB correction jacobian support
 % 04-08-2026    Pietro Califano, Codex gpt-5.6    Add MATLAB-only finite-value diagnostics at core update boundaries
 % 09-09-2026    Pietro Califano, Codex gpt-6    Correct LiDAR target-bias mean and consider sensitivity.
+% 10-09-2026    Pietro Califano, Codex gpt-6    Use the shared relative-direction observation model.
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % ComputeTargetAttitudeBias, EvalChbvAttInterp_InFromTarget, RayEllipsoidIntersection,
-% ApplySlidingWindowErrorState.
+% ApplySlidingWindowErrorState, EvaluateRelativeDirectionObs.
 % -------------------------------------------------------------------------------------------------------------
 
 % Coder directives
@@ -515,112 +517,18 @@ end
 %% Feature-based measurement processing
 if bMeasTypeFlags(1) == true
 
-    % Compute relative attitudes of all poses in window TODO
-    % NOTE: attitude matrices dDCM_TBfromCi must account for the estimated bias
-    dDCM_EstTBiFromCi       = zeros(3, 3, strFilterConstConfig.ui16NumWindowPoses + 1);
-    dDCM_EstTBiFromIN       = zeros(3, 3, strFilterConstConfig.ui16NumWindowPoses + 1);
-    dDCM_TBiFromIN          = zeros(3, 3, strFilterConstConfig.ui16NumWindowPoses + 1);
+    % Use the shared prediction and bias maps for current and retained camera poses.
+    ui32DirOfMotionAllocPtr = uint32([0, 1, 2]) + ui32ResStartAllocPtr;
+    [dDirVectorResidual, dDirOfMotionJac_CkFromCkprev_Ck, ...
+        dDirMotionMeasAutoCovR, dDirMotionMeasCrossCovN] = EvaluateRelativeDirectionObs( ...
+        dxStatePost, dStateTimetag, strMeasBus.dDirectionOfMotion_CurrentCamFromPrevCam_Cam, ...
+        strDynParams, strMeasModelParams, strFilterMutabConfig, strFilterConstConfig);
 
-    % Compute relative pose of current state wrt target body
-    dDCM_TBiFromIN(:,:,1)      = transpose(EvalChbvAttInterp_InFromTarget(dStateTimetag(1), strDynParams.strMainData.strAttData));
-    dDCM_EstTBiFromIN(:,:,1)   = Quat2DCM([1; 2 * dxStatePost(strFilterConstConfig.strStatesIdx.ui8attBiasDeltaIdx)], false) * dDCM_TBiFromIN(:,:,1);
-
-    % TODO optimize computations and memory, no need to have DCMs for dDCM_TBfromIN
-    dDCM_EstTBiFromCi(:, :, 1)  = dDCM_EstTBiFromIN(:,:,1) * transpose(dDCM_CiFromIN(:,:,1));
-
-    % Compute relative pose of camera Ci wrt target body and dDCM_EstTBfromIN
-    ui16WindowStatesPtr = ui16StateSize + 1;
-
-    for idP = 1:strFilterMutabConfig.ui16WindowStateCounter
-
-        dDCM_TBiFromIN(:,:, idP + 1)        = transpose(EvalChbvAttInterp_InFromTarget(dStateTimetag(idP + 1), strDynParams.strMainData.strAttData));
-        dDCM_EstTBiFromCi(:, :, idP + 1)    = Quat2DCM( dxStatePost(ui16WindowStatesPtr+3 : ui16WindowStatesPtr+6), false);
-
-        % Recompute attitude error matrix from buffered Camera attitude knowledge
-        % dTmpDCM_CifromTB = dDCM_CamFromIN(:,:, idP + 1) * dDCM_TBfromIN(:,:, idP + 1)'; % Camera pose wrt NOMINAL target attitude
-        dDCM_EstTBiFromIN(:, :, idP+1) = dDCM_EstTBiFromCi(:, :, idP + 1) * dDCM_CiFromIN(:,:, idP + 1);
-
-        % Compute target attitude
-        if coder.target('MEX') || coder.target('MATLAB')
-            assert(dStateTimetag(idP + 1) ~= -1, 'ERROR: invalid timetag for ephemerides evaluation.')
-        end
-
-        % Increment ptr position
-        ui16WindowStatesPtr = ui16WindowStatesPtr + uint16(strFilterConstConfig.ui16WindowPoseSize);
-
-    end
-
-    % DEVNOTE: 1 is latest pose (current)
-    ui32EstimationCameraID = strFilterMutabConfig.ui32EstimationCameraID; % DEVNOTE: this must be <= window counter + 1;
-
-    % Direction of motion processing (loosely coupled feature tracking)
-    ui32DirOfMotionAllocPtr   = uint32([0,1,2]) + ui32ResStartAllocPtr;
-
-    dPositionCam_EstTBi         = zeros(3, strFilterConstConfig.ui16NumWindowPoses + 1);
-    dPositionCam_EstTBi(:, 1)   = dDCM_EstTBiFromIN(:,:,1) * dxStatePost(strFilterConstConfig.strStatesIdx.ui8posVelIdx(1:3));
-
-    % Compute relative pose of camera Ci wrt target body and dDCM_EstTBfromIN
-    ui16WindowStatesPtr = ui16StateSize + 1;
-
-    for idP = 1:strFilterMutabConfig.ui16WindowStateCounter
-
-        dPositionCam_EstTBi(:, idP + 1)     = dDCM_EstTBiFromIN(:,:, idP + 1) * dxStatePost(ui16WindowStatesPtr : ui16WindowStatesPtr + 2);
-
-        % Compute target attitude
-        if coder.target('MEX') || coder.target('MATLAB')
-            assert(dStateTimetag(idP + 1) ~= -1, 'ERROR: invalid timetag for ephemerides evaluation.')
-        end
-
-        % Increment ptr position
-        ui16WindowStatesPtr = ui16WindowStatesPtr + uint16(strFilterConstConfig.ui16WindowPoseSize);
-
-    end
-        
-    % Evaluate measurement model and residual
-    dDirOfMotion_Cam = strMeasBus.dDirectionOfMotion_CurrentCamFromPrevCam_Cam;
-
-    % [dDirOfMotionMeas_CkFromCkprev_Ck, dDirOfMotionJac_CkFromCkprev_Ck, ...
-    %  dRelPos_CkFromCi_Ci, dDirMotionMeasAutoCovR, ...
-    %  dDirMotionMeasCrossCovN] =  EvaluateDirectionOfMotionModel(dDCM_EstTBiFromCi, ...
-    %                                                             dPositionCam_EstTBi, ...
-    %                                                             dDCM_TBiFromIN,...
-    %                                                             coder.const(2), ...
-    %                                                             strFilterMutabConfig,...
-    %                                                             strFilterConstConfig);
-
-    [dDirOfMotionMeas_CkFromCkprev_Ck, dDirOfMotionJac_CkFromCkprev_Ck, ...
-     dRelPos_CkFromCi_Ci, dDirMotionMeasAutoCovR, ...
-     dDirMotionMeasCrossCovN] =  EvaluateDirectionOfMotionModel(dDCM_EstTBiFromCi, ...
-                                                                dPositionCam_EstTBi, ...
-                                                                dDCM_TBiFromIN,...
-                                                                coder.const(2), ...
-                                                                strMeasModelParams, ...
-                                                                strFilterMutabConfig,...
-                                                                strFilterConstConfig);
-
-    % Apply measurement autocovariance pre-conditioner to enforce direction constraint
-    dDirMotionMeasAutoCovR = dDirMotionMeasAutoCovR + 0.5 * trace(dDirMotionMeasAutoCovR) * ...
-                                    dDirOfMotion_Cam * transpose(dDirOfMotion_Cam);
-
-    % Compute linearly mapped measurement covariance
-    % NOTE: dRmeas = AngleErrSigma2 * (I - nn^T), which is the operator projecting onto the plane
-    % orthogonal to the direction.
-
-    % dRmeasCov(ui32ResStartAllocPtr:ui32ResStartAllocPtr + 2, ...
-    %     ui32ResStartAllocPtr:ui32ResStartAllocPtr + 2) = 10 * strFilterMutabConfig.dDirOfMotionInPlaneSigmaRad^2  * ...
-    %                  ( (1 + 10*eps('double')) * eye(3) - dDirOfMotionMeas_CkFromCkprev_Ck(:,1) * transpose(dDirOfMotionMeas_CkFromCkprev_Ck(:,1)) );
-
-    % dRmeasCov(ui32ResStartAllocPtr:ui32ResStartAllocPtr + 2, ...
-    %     ui32ResStartAllocPtr:ui32ResStartAllocPtr + 2) = 10*strFilterMutabConfig.dDirOfMotionInPlaneSigmaRad^2  * eye(3);
-    
     % Allocate measurement autocovariance [meas, meas] and cross-covariance [prior state, meas]
     dMeasAutoCovR(ui32ResStartAllocPtr:ui32ResStartAllocPtr + 2, ...
         ui32ResStartAllocPtr:ui32ResStartAllocPtr + 2) = dDirMotionMeasAutoCovR;
     
     dMeasCrossCovN(1:ui16StateSize, ui32ResStartAllocPtr:ui32ResStartAllocPtr + 2) = dDirMotionMeasCrossCovN; % DEVNOTE: correlation can only be with current state
-
-    % Compute measurement residual
-    dDirVectorResidual =  dDirOfMotion_Cam - dDirOfMotionMeas_CkFromCkprev_Ck(:,1);
 
     % Allocate global Jacobian and residuals entry
     dAllObservJac(ui32DirOfMotionAllocPtr, : ) = dDirOfMotionJac_CkFromCkprev_Ck; %#ok<*UNRCH> % TODO
