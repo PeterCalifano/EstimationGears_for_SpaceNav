@@ -10,12 +10,14 @@ function [strFilterMutabConfig, strDynParams, strMeasModelParams, strMeasBus] = 
 % caller before running a real filter.
 % Camera mounting uses p_SCB = R_CAMfromSCB' * p_CAM + dCameraPosition_SCB. The lever arm is
 % expressed in the filter's length unit and defaults to zero. Current position refers to the
-% spacecraft origin; clone creation applies the mounting offset.
+% spacecraft origin; camera clones and camera observations apply the mounting offset.
+% External camera-attitude uncertainty is supplied separately to the direction/range model.
 % -------------------------------------------------------------------------------------------------------------
 %% INPUT
 % strFilterConstConfig       Fixed filter architecture and storage capacities.
 % kwargs.dDCM_CamFromSCB      Spacecraft-to-camera mounting rotation; default identity.
 % kwargs.dCameraPosition_SCB Camera origin relative to spacecraft origin in SCB axes; default zero.
+% kwargs.dCameraAttitudeSigma Isotropic external attitude standard deviation [rad]; default zero.
 % -------------------------------------------------------------------------------------------------------------
 %% OUTPUT
 % strFilterMutabConfig       Mutable tuning and mounting parameters, including a derived quaternion.
@@ -36,6 +38,7 @@ function [strFilterMutabConfig, strDynParams, strMeasModelParams, strMeasBus] = 
 % 09-09-2026    Pietro Califano, Codex gpt-6    Parameterize the fixed camera mounting transform.
 % 10-09-2026  Pietro Califano, Codex gpt-6    Use the constant window-frame enum.
 % 10-09-2026    Pietro Califano, Codex gpt-6    Include the full-covariance EKF editing limit.
+% 10-09-2026    Pietro Califano, Codex gpt-6    Configure isotropic external attitude uncertainty.
 % -------------------------------------------------------------------------------------------------------------
 
 %% DEPENDENCIES
@@ -45,6 +48,7 @@ arguments (Input)
     strFilterConstConfig (1,1) struct
     kwargs.dDCM_CamFromSCB (3,3) double {mustBeFinite} = eye(3)
     kwargs.dCameraPosition_SCB (3,1) double {mustBeFinite} = zeros(3,1)
+    kwargs.dCameraAttitudeSigma (1,1) double {mustBeFinite, mustBeNonnegative} = 0.0
 end
 
 arguments (Output)
@@ -139,6 +143,8 @@ strFilterMutabConfig.ui32UnscentedNumSigmaPoints = ui32NumSigmaPoints;
 strFilterMutabConfig.dKcam = eye(3);
 strFilterMutabConfig.dDCM_CamFromSCB = kwargs.dDCM_CamFromSCB;
 strFilterMutabConfig.dCameraPosition_SCB = kwargs.dCameraPosition_SCB;
+% Zero denotes an ideal supplied camera attitude.
+strFilterMutabConfig.dCameraAttitudeSigma = kwargs.dCameraAttitudeSigma;
 strFilterMutabConfig.dTargetPosition_IN = zeros(3,1);
 strFilterMutabConfig.dMeanInstFOVinRadPx = 0.0;
 strFilterMutabConfig.dReferenceMetricRadius = 0.0;

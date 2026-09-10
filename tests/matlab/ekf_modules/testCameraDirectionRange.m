@@ -15,9 +15,11 @@ function tests = testCameraDirectionRange
 %% CHANGELOG
 % 09-09-2026  Pietro Califano, Codex gpt-6    Cover camera attitude uncertainty without augmentation.
 % 10-09-2026  Pietro Califano, Codex gpt-6    Use source-independent observation terminology.
+% 10-09-2026  Pietro Califano, Codex gpt-6    Validate configured and ideal camera-attitude uncertainty.
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
-% EvaluateCameraDirectionRange, ComputeFiniteDiffJacobian, RotationVectorToDCM.
+% EvaluateCameraDirectionRange, ComputeFiniteDiffJacobian, RotationVectorToDCM,
+% filter_tailoring.BuildArchitectureTemplate, filter_tailoring.BuildInputStructsTemplate.
 % -------------------------------------------------------------------------------------------------------------
 tests = functiontests(localfunctions);
 end
@@ -37,12 +39,22 @@ dRotation = RotationVectorToDCM([.2;-.4;.1]);
 dPosition = [30;-40;100];
 dMeasurement = -dRotation*dPosition;
 dVariance = (3e-4)^2;
+strConstant = filter_tailoring.BuildArchitectureTemplate('bWriteBusDefs', false);
+strMutable = filter_tailoring.BuildInputStructsTemplate(strConstant, ...
+    'dCameraAttitudeSigma', sqrt(dVariance));
 [dResidual, dPositionJac, dNoise, dAttitudeJac] = EvaluateCameraDirectionRange( ...
-    dPosition, dRotation, dMeasurement, zeros(3), sqrt(dVariance), 1, zeros(3, 1));
+    dPosition, dRotation, dMeasurement, zeros(3), ...
+    strMutable.dCameraAttitudeSigma, 1, zeros(3, 1));
 verifyEqual(testCase, dResidual, zeros(3, 1), 'AbsTol', 1e-13);
 verifyEqual(testCase, dNoise, diag([dVariance, dVariance, 0]), 'AbsTol', 1e-18);
 verifyEqual(testCase, dAttitudeJac(3, :), zeros(1, 3), 'AbsTol', 1e-13);
 verifyEqual(testCase, dPositionJac(1:2, :)*dPosition, zeros(2, 1), 'AbsTol', 1e-13);
+
+% The default supplied attitude contributes no additional observation covariance.
+strIdeal = filter_tailoring.BuildInputStructsTemplate(strConstant);
+[~, ~, dIdealNoise] = EvaluateCameraDirectionRange(dPosition, dRotation, dMeasurement, ...
+    zeros(3), strIdeal.dCameraAttitudeSigma, 1, zeros(3, 1));
+verifyEqual(testCase, dIdealNoise, zeros(3));
 verifyEqual(testCase, rank(dPositionJac(1:2, :)), 2);
 end
 
