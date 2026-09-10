@@ -59,7 +59,7 @@ switch coder.const(strFilterConstConfig.enumWindowRefFrame)
         dPosition_TF = dDCM_EstTFfromIN * (dxState(ui8PositionIdx) + dCameraOffset_IN);
         dJacPoseCovFromState(1:3,ui8PositionIdx) = dDCM_EstTFfromIN;
         dJacPoseCovFromState(1:3,ui8BiasIdx) = skewSymm(dPosition_TF) * dBiasJacobian;
-
+        
     case EnumWindowRefFrame.INERTIAL
         dJacPoseCovFromState(1:3,ui8PositionIdx) = eye(3);
     otherwise

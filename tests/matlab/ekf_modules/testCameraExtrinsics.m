@@ -3,7 +3,7 @@ function tests = testCameraExtrinsics
 % tests = testCameraExtrinsics
 % -------------------------------------------------------------------------------------------------------------
 %% DESCRIPTION
-% Validate camera mounting rotation and spacecraft-to-camera lever arm in clone means and covariance maps.
+% Validate camera mounting rotation and spacecraft-to-camera lever arm in observation and clone models.
 % Check clone means independently and differentiate the actual augmentation, including target bias.
 % -------------------------------------------------------------------------------------------------------------
 %% INPUT
@@ -17,7 +17,7 @@ function tests = testCameraExtrinsics
 % 10-09-2026  Pietro Califano, Codex gpt-6    Use the constant window-frame enum.
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
-% BuildFullCovObservationTestProblem, AugmentStateWithNewCameraPose,
+% BuildFullCovObservationTestProblem, AugmentStateWithNewCameraPose, EvaluateCentroidObservation,
 % ComputeFiniteDiffJacobian, RotationVectorToDCM, LogMap_SO3toR3.
 % -------------------------------------------------------------------------------------------------------------
 tests = functiontests(localfunctions);
@@ -79,6 +79,32 @@ for enumFrame = [EnumWindowRefFrame.INERTIAL, EnumWindowRefFrame.TARGET_FIXED]
 end
 end
 
+function testCentroidUsesCameraOrigin(testCase)
+strScenario = BuildFullCovObservationTestProblem();
+strScenario.strMutable.dCameraPosition_SCB = [.7;-.3;.2];
+strScenario.strMutable.dDCM_CamFromSCB = RotationVectorToDCM([.2;-.1;.3]);
+strScenario.strMutable.i8CentroidingAlgorithmMode = uint8(0);
+strScenario.strConstant.bOrbitStateOnly = true;
+strScenario.strMutable.ui8CenMeasCovModel = uint8(1);
+strScenario.strMutable.dCenMeasApparentSizeLawCoeff = .05;
+strScenario.strDynamics.strMainData.dRefRadius = 2;
+[dResidual, dJacobian, dNoise] = EvaluateCentroidObservation(strScenario.dxState, strScenario.dTimestamps, ...
+    zeros(2, 1), strScenario.strDynamics, strScenario.strModel, strScenario.strMutable, strScenario.strConstant);
+dVector = strScenario.strMutable.dDCM_CamFromSCB * ...
+    (-strScenario.strModel.dDCM_SCBiFromIN(:, :, 1) * strScenario.dxState(1:3) - ...
+    strScenario.strMutable.dCameraPosition_SCB);
+dHomogeneous = strScenario.strMutable.dKcam * dVector;
+verifyEqual(testCase, -dResidual, dHomogeneous(1:2) / dHomogeneous(3), 'AbsTol', 1e-12);
+dIFOV = atan(1./diag(strScenario.strMutable.dKcam(1:2, 1:2)));
+dDiameter = atan(2 * strScenario.strDynamics.strMainData.dRefRadius / norm(dVector))./dIFOV;
+dExpectedNoise = diag((.05 * dDiameter).^2);
+verifyGreaterThan(testCase, norm(dExpectedNoise, 'fro'), 0);
+verifyEqual(testCase, dNoise, dExpectedNoise, 'AbsTol', 1e-13);
+dNumeric = ComputeFiniteDiffJacobian(@(dPosition) Centroid_(dPosition, strScenario), ...
+    strScenario.dxState(1:3), 1e-6);
+verifyEqual(testCase, dJacobian(:, 1:3), dNumeric, 'AbsTol', 2e-7);
+end
+
 function [dxPose, dJointCov] = Augment_(dxState, strScenario)
 strMutable = strScenario.strMutable;
 strMutable.ui16WindowStateCounter = uint16(0);
@@ -98,6 +124,13 @@ dxState(1:17) = dxState(1:17) + dxError;
 dxPose = Augment_(dxState, strScenario);
 dError = [dxPose(1:3) - dxReference(1:3); ...
     -LogMap_SO3toR3(Quat2DCM(dxPose(4:7), false) * Quat2DCM(dxReference(4:7), false)')];
+end
+
+function dPrediction = Centroid_(dPosition, strScenario)
+strScenario.dxState(1:3) = dPosition;
+dResidual = EvaluateCentroidObservation(strScenario.dxState, strScenario.dTimestamps, ...
+    zeros(2, 1), strScenario.strDynamics, strScenario.strModel, strScenario.strMutable, strScenario.strConstant);
+dPrediction = -dResidual;
 end
 
 function testAugmentationUsesStaticMexStorage(testCase)
@@ -146,4 +179,12 @@ clear CameraAugmentationTest_mex
 cd(charOriginalDir);
 rmpath(charBuildDir);
 rmdir(charBuildDir, 's');
+end
+
+function testConstantNoiseNeedsNoPositionModel(testCase)
+strMutable.ui8CenMeasCovModel = uint8(0);
+strMutable.dCentroidingPixSigmas = [2;3];
+[dNoise, dDiameter] = ComputeCentroidingMeasCov(0, strMutable, struct(), struct(), struct());
+verifyEqual(testCase, dNoise, diag([4, 9]));
+verifyEqual(testCase, dDiameter, 0);
 end
