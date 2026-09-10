@@ -9,7 +9,8 @@ function [dxState, dxStateCov, dStateTimetag, strFilterMutabConfig] = AugmentSta
 %% DESCRIPTION
 % Function executing sliding window pose computation and assignment based on current state and pointer to
 % free entry (window pose counter). Two modes are supported based on the configuration: position can be
-% either in target fixed or in inertial frame.
+% either in target fixed or in inertial frame. Current position refers to the spacecraft origin;
+% the fixed camera lever arm is applied before constructing the camera clone.
 % -------------------------------------------------------------------------------------------------------------
 %% INPUT
 % dxState                (:,1) double
@@ -18,7 +19,8 @@ function [dxState, dxStateCov, dStateTimetag, strFilterMutabConfig] = AugmentSta
 % dQuat_INfromSC         (4,1) double
 % dQuat_TBfromIN         (4,1) double
 % dQuat_SCfromCam        (4,1) double
-% strFilterMutabConfig   (1,1) struct
+% strFilterMutabConfig   Fixed-schema configuration; dCameraPosition_SCB is the camera lever arm
+%                       in filter length units.
 % strFilterConstConfig   (1,1) struct
 % -------------------------------------------------------------------------------------------------------------
 %% OUTPUT
@@ -37,10 +39,11 @@ function [dxState, dxStateCov, dStateTimetag, strFilterMutabConfig] = AugmentSta
 % 07-09-2026  Pietro Califano, Codex gpt-6    Use type and size contracts instead of predicate validators.
 % 07-09-2026  Pietro Califano, Codex gpt-6    Resolve optional image-request schema at compile time.
 % 07-09-2026  Pietro Califano, Codex gpt-6    Exclude the -1 image-pose request sentinel.
+% 09-09-2026  Pietro Califano, Codex gpt-6    Apply camera lever arm in clone mean and covariance maps.
 % 10-09-2026  Pietro Califano, Codex gpt-6    Use the constant window-frame enum.
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
-% ComputeWindowPose, ComputeWindowPoseJacobian.
+% ComputeWindowPose, ComputeWindowPoseJacobian, Quat2DCM.
 % -------------------------------------------------------------------------------------------------------------
 
 arguments (Input)
@@ -101,8 +104,11 @@ ui16TmpCovIdxArray(:) = cast(1:strFilterConstConfig.ui16WindowPoseSize, 'uint16'
 % ui16TmpCovIdxArray = 1:coder.const(strFilterConstConfig.ui16WindowPoseSize));
 ui16StateAllocPtr = strFilterConstConfig.ui16StateSize +  ui16TmpCovIdxArray * ui16DefaultFreePoseSlotPtr; 
 
-% Get entries from state
-dCamPosition_IN         = dxState( strFilterConstConfig.strStatesIdx.ui8posVelIdx(1:3) );
+% Map the fixed spacecraft-to-camera displacement at the clone epoch.
+% Independent attitude uncertainty is handled separately from this state Jacobian.
+dCameraOffset_IN = Quat2DCM(dQuat_INfromSC, false) * strFilterMutabConfig.dCameraPosition_SCB;
+dCamPosition_IN = dxState(strFilterConstConfig.strStatesIdx.ui8posVelIdx(1:3)) + ...
+    dCameraOffset_IN;
 dxAttitudeBiasStates    = dxState( strFilterConstConfig.strStatesIdx.ui8attBiasDeltaIdx ); 
 
 % Define pointer to window pose covariance entries and allocate matrix
@@ -125,7 +131,7 @@ dxState(ui16StateAllocPtr) = [dCamPosition_Frame; dQuat_TBfromCam];
 
 % Evaluate 1st order map from state covariance to window pose covariance
 dJacPoseCovFromState(:, :) = ComputeWindowPoseJacobian(dxState, dQuat_TBfromIN, ...
-    dQuat_TBfromCam, strFilterConstConfig);
+    dQuat_TBfromCam, strFilterConstConfig, dCameraOffset_IN);
 
 
 %% Process timetag

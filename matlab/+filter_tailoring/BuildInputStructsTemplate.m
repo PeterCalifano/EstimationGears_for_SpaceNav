@@ -1,15 +1,27 @@
-function [strFilterMutabConfig, strDynParams, strMeasModelParams, strMeasBus] = BuildInputStructsTemplate(strFilterConstConfig)
-arguments
-    strFilterConstConfig (1,1) struct
-end
+function [strFilterMutabConfig, strDynParams, strMeasModelParams, strMeasBus] = BuildInputStructsTemplate(strFilterConstConfig, kwargs)
 %% SIGNATURE
-% [strFilterMutabConfig, strDynParams, strMeasModelParams, strMeasBus] = BuildInputStructsTemplate(strFilterConstConfig)
+% [strFilterMutabConfig, strDynParams, strMeasModelParams, strMeasBus] = ...
+%     BuildInputStructsTemplate(strFilterConstConfig, Name=Value, ...)
 % -------------------------------------------------------------------------------------------------------------
 %% DESCRIPTION
 % Build default template inputs for the EKF runtime using the standard EstimationGears structs. The
 % returned values are intentionally generic placeholders: they provide the expected fields, dimensions, and
 % default-safe values, but mission-specific dynamics and measurement data still need to be tailored by the
 % caller before running a real filter.
+% Camera mounting uses p_SCB = R_CAMfromSCB' * p_CAM + dCameraPosition_SCB. The lever arm is
+% expressed in the filter's length unit and defaults to zero. Current position refers to the
+% spacecraft origin; clone creation applies the mounting offset.
+% -------------------------------------------------------------------------------------------------------------
+%% INPUT
+% strFilterConstConfig       Fixed filter architecture and storage capacities.
+% kwargs.dDCM_CamFromSCB      Spacecraft-to-camera mounting rotation; default identity.
+% kwargs.dCameraPosition_SCB Camera origin relative to spacecraft origin in SCB axes; default zero.
+% -------------------------------------------------------------------------------------------------------------
+%% OUTPUT
+% strFilterMutabConfig       Mutable tuning and mounting parameters, including a derived quaternion.
+% strDynParams              Fixed-schema placeholder dynamics data.
+% strMeasModelParams         Fixed-schema observation data and history storage.
+% strMeasBus                 Fixed-schema measurement inputs.
 % -------------------------------------------------------------------------------------------------------------
 %% CHANGELOG
 % 22-04-2026    Pietro Califano     Add reusable default builders for standard filter input structs.
@@ -21,8 +33,27 @@ end
 %                                   make UKF runtime data explicit instead of optional.
 % 27-04-2026    Pietro Califano     Use ComputeMeasPredAndObsJacobian as the single tailoring hook;
 %                                   UKF paths request prediction outputs only.
-% 10-09-2026  Pietro Califano, Codex gpt-6    Keep the window-frame selector in constant configuration.
+% 09-09-2026    Pietro Califano, Codex gpt-6    Parameterize the fixed camera mounting transform.
+% 10-09-2026  Pietro Califano, Codex gpt-6    Use the constant window-frame enum.
 % -------------------------------------------------------------------------------------------------------------
+
+%% DEPENDENCIES
+% DCM2quat.
+% -------------------------------------------------------------------------------------------------------------
+arguments (Input)
+    strFilterConstConfig (1,1) struct
+    kwargs.dDCM_CamFromSCB (3,3) double {mustBeFinite} = eye(3)
+    kwargs.dCameraPosition_SCB (3,1) double {mustBeFinite} = zeros(3,1)
+end
+
+arguments (Output)
+    strFilterMutabConfig (1,1) struct
+    strDynParams (1,1) struct
+    strMeasModelParams (1,1) struct
+    strMeasBus (1,1) struct
+end
+
+%% Function code
 
 ui16StateSize = strFilterConstConfig.ui16StateSize;
 ui16NumWindowPoses = GetFieldOrDefault_(strFilterConstConfig, "ui16NumWindowPoses", uint16(0));
@@ -62,7 +93,9 @@ strFilterMutabConfig.bContinuousSlideMode = false;
 strFilterMutabConfig.bStoreStateInSlidingWind = false;
 strFilterMutabConfig.bIsSlidingWindFull = false;
 strFilterMutabConfig.i8FeatTrackingMode = int8(-1);
-strFilterMutabConfig.dQuat_SCfromCAM = [1.0; 0.0; 0.0; 0.0];
+
+% Derive both rotation representations from one configured matrix at setup.
+strFilterMutabConfig.dQuat_SCfromCAM = DCM2quat(kwargs.dDCM_CamFromSCB', false);
 
 % Observation/update defaults
 strFilterMutabConfig.bNewMeasAvailable = false;
@@ -102,7 +135,8 @@ strFilterMutabConfig.ui32UnscentedNumSigmaPoints = ui32NumSigmaPoints;
 
 % Common measurement-model runtime data
 strFilterMutabConfig.dKcam = eye(3);
-strFilterMutabConfig.dDCM_CamFromSCB = eye(3);
+strFilterMutabConfig.dDCM_CamFromSCB = kwargs.dDCM_CamFromSCB;
+strFilterMutabConfig.dCameraPosition_SCB = kwargs.dCameraPosition_SCB;
 strFilterMutabConfig.dTargetPosition_IN = zeros(3,1);
 strFilterMutabConfig.dMeanInstFOVinRadPx = 0.0;
 strFilterMutabConfig.dReferenceMetricRadius = 0.0;

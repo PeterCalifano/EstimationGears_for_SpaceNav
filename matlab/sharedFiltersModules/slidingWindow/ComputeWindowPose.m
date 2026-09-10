@@ -14,7 +14,7 @@ function [dCamPosition_Frame, dQuat_TBfromCam, dQuat_EstTFfromTF] = ...
 % TARGET_FIXED stores position in the corrected target frame.
 % -------------------------------------------------------------------------------------------------------------
 %% INPUT
-% dCamPosition_IN       Camera position relative to target origin [m].
+% dCamPosition_IN       Camera position relative to target origin [filter length unit].
 % dQuat_INfromSC        Scalar-first passive spacecraft-to-IN quaternion.
 % dQuat_TBfromIN        Nominal IN-to-target quaternion.
 % dQuat_SCfromCam       Camera-to-spacecraft extrinsic quaternion.
@@ -22,7 +22,7 @@ function [dCamPosition_Frame, dQuat_TBfromCam, dQuat_EstTFfromTF] = ...
 % dBias_TF              Additive TF-axis target rotation vector [rad]; default zero.
 % -------------------------------------------------------------------------------------------------------------
 %% OUTPUT
-% dCamPosition_Frame    Camera position in the selected frame [m].
+% dCamPosition_Frame    Camera position in the selected frame [filter length unit].
 % dQuat_TBfromCam       Camera-to-corrected-target unit quaternion, also in IN mode.
 % dQuat_EstTFfromTF     Unit target-side bias correction quaternion.
 % -------------------------------------------------------------------------------------------------------------
@@ -32,6 +32,7 @@ function [dCamPosition_Frame, dQuat_TBfromCam, dQuat_EstTFfromTF] = ...
 % 06-09-2026  Pietro Califano, Codex gpt-6    Leave tracking-independent pose admission to the caller.
 % 07-09-2026  Pietro Califano, Codex gpt-6    Use type and size contracts instead of predicate validators.
 % 09-09-2026  Pietro Califano, Codex gpt-6    Apply TF-axis bias and align frame selection.
+% 09-09-2026  Pietro Califano, Codex gpt-6    Document caller-owned camera offset and filter length units.
 % 10-09-2026  Pietro Califano, Codex gpt-6    Use the constant window-frame enum.
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES

@@ -1,8 +1,8 @@
 function dJacPoseCovFromState = ComputeWindowPoseJacobian(dxState, dQuat_TBfromIN, ...
-    dQuat_TBfromCam, strFilterConstConfig) %#codegen
+    dQuat_TBfromCam, strFilterConstConfig, dCameraOffset_IN) %#codegen
 %% SIGNATURE
 % dJacPoseCovFromState = ComputeWindowPoseJacobian(dxState, dQuat_TBfromIN, ...
-%     dQuat_TBfromCam, strFilterConstConfig)
+%     dQuat_TBfromCam, strFilterConstConfig, dCameraOffset_IN)
 % -------------------------------------------------------------------------------------------------------------
 %% DESCRIPTION
 % Differentiate ComputeWindowPose into [position; local target-side attitude]
@@ -16,6 +16,7 @@ function dJacPoseCovFromState = ComputeWindowPoseJacobian(dxState, dQuat_TBfromI
 % dQuat_TBfromIN        Nominal IN-to-target scalar-first passive quaternion.
 % dQuat_TBfromCam       Retained API argument; target-side errors do not depend on it.
 % strFilterConstConfig  State size, position/bias indices and enumWindowRefFrame.
+% dCameraOffset_IN      Camera lever arm rotated into IN at the clone epoch; default zero.
 % -------------------------------------------------------------------------------------------------------------
 %% OUTPUT
 % dJacPoseCovFromState  Six clone-error rows by current-state columns.
@@ -26,6 +27,7 @@ function dJacPoseCovFromState = ComputeWindowPoseJacobian(dxState, dQuat_TBfromI
 % 06-09-2026  Pietro Califano, Codex gpt-6    Leave acquisition admission to the caller.
 % 07-09-2026  Pietro Califano, Codex gpt-6    Use type and size contracts instead of predicate validators.
 % 09-09-2026  Pietro Califano, Codex gpt-6    Differentiate corrected pose at nonzero bias.
+% 09-09-2026  Pietro Califano, Codex gpt-6    Include the camera offset in target-frame position sensitivity.
 % 10-09-2026  Pietro Califano, Codex gpt-6    Use the constant window-frame enum.
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
@@ -36,6 +38,7 @@ arguments (Input)
     dQuat_TBfromIN        (1,4) double
     dQuat_TBfromCam       (1,4) double
     strFilterConstConfig  (1,1) struct {coder.mustBeConst}
+    dCameraOffset_IN      (3,1) double = zeros(3,1)
 end
 arguments (Output)
     dJacPoseCovFromState (6,:) double
@@ -53,9 +56,10 @@ dJacPoseCovFromState(4:6,ui8BiasIdx) = dBiasJacobian;
 
 switch coder.const(strFilterConstConfig.enumWindowRefFrame)
     case EnumWindowRefFrame.TARGET_FIXED
-        dPosition_TF = dDCM_EstTFfromIN * dxState(ui8PositionIdx);
+        dPosition_TF = dDCM_EstTFfromIN * (dxState(ui8PositionIdx) + dCameraOffset_IN);
         dJacPoseCovFromState(1:3,ui8PositionIdx) = dDCM_EstTFfromIN;
-        dJacPoseCovFromState(1:3,ui8BiasIdx) = skewSymm(dPosition_TF)*dBiasJacobian;
+        dJacPoseCovFromState(1:3,ui8BiasIdx) = skewSymm(dPosition_TF) * dBiasJacobian;
+
     case EnumWindowRefFrame.INERTIAL
         dJacPoseCovFromState(1:3,ui8PositionIdx) = eye(3);
     otherwise
