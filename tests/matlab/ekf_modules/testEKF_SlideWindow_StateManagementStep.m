@@ -19,6 +19,7 @@ function tests = testEKF_SlideWindow_StateManagementStep
 % 21-08-2026  Pietro Califano, Codex gpt-5.6     Cover full clone covariance and past-clone updates.
 % 07-09-2026  Pietro Califano, Codex gpt-6       Cover image requests, no-ops and full-window covariance.
 % 07-09-2026  Pietro Califano, Codex gpt-6       Verify -1 request clearing and admission at epoch zero.
+% 10-09-2026  Pietro Califano, Codex gpt-6    Use the constant window-frame enum.
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % EKF_SlideWindow_StateManagementStep.
@@ -340,7 +341,7 @@ strFilterConstConfig = filter_tailoring.BuildArchitectureTemplate('bWriteBusDefs
 strFilterMutabConfig.bContinuousSlideMode = true;
 strFilterMutabConfig.bNewImageAcquisition = false;
 strFilterMutabConfig.i8FeatTrackingMode = int8(-1);
-strFilterMutabConfig.charWindowRefFrame = 'IN';
+strFilterConstConfig.enumWindowRefFrame = EnumWindowRefFrame.INERTIAL;
 
 ui32FullStateSize = double(strFilterConstConfig.ui32FullStateSize);
 ui32FullCovSize = double(strFilterConstConfig.ui32FullCovSize);

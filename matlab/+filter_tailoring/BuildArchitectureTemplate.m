@@ -1,20 +1,52 @@
-function [strFilterConstConfig] = BuildArchitectureTemplate(kwargs)
-arguments
-    kwargs.bWriteBusDefs        (1,1) {mustBeNumericOrLogical} = true;
-    kwargs.charDefsOutputPath   {mustBeA(kwargs.charDefsOutputPath, ["string", "char"])} = "./bus_defs_EKF";
-    kwargs.ui16StateSize        (1,1) uint16 = 17
-    kwargs.bAddExponentialAtmosphData (1,1) logical = false
-    kwargs.enumFilterBackend    (1,1) EnumFilterBackend = EnumFilterBackend.EKF_FULLCOV
-    kwargs.enumSmoothingBackend (1,1) EnumSmoothingBackend = EnumSmoothingBackend.NONE
-end
+function strFilterConstConfig = BuildArchitectureTemplate(kwargs)
+%% SIGNATURE
+% strFilterConstConfig = filter_tailoring.BuildArchitectureTemplate(Name=Value,...)
+% -------------------------------------------------------------------------------------------------------------
+%% DESCRIPTION
+% Build the fixed state layout, storage capacities and filter algorithm selectors.
+% The window frame defines clone coordinates; changing it requires rebuilding the state and
+% covariance. Pass this configuration as coder.Constant when generating filter routines.
+% -------------------------------------------------------------------------------------------------------------
+%% INPUT
+% kwargs.ui16StateSize             Current-state dimension, at least 17.
+% kwargs.enumWindowRefFrame        Clone position axes; INERTIAL by default.
+% kwargs.enumFilterBackend         Covariance/information filter selector.
+% kwargs.enumSmoothingBackend      Smoothing selector.
+% kwargs.bAddExponentialAtmosphData Include atmospheric model data in the input schema.
+% kwargs.bWriteBusDefs, kwargs.charDefsOutputPath Legacy builder options retained for callers.
+% -------------------------------------------------------------------------------------------------------------
+%% OUTPUT
+% strFilterConstConfig             Constant state layout, capacities and algorithm configuration.
+% -------------------------------------------------------------------------------------------------------------
 %% CHANGELOG
 % 22-04-2026    Pietro Califano     Add reusable default architecture builder for standard filter structs.
 % 24-04-2026    Pietro Califano     Align sigma-point architecture metadata with the EKF-style template.
 % 24-04-2026    Pietro Califano     Align sigma-point runtime fields with the EKF-style template.
 % 26-04-2026    Pietro Califano     Remove template-mode selector; keep only explicit optional data flags.
 % 27-04-2026    Pietro Califano     Add const-config backend and smoothing selectors.
+% 10-09-2026  Pietro Califano, Codex gpt-6    Define clone coordinates in constant configuration.
+% -------------------------------------------------------------------------------------------------------------
+%% DEPENDENCIES
+% EnumWindowRefFrame, EnumFilterBackend, EnumSmoothingBackend, EnumSigmaPointResidualMode,
+% EnumMeasDelayManagementMode.
+% -------------------------------------------------------------------------------------------------------------
+arguments (Input)
+    kwargs.bWriteBusDefs        (1,1) {mustBeNumericOrLogical} = true;
+    kwargs.charDefsOutputPath   {mustBeA(kwargs.charDefsOutputPath, ["string", "char"])} = "./bus_defs_EKF";
+    kwargs.ui16StateSize        (1,1) uint16 = 17
+    kwargs.bAddExponentialAtmosphData (1,1) logical = false
+    kwargs.enumWindowRefFrame   (1,1) EnumWindowRefFrame = EnumWindowRefFrame.INERTIAL
+    kwargs.enumFilterBackend    (1,1) EnumFilterBackend = EnumFilterBackend.EKF_FULLCOV
+    kwargs.enumSmoothingBackend (1,1) EnumSmoothingBackend = EnumSmoothingBackend.NONE
+end
+arguments (Output)
+    strFilterConstConfig (1,1) struct
+end
+
+%% Function code
 
 strFilterConstConfig.ui16StateSize = uint16(kwargs.ui16StateSize);
+strFilterConstConfig.enumWindowRefFrame = kwargs.enumWindowRefFrame;
 strFilterConstConfig.enumFilterBackend = kwargs.enumFilterBackend;
 strFilterConstConfig.enumSmoothingBackend = kwargs.enumSmoothingBackend;
 strFilterConstConfig.ui32UnscentedNumSigmaPoints = uint32(2 * double(strFilterConstConfig.ui16StateSize) + 1);

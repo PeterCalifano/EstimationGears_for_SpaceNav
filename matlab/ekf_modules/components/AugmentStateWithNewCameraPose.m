@@ -37,6 +37,7 @@ function [dxState, dxStateCov, dStateTimetag, strFilterMutabConfig] = AugmentSta
 % 07-09-2026  Pietro Califano, Codex gpt-6    Use type and size contracts instead of predicate validators.
 % 07-09-2026  Pietro Califano, Codex gpt-6    Resolve optional image-request schema at compile time.
 % 07-09-2026  Pietro Califano, Codex gpt-6    Exclude the -1 image-pose request sentinel.
+% 10-09-2026  Pietro Califano, Codex gpt-6    Use the constant window-frame enum.
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % ComputeWindowPose, ComputeWindowPoseJacobian.
@@ -118,13 +119,13 @@ dJacPoseCovFromState = coder.nullcopy( zeros( strFilterConstConfig.ui16WindowPos
 
 % Compute window pose entries
 [dCamPosition_Frame, dQuat_TBfromCam, ~] = ComputeWindowPose(dCamPosition_IN, ...
-    dQuat_INfromSC, dQuat_TBfromIN, dQuat_SCfromCam, strFilterMutabConfig, dxAttitudeBiasStates);
+    dQuat_INfromSC, dQuat_TBfromIN, dQuat_SCfromCam, strFilterConstConfig, dxAttitudeBiasStates);
 % Allocate window pose state
 dxState(ui16StateAllocPtr) = [dCamPosition_Frame; dQuat_TBfromCam];
 
 % Evaluate 1st order map from state covariance to window pose covariance
 dJacPoseCovFromState(:, :) = ComputeWindowPoseJacobian(dxState, dQuat_TBfromIN, ...
-    dQuat_TBfromCam, strFilterMutabConfig, strFilterConstConfig);
+    dQuat_TBfromCam, strFilterConstConfig);
 
 
 %% Process timetag

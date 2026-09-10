@@ -1,75 +1,65 @@
-function [dJacPoseCovFromState] = ComputeWindowPoseJacobian(dxState, ...
-                                                            dQuat_TBfromIN, ...
-                                                            dQuat_TBfromCam, ...
-                                                            strFilterMutabConfig, ...
-                                                            strFilterConstConfig) %#codegen
-arguments
-    dxState         % TBC if not needed
-    dQuat_TBfromIN          (1,4)
-    dQuat_TBfromCam         (1,4)
-    strFilterMutabConfig    (1,1) struct
-    strFilterConstConfig    (1,1) struct
-end
+function dJacPoseCovFromState = ComputeWindowPoseJacobian(dxState, dQuat_TBfromIN, ...
+    dQuat_TBfromCam, strFilterConstConfig) %#codegen
 %% SIGNATURE
-% [dCamPosition_TB, dQuat_TBfromCam] = ComputeWindowPose(dCamPosition_IN, ...
-%                                                        dxAttitudeBiasStates, ...
-%                                                        dQuat_INfromSC, ...
-%                                                        dQuat_TBfromIN, ...
-%                                                        dQuat_SCfromCam) %#codegen
+% dJacPoseCovFromState = ComputeWindowPoseJacobian(dxState, dQuat_TBfromIN, ...
+%     dQuat_TBfromCam, strFilterConstConfig)
 % -------------------------------------------------------------------------------------------------------------
 %% DESCRIPTION
-% Function computing the jacobian of the transformation from current position, attitude bias and attitude 
-% quaternion to window camera pose, assuming the camera origin coincident with spacecraft origin.
+% Differentiate ComputeWindowPose into [position; local target-side attitude]
+% error coordinates used by ApplyWindowPoseUpdate. The current bias is additive
+% in TF-axis radians. Its nonzero-mean differential is J_l(-bias), not a TF/IN
+% frame conversion. Camera attitude is held fixed in this state derivative;
+% independently supplied attitude uncertainty requires its own covariance map.
 % -------------------------------------------------------------------------------------------------------------
 %% INPUT
-% in1 [dim] description TODO
+% dxState               Current state, optionally followed by allocated clones.
+% dQuat_TBfromIN        Nominal IN-to-target scalar-first passive quaternion.
+% dQuat_TBfromCam       Retained API argument; target-side errors do not depend on it.
+% strFilterConstConfig  State size, position/bias indices and enumWindowRefFrame.
 % -------------------------------------------------------------------------------------------------------------
 %% OUTPUT
-% out1 [dim] description
-% Name1                     []
-% Name2                     []
-% Name3                     []
+% dJacPoseCovFromState  Six clone-error rows by current-state columns.
 % -------------------------------------------------------------------------------------------------------------
 %% CHANGELOG
 % 05-02-2025    Pietro Califano     First prototype implementation for MSCKF.
 % 11-08-2026    Pietro Califano, Codex gpt-5.6     Make function code-generation.
 % 06-09-2026  Pietro Califano, Codex gpt-6    Leave acquisition admission to the caller.
 % 07-09-2026  Pietro Califano, Codex gpt-6    Use type and size contracts instead of predicate validators.
+% 09-09-2026  Pietro Califano, Codex gpt-6    Differentiate corrected pose at nonzero bias.
+% 10-09-2026  Pietro Califano, Codex gpt-6    Use the constant window-frame enum.
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
-% [-]
+% ComputeTargetAttitudeBias, Quat2DCM, skewSymm.
 % -------------------------------------------------------------------------------------------------------------
-%% Function code
-dJacPoseCovFromState = zeros( strFilterConstConfig.ui16WindowPoseSize-1, strFilterConstConfig.ui16StateSize);
-
-if coder.target('MATLAB') || coder.target('MEX')
-    assert(strcmpi(strFilterMutabConfig.charWindowRefFrame, 'TB') || ...
-        strcmpi(strFilterMutabConfig.charWindowRefFrame, 'IN'), ...
-        'Window reference frame must be TB or IN.');
+arguments (Input)
+    dxState               (:,1) double
+    dQuat_TBfromIN        (1,4) double
+    dQuat_TBfromCam       (1,4) double
+    strFilterConstConfig  (1,1) struct {coder.mustBeConst}
+end
+arguments (Output)
+    dJacPoseCovFromState (6,:) double
 end
 
-% TODO (PC) change to switch case and coder.const moving window frame to constant for codegen.
-if strcmpi(strFilterMutabConfig.charWindowRefFrame, 'TF')
-    % Mode 0: Tightly coupled feature tracking mode (MSCKF) --> Window poses in target fixed frame.
+ui8PositionIdx = strFilterConstConfig.strStatesIdx.ui8posVelIdx(1:3);
+ui8BiasIdx = strFilterConstConfig.strStatesIdx.ui8attBiasDeltaIdx;
+[dCorrection, dBiasJacobian] = ComputeTargetAttitudeBias(dxState(ui8BiasIdx));
+dDCM_EstTFfromIN = dCorrection * Quat2DCM(dQuat_TBfromIN,false);
+dJacPoseCovFromState = zeros(6,strFilterConstConfig.ui16StateSize);
 
-    % Compute Jacobian of window camera position wrt state
-    % NOTE: jacobian of target fixed position wrt inertial state
-    dJacPoseCovFromState(1:3, strFilterConstConfig.strStatesIdx.ui8posVelIdx(1:3)) = Quat2DCM(dQuat_TBfromIN, false); 
-    
-    % Compute Jacobian of window camera attitude (from target fixed) wrt state 
-    % NOTE: Jacobian of attitude quaternion Cam from Fixed wrt attitude bias (error true TB from est TB)
-    dJacPoseCovFromState(4:6, strFilterConstConfig.strStatesIdx.ui8attBiasDeltaIdx) = Quat2DCM(dQuat_TBfromIN, false); % TODO review
+% Target-relative orientation always carries the local bias uncertainty, even
+% when the clone position is stored in IN. Consider mode does not remove this map.
+dJacPoseCovFromState(4:6,ui8BiasIdx) = dBiasJacobian;
 
-elseif strcmpi(strFilterMutabConfig.charWindowRefFrame, 'IN')
-    % Mode 1: Loosely coupled feature tracking mode (Direction of motion) --> Position in Inertial frame, attitude wrt target fixed frame
-    dJacPoseCovFromState(1:3, strFilterConstConfig.strStatesIdx.ui8posVelIdx(1:3)) = eye(3);
-
-    % Compute Jacobian of window camera attitude (from target fixed) wrt state
-    dJacPoseCovFromState(4:6, strFilterConstConfig.strStatesIdx.ui8attBiasDeltaIdx) = Quat2DCM(dQuat_TBfromIN, false); % TODO
-else
-    if coder.target('MATLAB') || coder.target('MEX')
-        assert(0, 'Invalid pose augmentation mode.')
-    end
+switch coder.const(strFilterConstConfig.enumWindowRefFrame)
+    case EnumWindowRefFrame.TARGET_FIXED
+        dPosition_TF = dDCM_EstTFfromIN * dxState(ui8PositionIdx);
+        dJacPoseCovFromState(1:3,ui8PositionIdx) = dDCM_EstTFfromIN;
+        dJacPoseCovFromState(1:3,ui8BiasIdx) = skewSymm(dPosition_TF)*dBiasJacobian;
+    case EnumWindowRefFrame.INERTIAL
+        dJacPoseCovFromState(1:3,ui8PositionIdx) = eye(3);
+    otherwise
+        error('ComputeWindowPoseJacobian:InvalidFrame', ...
+            'Unsupported constant window reference frame.');
 end
-
 end

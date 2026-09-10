@@ -48,6 +48,8 @@ end
 % This function fuses available measurements (LIDAR, centroiding, feature tracking as relative direction) to update the state and covariance.
 % It supports multiple measurement types, handles measurement Jacobians, and manages windowed state updates.
 % The implementation is tailored for spacecraft navigation and supports both additive and multiplicative state corrections.
+% Ellipsoidal LiDAR uses a TF-axis rotation-vector bias [rad]. Its sensitivity
+% contributes to the update in both estimated and consider modes.
 % -------------------------------------------------------------------------------------------------------------
 %% INPUT
 % dxStatePrior            (:,1) {mustBeNumeric}
@@ -82,6 +84,11 @@ end
 % 11-07-2025    Pietro Califano     [MAJOR] Fix incorrect pointer to sliding window entries for update step
 % 30-04-2026    Pietro Califano     Extend default implementation with ACOB correction jacobian support
 % 04-08-2026    Pietro Califano, Codex gpt-5.6    Add MATLAB-only finite-value diagnostics at core update boundaries
+% 09-09-2026    Pietro Califano, Codex gpt-6    Correct LiDAR target-bias mean and consider sensitivity.
+% -------------------------------------------------------------------------------------------------------------
+%% DEPENDENCIES
+% ComputeTargetAttitudeBias, EvalChbvAttInterp_InFromTarget, RayEllipsoidIntersection,
+% ApplySlidingWindowErrorState.
 % -------------------------------------------------------------------------------------------------------------
 
 % Coder directives
@@ -230,6 +237,7 @@ if bMeasTypeFlags(3) == true
     % Default values: set rotation matrices to Identity (evaluation occurs in Inertial)
     dCurrentDCM_TBfromIN    = eye(3);
     dCurrentDCM_EstTBfromIN = eye(3);
+    dBiasJacobian_TF        = eye(3);
     dEllipsoidCentre        = [0; 0; 0];
 
 
@@ -243,11 +251,16 @@ if bMeasTypeFlags(3) == true
     elseif strFilterMutabConfig.ui8LidarShapeModelMode == 2
         % Ellipsoidal
         dInvDiagShapeCoeffs = strFilterMutabConfig.dEllipsoidInvDiagShapeCoeffs;
-        bEvaluateJacs(2) = false; % true; % True unless disabled. NOTE: Should be true also when consider!
-        % FIXME: jacobian needs debug
+        dCurrentDCM_TBfromIN = transpose(EvalChbvAttInterp_InFromTarget( ...
+            dStateTimetag(1), strDynParams.strMainData.strAttData));
+        dCurrentDCM_EstTBfromIN = dCurrentDCM_TBfromIN;
 
-        dCurrentDCM_TBfromIN(:,:)     = transpose(EvalChbvAttInterp_InFromTarget(dStateTimetag(1), strDynParams.strMainData.strAttData));
-        dCurrentDCM_EstTBfromIN(:,:)  = Quat2DCM([1; 2 * dxStatePost(strFilterConstConfig.strStatesIdx.ui8attBiasDeltaIdx)], false) * dCurrentDCM_TBfromIN;
+        % Compose the passive bias on the target side, using radians in TF axes.
+        if ~strFilterConstConfig.bOrbitStateOnly
+            [dTargetCorrection, dBiasJacobian_TF] = ComputeTargetAttitudeBias( ...
+                dxStatePost(strFilterConstConfig.strStatesIdx.ui8attBiasDeltaIdx));
+            dCurrentDCM_EstTBfromIN = dTargetCorrection * dCurrentDCM_TBfromIN;
+        end
 
     end
 
@@ -286,12 +299,12 @@ if bMeasTypeFlags(3) == true
         
         if not(strFilterConstConfig.bOrbitStateOnly) 
 
-            %%%% TEST: do not add jacobian wrt target attitude error if consider or if spherical model!
-
-            if not(all(strFilterMutabConfig.bConsiderStatesMode(strFilterConstConfig.strStatesIdx.ui8attBiasDeltaIdx))) && not(strFilterMutabConfig.ui8LidarShapeModelMode == 1)
-                dRangeLidarObsMatrix(1, strFilterConstConfig.strStatesIdx.ui8attBiasDeltaIdx)   = dJacIntersectDistance_TargetAttErr;
+            % The ray routine differentiates positive local rotations. Map these
+            % to additive passive bias, including uncertainty held in consider mode.
+            if bEvaluateJacs(2)
+                dRangeLidarObsMatrix(1, strFilterConstConfig.strStatesIdx.ui8attBiasDeltaIdx) = ...
+                    -dJacIntersectDistance_TargetAttErr * dBiasJacobian_TF;
             end
-            %%%%%
 
             dRangeLidarObsMatrix(1, strFilterConstConfig.strStatesIdx.ui8LidarMeasBiasIdx)  = 1.0;
         end

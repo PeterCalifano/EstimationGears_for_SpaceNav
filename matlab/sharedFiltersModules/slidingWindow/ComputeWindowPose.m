@@ -1,96 +1,69 @@
-function [dCamPosition_Frame, dQuat_TBfromCam, dQuatAttitudeBias_TBfromCam] = ComputeWindowPose(dCamPosition_IN, ...
-                                                                                             dQuat_INfromSC, ...
-                                                                                             dQuat_TBfromIN, ...
-                                                                                             dQuat_SCfromCam, ...
-                                                                                             strFilterMutabConfig, ...
-                                                                                             dxAttitudeBiasStates) %#codegen
-arguments
-    dCamPosition_IN
-    dQuat_INfromSC
-    dQuat_TBfromIN
-    dQuat_SCfromCam
-    strFilterMutabConfig (1,1) struct
-    dxAttitudeBiasStates = [0;0;0];
-end
+function [dCamPosition_Frame, dQuat_TBfromCam, dQuat_EstTFfromTF] = ...
+    ComputeWindowPose(dCamPosition_IN, dQuat_INfromSC, dQuat_TBfromIN, ...
+                      dQuat_SCfromCam, strFilterConstConfig, dBias_TF) %#codegen
 %% SIGNATURE
-% [dCamPosition_TB, dQuat_TBfromCam] = ComputeWindowPose(dCamPosition_IN, ...
-%                                                        dxAttitudeBiasStates, ...
-%                                                        dQuat_INfromSC, ...
-%                                                        dQuat_TBfromIN, ...
-%                                                        dQuat_SCfromCam) %#codegen
+% [dCamPosition_Frame, dQuat_TBfromCam, dQuat_EstTFfromTF] = ...
+%     ComputeWindowPose(dCamPosition_IN, dQuat_INfromSC, dQuat_TBfromIN, ...
+%                       dQuat_SCfromCam, strFilterConstConfig, dBias_TF)
 % -------------------------------------------------------------------------------------------------------------
 %% DESCRIPTION
-% Function constructing camera window pose from current position, attitude bias and attitude quaternions.
+% Construct a camera clone with corrected target-relative attitude. The camera
+% position is already relative to the target origin in IN; no lever arm is added.
+% The TF-axis bias rotates the target frame, independently of camera extrinsics.
+% IN mode preserves position in IN while retaining target-relative orientation.
+% TARGET_FIXED stores position in the corrected target frame.
 % -------------------------------------------------------------------------------------------------------------
 %% INPUT
-% in1 [dim] description TODO
+% dCamPosition_IN       Camera position relative to target origin [m].
+% dQuat_INfromSC        Scalar-first passive spacecraft-to-IN quaternion.
+% dQuat_TBfromIN        Nominal IN-to-target quaternion.
+% dQuat_SCfromCam       Camera-to-spacecraft extrinsic quaternion.
+% strFilterConstConfig  enumWindowRefFrame selects INERTIAL or TARGET_FIXED position axes.
+% dBias_TF              Additive TF-axis target rotation vector [rad]; default zero.
 % -------------------------------------------------------------------------------------------------------------
 %% OUTPUT
-% out1 [dim] description
-% Name1                     []
-% Name2                     []
-% Name3                     []
+% dCamPosition_Frame    Camera position in the selected frame [m].
+% dQuat_TBfromCam       Camera-to-corrected-target unit quaternion, also in IN mode.
+% dQuat_EstTFfromTF     Unit target-side bias correction quaternion.
 % -------------------------------------------------------------------------------------------------------------
 %% CHANGELOG
 % 05-02-2025    Pietro Califano     First prototype implementation for MSCKF.
 % 11-08-2026    Pietro Califano, Codex gpt-5.6     Use code-generation-safe frame validation.
 % 06-09-2026  Pietro Califano, Codex gpt-6    Leave tracking-independent pose admission to the caller.
 % 07-09-2026  Pietro Califano, Codex gpt-6    Use type and size contracts instead of predicate validators.
+% 09-09-2026  Pietro Califano, Codex gpt-6    Apply TF-axis bias and align frame selection.
+% 10-09-2026  Pietro Califano, Codex gpt-6    Use the constant window-frame enum.
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
-% [-]
+% ComputeTargetAttitudeBias, Quat2DCM, DCM2quat.
 % -------------------------------------------------------------------------------------------------------------
-%% Function code
-% dQuat_TBfromSC              = coder.nullcopy(zeros(4, 1));
-% dQuat_TBfromCam             = coder.nullcopy(zeros(4, 1));
-dCamPosition_Frame          = coder.nullcopy(zeros(3, 1));
-dQuatAttitudeBias_TBfromCam = coder.nullcopy(zeros(4, 1));
-
-% Compute quaternion from attitude correction bias (assumed on camera)
-% TODO verify if small angle approximation holds, else use full ExpMap
-dQuatAttitudeBias_TBfromCam(:) = [1.0; 0.5*dxAttitudeBiasStates] ;
-
-% Compute inverse of camera attitude quaternion fom target fixed (i.e., DCM rotating from CAM to TB)
-% dQuat_TBfromSC(:)   = quatmultiply(dQuat_TBfromIN', dQuat_INfromSC'); % TODO verify order of quaternions
-% dQuat_TBfromCam(:)  = quatmultiply(dQuat_TBfromSC', dQuat_SCfromCam');
-
-% Apply estimated attitude correction
-% FIXME, quaternion from this sequence of operations is not correct
-% dQuat_TBfromCam(:) = quatmultiply(dQuat_TBfromCam', dQuatAttitudeBias_TBfromCam');
-
-%%% DEVTEMP %%%%
-% TODO, review code above, which does not produce the expected result
-% (the attitude matrix TBfromCam as below)
-dTmpDCM_TBfromIN = Quat2DCM(dQuat_TBfromIN, false);
-dTmpDCM_INfromSC = Quat2DCM(dQuat_INfromSC, false);
-
-dTmpDCM_TBfromSC = dTmpDCM_TBfromIN * dTmpDCM_INfromSC;
-dTmpDCM_TBfromCam = dTmpDCM_TBfromSC * Quat2DCM(dQuat_SCfromCam, false);
-
-dQuat_TBfromCam = DCM2quat(dTmpDCM_TBfromCam, false);
-%%%%%%%%%%%%%%%%
-
-if coder.target('MATLAB') || coder.target('MEX')
-    assert(strcmpi(strFilterMutabConfig.charWindowRefFrame, 'TB') || ...
-        strcmpi(strFilterMutabConfig.charWindowRefFrame, 'IN'), ...
-        'Window reference frame must be TB or IN.');
+arguments (Input)
+    dCamPosition_IN       (3,1) double
+    dQuat_INfromSC        (4,1) double
+    dQuat_TBfromIN        (4,1) double
+    dQuat_SCfromCam       (4,1) double
+    strFilterConstConfig  (1,1) struct {coder.mustBeConst}
+    dBias_TF              (3,1) double = zeros(3,1)
+end
+arguments (Output)
+    dCamPosition_Frame (3,1) double
+    dQuat_TBfromCam    (4,1) double
+    dQuat_EstTFfromTF  (4,1) double
 end
 
-if strcmpi(strFilterMutabConfig.charWindowRefFrame, 'TF')
-    % Mode 0: Tightly coupled feature tracking mode (MSCKF) --> Window poses in target fixed frame.
+% Correct the target side before composing the independently supplied camera attitude.
+[dCorrection, ~, dQuat_EstTFfromTF] = ComputeTargetAttitudeBias(dBias_TF);
+dDCM_EstTFfromIN = dCorrection * Quat2DCM(dQuat_TBfromIN,false);
+dDCM_EstTFfromCam = dDCM_EstTFfromIN * Quat2DCM(dQuat_INfromSC,false) * ...
+    Quat2DCM(dQuat_SCfromCam,false);
+dQuat_TBfromCam = DCM2quat(dDCM_EstTFfromCam,false);
 
-    % Compute spacecraft position in target fixed
-    dCamPosition_Frame(:) = dTmpDCM_TBfromIN * dCamPosition_IN ;
-
-
-elseif strcmpi(strFilterMutabConfig.charWindowRefFrame, 'IN')
-
-    % Mode 1: Loosely coupled feature tracking mode (Direction of motion) --> Position in Inertial frame, attitude wrt target fixed frame
-    dCamPosition_Frame(:) = dCamPosition_IN;
-else
-    if coder.target('MATLAB') || coder.target('MEX')
-        assert(0, 'Invalid pose augmentation mode.')
-    end
+switch coder.const(strFilterConstConfig.enumWindowRefFrame)
+    case EnumWindowRefFrame.TARGET_FIXED
+        dCamPosition_Frame = dDCM_EstTFfromIN * dCamPosition_IN;
+    case EnumWindowRefFrame.INERTIAL
+        dCamPosition_Frame = dCamPosition_IN;
+    otherwise
+        error('ComputeWindowPose:InvalidFrame', 'Unsupported constant window reference frame.');
 end
-
 end

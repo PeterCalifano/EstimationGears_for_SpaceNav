@@ -21,6 +21,7 @@ end
 %                                   make UKF runtime data explicit instead of optional.
 % 27-04-2026    Pietro Califano     Use ComputeMeasPredAndObsJacobian as the single tailoring hook;
 %                                   UKF paths request prediction outputs only.
+% 10-09-2026  Pietro Califano, Codex gpt-6    Keep the window-frame selector in constant configuration.
 % -------------------------------------------------------------------------------------------------------------
 
 ui16StateSize = strFilterConstConfig.ui16StateSize;
@@ -61,7 +62,6 @@ strFilterMutabConfig.bContinuousSlideMode = false;
 strFilterMutabConfig.bStoreStateInSlidingWind = false;
 strFilterMutabConfig.bIsSlidingWindFull = false;
 strFilterMutabConfig.i8FeatTrackingMode = int8(-1);
-strFilterMutabConfig.charWindowRefFrame = 'IN';
 strFilterMutabConfig.dQuat_SCfromCAM = [1.0; 0.0; 0.0; 0.0];
 
 % Observation/update defaults
