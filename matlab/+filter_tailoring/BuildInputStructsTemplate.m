@@ -39,6 +39,7 @@ function [strFilterMutabConfig, strDynParams, strMeasModelParams, strMeasBus] = 
 % 10-09-2026  Pietro Califano, Codex gpt-6    Use the constant window-frame enum.
 % 10-09-2026    Pietro Califano, Codex gpt-6    Include the full-covariance EKF editing limit.
 % 10-09-2026    Pietro Califano, Codex gpt-6    Configure isotropic external attitude uncertainty.
+% 11-09-2026  Pietro Califano, Codex gpt-6    Remove unused runtime sign-switch metadata.
 % -------------------------------------------------------------------------------------------------------------
 
 %% DEPENDENCIES
@@ -187,7 +188,6 @@ strDynParams.strMainData.strAttData.dChbvPolycoeffs = [1.0; 0.0; 0.0; ...
                                                        0.0; 0.0; 0.0; ...
                                                        0.0; 0.0; 0.0; ...
                                                        0.0; 0.0; 0.0];
-strDynParams.strMainData.strAttData.dsignSwitchIntervals = zeros(1,2);
 strDynParams.strMainData.strAttData.dTimeLowBound = -1.0;
 strDynParams.strMainData.strAttData.dTimeUpBound = 1.0;
 

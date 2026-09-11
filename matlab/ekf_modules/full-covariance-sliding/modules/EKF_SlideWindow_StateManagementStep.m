@@ -35,6 +35,8 @@ function [dxState, dxStateCov, dStateTimetag, strDynParams, strFilterMutabConfig
 % 06-09-2026  Pietro Califano, Codex gpt-6    Consume image-epoch requests without changing covariance math.
 % 07-09-2026  Pietro Califano, Codex gpt-6    Skip slot-release work on non-augmentation calls.
 % 07-09-2026  Pietro Califano, Codex gpt-6    Use -1 for an absent or consumed image-pose request.
+% 10-09-2026  Pietro Califano, Codex gpt-6    Separate runtime attitude degree from fixed capacity.
+% 11-09-2026  Pietro Califano, Codex gpt-6    Remove unused runtime sign-switch metadata.
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % ReleaseTrailingWindowPoseSlot.
@@ -118,9 +120,11 @@ dQuat_INfromSCB = DCM2quat(transpose(strMeasModelParams.dDCM_SCBiFromIN(:, :, 2)
 strAttData = strDynParams.strMainData.strAttData;
 
 % DEVNOTE: attitude interpolation at state epoch to build new camera pose for augmentation.
+% Keep the workspace bound fixed while the active degree remains runtime data.
+ui32AttMaxDegree = coder.const(uint32(floor(numel(strAttData.dChbvPolycoeffs) / 4)) - 1);
 dQuat_INfromTB = evalAttQuatChbvPolyWithCoeffs(strAttData.ui32PolyDeg, 4, dStateTimetag(1), ...
-    strAttData.dChbvPolycoeffs, strAttData.dsignSwitchIntervals, ...
-    strAttData.dTimeLowBound, strAttData.dTimeUpBound);
+    strAttData.dChbvPolycoeffs, ...
+    strAttData.dTimeLowBound, strAttData.dTimeUpBound, ui32AttMaxDegree);
 
 % Shift retained poses toward the trailing slot before writing the newest pose
 % into the default free slot.

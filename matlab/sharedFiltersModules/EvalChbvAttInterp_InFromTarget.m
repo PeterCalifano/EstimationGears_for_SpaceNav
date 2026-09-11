@@ -11,7 +11,7 @@ function dTargetDCM_INfromTF = EvalChbvAttInterp_InFromTarget(dTimestamp, strAtt
 %% INPUT
 % dTimestamp    Evaluation epoch in the same time units as the ephemeris bounds.
 % strAttData    ui32PolyDeg; stacked dChbvPolycoeffs (degree+1 entries per component);
-%               dsignSwitchIntervals; dTimeLowBound; dTimeUpBound.
+%               dTimeLowBound; dTimeUpBound.
 % -------------------------------------------------------------------------------------------------------------
 %% OUTPUT
 % dTargetDCM_INfromTF    Rotation mapping target-fixed vectors into inertial axes.
@@ -20,6 +20,8 @@ function dTargetDCM_INfromTF = EvalChbvAttInterp_InFromTarget(dTimestamp, strAtt
 % 09-09-2026  Pietro Califano, Codex gpt-6    Move the backend evaluator into EstimationGears.
 % 09-09-2026  Pietro Califano, Codex gpt-6    Keep dynamic schema validation on the MATLAB path.
 % 09-09-2026  Pietro Califano, Codex gpt-6    Derive polynomial capacity from fixed coefficient storage.
+% 10-09-2026  Pietro Califano, Codex gpt-6    Separate runtime attitude degree from fixed capacity.
+% 11-09-2026  Pietro Califano, Codex gpt-6    Remove unused runtime sign-switch metadata.
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % evalAttQuatChbvPolyWithCoeffs, Quat2DCM (MathCore).
@@ -37,15 +39,12 @@ if coder.target('MATLAB')
     ValidateAttData_(strAttData, dTimestamp);
 end
 
-% Four equally sized coefficient blocks determine the compiled polynomial degree.
-% Keep the metadata check explicit so a mismatched degree cannot be ignored.
-ui32PolyDegree = coder.const(uint32(numel(strAttData.dChbvPolycoeffs) / 4 - 1));
-assert(strAttData.ui32PolyDeg == ui32PolyDegree, ...
-    'Attitude polynomial degree does not match coefficient storage.');
+% Fixed storage bounds the workspace; the packed active series may have a lower degree.
+ui32AttMaxDegree = coder.const(uint32(floor(numel(strAttData.dChbvPolycoeffs) / 4)) - 1);
 
-dQuaternion = evalAttQuatChbvPolyWithCoeffs(ui32PolyDegree, uint32(4), ...
-    dTimestamp, strAttData.dChbvPolycoeffs, strAttData.dsignSwitchIntervals, ...
-    strAttData.dTimeLowBound, strAttData.dTimeUpBound);
+dQuaternion = evalAttQuatChbvPolyWithCoeffs(strAttData.ui32PolyDeg, uint32(4), ...
+    dTimestamp, strAttData.dChbvPolycoeffs, ...
+    strAttData.dTimeLowBound, strAttData.dTimeUpBound, ui32AttMaxDegree);
 
 dTargetDCM_INfromTF = Quat2DCM(dQuaternion, false);
 end
@@ -53,7 +52,7 @@ end
 %% Local helper
 function ValidateAttData_(strAttData, dTimestamp)
 % Check the struct before evaluating its component-wise coefficient blocks.
-cellRequiredFields = {'ui32PolyDeg', 'dChbvPolycoeffs', 'dsignSwitchIntervals', ...
+cellRequiredFields = {'ui32PolyDeg', 'dChbvPolycoeffs', ...
     'dTimeLowBound', 'dTimeUpBound'};
 
 bPresentFields = isfield(strAttData, cellRequiredFields);
@@ -68,8 +67,10 @@ validateattributes(strAttData.ui32PolyDeg, {'numeric','uint32'}, ...
 dCoeffsPerComponent = double(strAttData.ui32PolyDeg) + 1;
 
 validateattributes(strAttData.dChbvPolycoeffs, {'numeric'}, ...
-    {'real','2d','nrows',4*dCoeffsPerComponent,'ncols',1}, ...
+    {'real','2d','ncols',1}, ...
     mfilename, 'strAttData.dChbvPolycoeffs');
+assert(numel(strAttData.dChbvPolycoeffs) >= 4 * dCoeffsPerComponent, ...
+    'Attitude coefficient storage is smaller than the active series.');
 
 % An out-of-domain request must fail rather than silently clamp the epoch.
 validateattributes(strAttData.dTimeLowBound, {'numeric'}, {'scalar'}, ...

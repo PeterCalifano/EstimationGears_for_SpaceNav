@@ -31,10 +31,12 @@ end
 % dxdt
 % -------------------------------------------------------------------------------------------------------------
 %% CHANGELOG
-% 17-08-2024    Pietro Califano     Version adapted from FUTURE EKF to use general purpose evalRHS_DynOrbit
 % 17-03-2024    Pietro Califano     Updated version for use in MSKCF
+% 17-08-2024    Pietro Califano     Version adapted from FUTURE EKF to use general purpose evalRHS_DynOrbit
 % 28-07-2025    Pietro Califano     Update version to recompute P_SRP and eclipse flag
 % 07-12-2025    Pietro Califano     Fix bugs related to SRP computation
+% 10-09-2026  Pietro Califano, Codex gpt-6    Separate runtime attitude degree from fixed capacity.
+% 11-09-2026  Pietro Califano, Codex gpt-6    Remove unused runtime sign-switch metadata.
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % evalAttQuatChbvPolyWithCoeffs()
@@ -92,11 +94,13 @@ end
 
 
 % Compute attitude of Main at current time instant (NOT NEEDED IN FILTER)
+% Keep the workspace bound fixed while the active degree remains runtime data.
+ui32AttMaxDegree = coder.const(uint32(floor( ...
+    numel(strDynParams.strMainData.strAttData.dChbvPolycoeffs) / 4)) - 1);
 dTmpQuat = evalAttQuatChbvPolyWithCoeffs(strDynParams.strMainData.strAttData.ui32PolyDeg, 4, dEvalPoint,...
                                         strDynParams.strMainData.strAttData.dChbvPolycoeffs, ...
-                                        strDynParams.strMainData.strAttData.dsignSwitchIntervals, ...
                                         strDynParams.strMainData.strAttData.dTimeLowBound, ...
-                                        strDynParams.strMainData.strAttData.dTimeUpBound);
+                                        strDynParams.strMainData.strAttData.dTimeUpBound, ui32AttMaxDegree);
 
 dDCMmainAtt_INfromTF(1:3, 1:3) = Quat2DCM(dTmpQuat, true);
 

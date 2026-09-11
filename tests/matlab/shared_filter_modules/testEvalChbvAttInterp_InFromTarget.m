@@ -14,6 +14,8 @@ function tests = testEvalChbvAttInterp_InFromTarget
 % -------------------------------------------------------------------------------------------------------------
 %% CHANGELOG
 % 09-09-2026  Pietro Califano, Codex gpt-6    Cover the evaluator moved from nav-backend.
+% 10-09-2026  Pietro Califano, Codex gpt-6    Verify runtime degrees within fixed coefficient capacity.
+% 11-09-2026  Pietro Califano, Codex gpt-6    Remove unused runtime sign-switch metadata.
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % EvalChbvAttInterp_InFromTarget, SetupPaths_EstimationGears.
@@ -55,6 +57,20 @@ for dTimestamp = [-1.01, 1.01]
 end
 end
 
+function testRuntimeDegreeWithinCapacity(testCase)
+strAttData = CreateEphemeris_();
+dExpected = EvalChbvAttInterp_InFromTarget(0, strAttData);
+for ui32Degree = uint32(2:5)
+    dCoefficients = nan(24, 1);
+    dCoefficients(1:4 * (ui32Degree + 1)) = 0;
+    dCoefficients(1:ui32Degree+1:4*(ui32Degree+1)) = [cos(0.2); 0; 0; sin(0.2)];
+    strAttData.ui32PolyDeg = ui32Degree;
+    strAttData.dChbvPolycoeffs = dCoefficients;
+    verifyEqual(testCase, EvalChbvAttInterp_InFromTarget(0, strAttData), ...
+        dExpected, 'AbsTol', 2e-15);
+end
+end
+
 function testRejectsMissingCoefficients(testCase)
 strAttData = rmfield(CreateEphemeris_(), 'dChbvPolycoeffs');
 verifyError(testCase, @() EvalChbvAttInterp_InFromTarget(0, strAttData), ...
@@ -66,5 +82,5 @@ function strAttData = CreateEphemeris_()
 dCoefficients = zeros(12,1);
 dCoefficients(1:3:12) = [cos(0.2); 0; 0; sin(0.2)];
 strAttData = struct('ui32PolyDeg', uint32(2), 'dChbvPolycoeffs', dCoefficients, ...
-    'dsignSwitchIntervals', zeros(1,2), 'dTimeLowBound', -1, 'dTimeUpBound', 1);
+    'dTimeLowBound', -1, 'dTimeUpBound', 1);
 end

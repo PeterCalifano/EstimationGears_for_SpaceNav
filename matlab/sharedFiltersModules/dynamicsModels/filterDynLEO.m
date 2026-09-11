@@ -42,6 +42,8 @@ end
 %                                           attitude ephemerides as evaluation of Chbv polynomials.
 % 23-07-2025        Pietro Califano         [MAJOR] Reworking for new filter standard architectures.
 % 07-12-2025        Pietro Califano     Fix minor bugs related to SRP
+% 10-09-2026        Pietro Califano, Codex gpt-6    Separate runtime attitude degree from fixed capacity.
+% 11-09-2026  Pietro Califano, Codex gpt-6    Remove unused runtime sign-switch metadata.
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % evalAttQuatChbvPolyWithCoeffs()
@@ -106,11 +108,13 @@ end
 %                                             3*strDynParams.strBody3rdData(2).strOrbitData.ui32PolyDeg, ui32PolyMaxDeg);
 
 % Compute attitude of Earth attitude at current time instant
+% Keep the workspace bound fixed while the active degree remains runtime data.
+ui32AttMaxDegree = coder.const(uint32(floor( ...
+    numel(strDynParams.strMainData.strAttData.dChbvPolycoeffs) / 4)) - 1);
 dTmpQuat = evalAttQuatChbvPolyWithCoeffs(strDynParams.strMainData.strAttData.ui32PolyDeg, 4, dEvalPoint,...
                                         strDynParams.strMainData.strAttData.dChbvPolycoeffs, ...
-                                        strDynParams.strMainData.strAttData.dsignSwitchIntervals, ...
                                         strDynParams.strMainData.strAttData.dTimeLowBound, ...
-                                        strDynParams.strMainData.strAttData.dTimeUpBound);
+                                        strDynParams.strMainData.strAttData.dTimeUpBound, ui32AttMaxDegree);
 
 dDCMmainAtt_INfromTF(1:3, 1:3) = Quat2DCM(dTmpQuat, false);
 
