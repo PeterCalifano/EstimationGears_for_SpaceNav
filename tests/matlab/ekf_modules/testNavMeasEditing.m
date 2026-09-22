@@ -14,6 +14,7 @@ function tests = testNavMeasEditing
 % -------------------------------------------------------------------------------------------------------------
 %% CHANGELOG
 % 10-09-2026  Pietro Califano, Codex gpt-6    Validate the extracted navigation editing policy.
+% 19-09-2026  Pietro Califano, Codex gpt-5.6  Verify NIS and proposal/application diagnostics.
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % EvaluateNavMeasEditing, InitObservationBatch, InsertObservationBlock.
@@ -84,6 +85,47 @@ verifyFalse(testCase, any(bMask));
 verifyEqual(testCase, strAfter, strMutable);
 end
 
+function testProposalAndAppliedDecisionsRemainSeparate(testCase)
+[strBatch, strMutable] = Fixture_();
+strBatch = InsertObservationBlock(strBatch, 2, zeros(1, 4), 1, zeros(4, 1), uint32(1));
+strMutable.dMahaDist2MeasThr = 0.5 * 4;
+
+% The first decision applies the proposal and exposes the same NIS used by
+% the policy without relying on a production threshold value.
+[bAppliedMask, strMutable, strDiagnostics] = ...
+    EvaluateNavMeasEditing(strBatch, strBatch.dNoiseCov, strMutable);
+verifyEqual(testCase, strDiagnostics.dNisByModel(1), 4, 'AbsTol', 10 * eps);
+verifyTrue(testCase, strDiagnostics.bRejectionEvaluated(1));
+verifyTrue(testCase, strDiagnostics.bRejectionProposed(1));
+verifyTrue(testCase, strDiagnostics.bRejectionApplied(1));
+verifyTrue(testCase, bAppliedMask(1));
+
+% An exhausted consecutive-editing allowance retains the proposal while the
+% observation is forced through and the applied mask remains clear.
+strMutable.ui32MeasEditingCounter = strMutable.ui32MaxMeasEditingOccurrence + uint32(1);
+[bAppliedMask, ~, strDiagnostics] = ...
+    EvaluateNavMeasEditing(strBatch, strBatch.dNoiseCov, strMutable);
+verifyTrue(testCase, strDiagnostics.bRejectionProposed(1));
+verifyFalse(testCase, strDiagnostics.bRejectionApplied(1));
+verifyFalse(testCase, bAppliedMask(1));
+end
+
+function testNisRemainsAvailableWhenEditingDisabled(testCase)
+[strBatch, strMutable] = Fixture_();
+strBatch = InsertObservationBlock(strBatch, [2; -1], zeros(2, 4), ...
+    [4, 1; 1, 2], zeros(4, 2), uint32(2));
+strMutable.bEnableEditing = false;
+
+[bAppliedMask, strAfter, strDiagnostics] = ...
+    EvaluateNavMeasEditing(strBatch, strBatch.dNoiseCov, strMutable);
+verifyEqual(testCase, strDiagnostics.dNisByModel(2), 16 / 7, 'AbsTol', 10 * eps);
+verifyFalse(testCase, strDiagnostics.bRejectionEvaluated(2));
+verifyFalse(testCase, strDiagnostics.bRejectionProposed(2));
+verifyFalse(testCase, strDiagnostics.bRejectionApplied(2));
+verifyFalse(testCase, any(bAppliedMask));
+verifyEqual(testCase, strAfter, strMutable);
+end
+
 function testStaticMex(testCase)
 assumeFalse(testCase, isempty(which('codegen')), 'MATLAB Coder is required.');
 [strBatch, strMutable] = Fixture_();
@@ -120,6 +162,10 @@ end
 
 function [strBatch, strMutable] = Fixture_()
 strBatch = InitObservationBatch(uint32(4), uint32(8), uint32(3));
+strBatch.ui8ObservationModelId(:) = uint8([ ...
+    EnumRecursiveObservationModel.LIDAR_RANGE; ...
+    EnumRecursiveObservationModel.IMAGE_CENTROID; ...
+    EnumRecursiveObservationModel.RELATIVE_DIRECTION]);
 strMutable = struct('bEnableEditing', true, 'dMahaDist2MeasThr', 1, ...
     'ui32MeasEditingCounter', uint32(0), 'ui32MaxMeasEditingOccurrence', uint32(10));
 end

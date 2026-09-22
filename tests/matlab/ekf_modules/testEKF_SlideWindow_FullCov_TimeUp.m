@@ -4,6 +4,8 @@ classdef testEKF_SlideWindow_FullCov_TimeUp < matlab.unittest.TestCase
             charThisDir = fileparts(mfilename('fullpath'));
             addpath(fullfile(charThisDir, '..', '..', '..'));
             SetupPaths_EstimationGears;
+            addpath(fullfile(charThisDir, '..', 'test_helpers', ...
+                'time_update_tailoring'));
         end
     end
 
@@ -106,6 +108,57 @@ classdef testEKF_SlideWindow_FullCov_TimeUp < matlab.unittest.TestCase
             testCase.verifyEqual(dIntegrProcessNoiseCovQ, dExpectedQ, 'AbsTol', 1e-12);
             testCase.verifyEqual(dxStateCovPrior, dExpectedCov, 'AbsTol', 1e-11);
             testCase.verifyEqual(dxStateCovPrior, transpose(dxStateCovPrior), 'AbsTol', 1e-12);
+        end
+
+        function testEstimatedCentroidBiasEvolvesAcrossImageGap(testCase)
+            %% SIGNATURE
+            % testCase.testEstimatedCentroidBiasEvolvesAcrossImageGap()
+            % -------------------------------------------------------------------------------------------------
+            %% DESCRIPTION
+            % Verify that two image-free time updates retain estimated centroid-bias FOGM decay and noise.
+            % -------------------------------------------------------------------------------------------------
+            %% INPUT
+            % testCase  MATLAB unit-test instance.
+            % -------------------------------------------------------------------------------------------------
+            %% OUTPUT
+            % None. Assertions report FOGM propagation regressions.
+            % -------------------------------------------------------------------------------------------------
+            %% CHANGELOG
+            % 19-09-2026  Pietro Califano, Codex gpt-5.6  First implementation.
+            % -------------------------------------------------------------------------------------------------
+            %% DEPENDENCIES
+            % EKF_SlideWindow_FullCov_TimeUp, ComputeInputNoise.
+            % -------------------------------------------------------------------------------------------------
+
+            strScenario = BuildTimeUpdateScenario_();
+            ui8BiasIdx = strScenario.strFilterConstConfig.strStatesIdx.ui8CenMeasBiasIdx;
+            strScenario.strDynParams.dCenMeasBiasTimeConst = [2.0; 4.0];
+            strScenario.strFilterMutabConfig.dCenMeasBiasSigma2WN = [1e-4; 2e-4];
+            strScenario.strFilterMutabConfig = ComputeInputNoise( ...
+                strScenario.strFilterMutabConfig, strScenario.strDynParams, ...
+                strScenario.strFilterConstConfig);
+
+            % No observation is presented between the two time updates. The
+            % estimated bias must decay and acquire its configured FOGM noise.
+            dGapStep = 0.4;
+            [dxFirst, dCovFirst, dFirstTime, ~, ~, ~, ~, ...
+             strMutableFirst, dFirstNoise] = EKF_SlideWindow_FullCov_TimeUp( ...
+                strScenario.dxState, strScenario.dxStateCov, ...
+                strScenario.dStateTimetag, dGapStep, strScenario.strDynParams, ...
+                strScenario.strFilterMutabConfig, strScenario.strFilterConstConfig);
+            [dxSecond, dCovSecond] = EKF_SlideWindow_FullCov_TimeUp( ...
+                dxFirst, dCovFirst, dFirstTime, 2*dGapStep, ...
+                strScenario.strDynParams, strMutableFirst, strScenario.strFilterConstConfig);
+
+            dExpectedFirst = strScenario.dxState(ui8BiasIdx) .* ...
+                exp(-dGapStep ./ strScenario.strDynParams.dCenMeasBiasTimeConst);
+            dExpectedSecond = strScenario.dxState(ui8BiasIdx) .* ...
+                exp(-2*dGapStep ./ strScenario.strDynParams.dCenMeasBiasTimeConst);
+            testCase.verifyEqual(dxFirst(ui8BiasIdx), dExpectedFirst, 'AbsTol', 2e-6);
+            testCase.verifyEqual(dxSecond(ui8BiasIdx), dExpectedSecond, 'AbsTol', 2e-6);
+            testCase.verifyGreaterThan(min(diag(dFirstNoise(ui8BiasIdx, ui8BiasIdx))), 0);
+            testCase.verifyGreaterThan(min(diag(dCovSecond(ui8BiasIdx, ui8BiasIdx))), 0);
+            testCase.verifyFalse(any(strMutableFirst.bConsiderStatesMode(ui8BiasIdx)));
         end
 
         function testPiecewiseAndSingleStepMatchForConstantLinearCase(testCase)

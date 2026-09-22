@@ -16,6 +16,8 @@ function tests = testLidarAttitudeBias
 %% CHANGELOG
 % 09-09-2026  Pietro Califano, Codex gpt-6    Validate TF-axis bias and consider sensitivity.
 % 09-09-2026  Pietro Califano, Codex gpt-6    Cover scalar rejection boundaries and fixed-capacity storage.
+% 19-09-2026  Pietro Califano, Codex gpt-5.6  Preserve estimated centroid bias without image observations.
+% 19-09-2026  Pietro Califano, Codex gpt-5.6  Preserve bias policy through rejected and accepted centroids.
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % EKF_SlideWindow_FullCov_ObsUp, ComputeFiniteDiffJacobian, RayEllipsoidIntersection.
@@ -75,7 +77,7 @@ for bConsider = [false, true]
         dExpectedInnovation = (1+dUnderweight)*dObs*dPrior*dObs' + dNoise;
         dGain = dPrior*dObs'/dExpectedInnovation;
 
-        % The filter holds centroid biases when no centroid measurement is present.
+        % This fixture explicitly configures centroid bias as a consider state.
         dGain(15:16) = 0;
         if bConsider
             dGain(7:9) = 0;
@@ -94,6 +96,72 @@ for bConsider = [false, true]
         verifyGreaterThan(testCase, norm(dObs(7:9)), 1e-3);
     end
 end
+end
+
+function testMissingCentroidPreservesEstimatedBias(testCase)
+strScenario = BuildFullCovObservationTestProblem();
+ui8BiasIdx = strScenario.strConstant.strStatesIdx.ui8CenMeasBiasIdx;
+strScenario.strMutable.bConsiderStatesMode(ui8BiasIdx) = false;
+strScenario.dxState(ui8BiasIdx) = [0.17; -0.12];
+
+% An empty observation batch must return the propagated prior untouched.
+strScenario.strMeasurements.bMeasTypeFlags(:) = false;
+[dxEmpty, dCovEmpty, ~, ~, ~, strEmpty] = RunUpdate_(strScenario);
+verifyEqual(testCase, dxEmpty(ui8BiasIdx), strScenario.dxState(ui8BiasIdx));
+verifyEqual(testCase, dCovEmpty, strScenario.dCovariance);
+verifyFalse(testCase, any(strEmpty.bConsiderStatesMode(ui8BiasIdx)));
+
+% A LiDAR-only update can correct the estimated bias through cross-covariance.
+strScenario.strMeasurements.bMeasTypeFlags(3) = true;
+[dxLidar, ~, dResidual, dJacobian, dInnovation, strLidar] = RunUpdate_(strScenario);
+dGain = strScenario.dCovariance * dJacobian(1, 1:size(strScenario.dCovariance, 1))' / ...
+    dInnovation(1, 1);
+verifyGreaterThan(testCase, norm(dGain(ui8BiasIdx)), 0);
+verifyEqual(testCase, dxLidar(ui8BiasIdx), ...
+    strScenario.dxState(ui8BiasIdx) + dGain(ui8BiasIdx) * dResidual(1), ...
+    'AbsTol', 2e-13);
+verifyFalse(testCase, any(strLidar.bConsiderStatesMode(ui8BiasIdx)));
+end
+
+function testRejectedAndAcceptedCentroidKeepEstimationPolicy(testCase)
+strScenario = BuildFullCovObservationTestProblem();
+ui8BiasIdx = strScenario.strConstant.strStatesIdx.ui8CenMeasBiasIdx;
+strScenario.strMutable.bConsiderStatesMode(ui8BiasIdx) = false;
+strScenario.dxState(ui8BiasIdx) = [0.17; -0.12];
+strScenario.strMutable.i8CentroidingAlgorithmMode = uint8(1);
+strScenario.strMutable.dReferenceMetricRadius = 2;
+strScenario.strMutable.dMeanInstFOVinRadPx = 1e-3;
+strScenario.strMutable.dKcam = [500, 0, 512; 0, 500, 512; 0, 0, 1];
+strScenario.strDynamics.strBody3rdData(1).strOrbitData.dChbvPolycoeffs(:) = 0;
+strScenario.strDynamics.strBody3rdData(1).strOrbitData.dChbvPolycoeffs(1:3:9) = ...
+    [20; 5; 3];
+strScenario.strMeasurements.bMeasTypeFlags = logical([0; 1; 0]);
+
+% A rejected image leaves the propagated prior intact without switching the
+% bias to consider mode; the next accepted image can then correct it.
+dZeroMeasurement = zeros(2,1);
+dPredictionResidual = EvaluateCentroidObservation( ...
+    strScenario.dxState, strScenario.dTimestamps, dZeroMeasurement, ...
+    strScenario.strDynamics, strScenario.strModel, ...
+    strScenario.strMutable, strScenario.strConstant);
+strScenario.strMeasurements.dRangeLidarCentroid(1:2) = ...
+    -dPredictionResidual + [2; -1];
+strScenario.strMutable.bEnableEditing = true;
+strScenario.strMutable.dMahaDist2MeasThr = 0;
+strScenario.strMutable.ui32MaxMeasEditingOccurrence = uint32(3);
+[dxRejected, dCovRejected, ~, ~, ~, strRejected] = RunUpdate_(strScenario);
+verifyEqual(testCase, dxRejected, strScenario.dxState);
+verifyEqual(testCase, dCovRejected, strScenario.dCovariance);
+verifyFalse(testCase, any(strRejected.bConsiderStatesMode(ui8BiasIdx)));
+
+strScenario.strMutable.bEnableEditing = false;
+[dxAccepted, ~, ~, dJacobian, dInnovation, strAccepted] = ...
+    RunUpdate_(strScenario);
+verifyGreaterThan(testCase, norm(dJacobian(1:2,ui8BiasIdx), 'fro'), 0);
+verifyGreaterThan(testCase, min(diag(dInnovation(1:2,1:2))), 0);
+verifyGreaterThan(testCase, norm(dxAccepted(ui8BiasIdx) - ...
+    strScenario.dxState(ui8BiasIdx)), 0);
+verifyFalse(testCase, any(strAccepted.bConsiderStatesMode(ui8BiasIdx)));
 end
 
 function testSphericalLidarHasNoTargetBiasSensitivity(testCase)

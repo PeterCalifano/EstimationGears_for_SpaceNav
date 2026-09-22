@@ -15,11 +15,12 @@ function strBatch = InitObservationBatch(ui32StateCapacity, ui32MeasCapacity, ..
 % ui32SensorCapacity    Number of sensor slots. All capacities are compile-time constants.
 % ---------------------------------------------------------------------------------------------------
 %% OUTPUT
-% strBatch              dResidual, dJacobian, dNoiseCov, dCrossCov, ui32RowRanges and ui32RowCount.
-%                       Arrays retain their capacities when sensors are absent.
+% strBatch              Numerical observation arrays plus explicit model identity, availability, source epochs,
+%                       row ranges and active-row count. Arrays retain their capacities when sensors are absent.
 % ---------------------------------------------------------------------------------------------------
 %% CHANGELOG
 % 09-09-2026  Pietro Califano, Codex gpt-6    Extract observation-model ownership.
+% 19-09-2026  Pietro Califano, Codex gpt-5.6  Add order-independent observation provenance.
 % ---------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % None.
@@ -43,6 +44,11 @@ strBatch.dResidual = zeros(ui32MeasCapacity, 1);
 strBatch.dJacobian = zeros(ui32MeasCapacity, ui32StateCapacity);
 strBatch.dNoiseCov = zeros(ui32MeasCapacity, ui32MeasCapacity);
 strBatch.dCrossCov = zeros(ui32StateCapacity, ui32MeasCapacity);
+strBatch.ui8ObservationModelId = zeros(ui32SensorCapacity, 1, 'uint8');
+strBatch.ui8ModelResidualCapacity = zeros(ui32SensorCapacity, 1, 'uint8');
+strBatch.dMeasurementTimestamp = nan(ui32SensorCapacity, 1);
+strBatch.bMeasurementReceived = false(ui32SensorCapacity, 1);
+strBatch.bPredictionValid = false(ui32SensorCapacity, 1);
 strBatch.ui32RowRanges = zeros(ui32SensorCapacity, 2, 'uint32');
 strBatch.ui32RowCount = uint32(0);
 end

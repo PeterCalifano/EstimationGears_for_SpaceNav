@@ -8,7 +8,7 @@ function [strBatch, dxPrediction, strFilterMutabConfig] = BuildNavObservationBat
 % Decode the navigation sensor bus and insert complete unwhitened observations in LiDAR,
 % centroid, relative-direction order. Input offsets follow received flags; output offsets
 % follow successful predictions. The caller owns covariance/information updates and editing.
-% Return existing prediction-bias resets and consider-mode changes explicitly.
+% Sensor availability does not alter configured state-estimation policy or propagated bias states.
 % ---------------------------------------------------------------------------------------------------
 %% INPUT
 % dxPrediction             Nominal current/window state used for prediction.
@@ -21,13 +21,16 @@ function [strBatch, dxPrediction, strFilterMutabConfig] = BuildNavObservationBat
 % strFilterConstConfig      Constant navigation state layout and storage capacities.
 % ---------------------------------------------------------------------------------------------------
 %% OUTPUT
-% strBatch                 Fixed residual/H/R/N arrays, sensor row ranges and active count.
-% dxPrediction             Nominal state after existing prediction-bias resets.
-% strFilterMutabConfig      Updated LiDAR failure flag and centroid consider mode.
+% strBatch                 Fixed residual/H/R/N arrays plus model identity, source epoch, availability,
+%                          prediction validity, sensor row ranges, and active count.
+% dxPrediction             Nominal state after any valid LiDAR prediction correction.
+% strFilterMutabConfig      Updated LiDAR failure flag; state-estimation policy is preserved.
 % ---------------------------------------------------------------------------------------------------
 %% CHANGELOG
 % 09-09-2026  Pietro Califano, Codex gpt-6    Extract observation-model ownership.
 % 10-09-2026  Pietro Califano, Codex gpt-6    Remove the obsolete orbit-only ablation selector.
+% 19-09-2026  Pietro Califano, Codex gpt-5.6  Preserve estimated bias dynamics across image gaps.
+% 19-09-2026  Pietro Califano, Codex gpt-5.6  Retain typed observation provenance for diagnostics.
 % ---------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % InitObservationBatch, InsertObservationBlock, EvaluateLidarObservation,
@@ -54,6 +57,23 @@ strBatch = InitObservationBatch(coder.const(uint32(strFilterConstConfig.ui32Full
     coder.const(uint32(strFilterConstConfig.ui16MaxResidualsVecSize)), uint32(3));
 bReceivedMeas = strMeasBus.bMeasTypeFlags;
 
+% Map measurement-bus channels to stable observation identities once. All
+% downstream consumers use these IDs and row ranges rather than slot order.
+strBatch.ui8ObservationModelId(:) = uint8([ ...
+    EnumRecursiveObservationModel.LIDAR_RANGE; ...
+    EnumRecursiveObservationModel.IMAGE_CENTROID; ...
+    EnumRecursiveObservationModel.RELATIVE_DIRECTION]);
+
+strBatch.ui8ModelResidualCapacity(:) = uint8([1; 2; 3]);
+strBatch.bMeasurementReceived(:) = bReceivedMeas([3; 2; 1]);
+strBatch.dMeasurementTimestamp(:) = strMeasBus.dMeasTimetags([3; 2; 1]);
+
+for ui32ModelIndex = uint32(1):coder.const(uint32(size(strBatch.ui32RowRanges, 1)))
+    if ~strBatch.bMeasurementReceived(ui32ModelIndex)
+        strBatch.dMeasurementTimestamp(ui32ModelIndex) = NaN;
+    end
+end
+
 % Lidar model block
 if bReceivedMeas(3)
     [dResidual, dJacobian, dVariance, bValid, dxPrediction, strFilterMutabConfig] = ...
@@ -62,20 +82,13 @@ if bReceivedMeas(3)
     if bValid
         strBatch = InsertObservationBlock(strBatch, dResidual, dJacobian, dVariance, ...
             zeros(ui32StateSize, 1), uint32(1));
+        strBatch.bPredictionValid(1) = true;
     end
 end
 
-% Centroiding model block
-% The centroid bias policy is independent of LiDAR prediction success.
-bHasCentroidBias = coder.const(~isempty(strFilterConstConfig.strStatesIdx.ui8CenMeasBiasIdx));
-if bHasCentroidBias
-    strFilterMutabConfig.bConsiderStatesMode(strFilterConstConfig.strStatesIdx.ui8CenMeasBiasIdx) = ...
-        ~bReceivedMeas(2);
-    if ~bReceivedMeas(2)
-        dxPrediction(strFilterConstConfig.strStatesIdx.ui8CenMeasBiasIdx) = 0;
-    end
-end
-
+% Centroiding model block. An image gap contributes no centroid rows; the
+% configured bias state and its time-propagated prior remain available to
+% other measurements through cross-covariance.
 if bReceivedMeas(2)
     ui32InputRows = uint32(0:1) + uint32(1) + uint32(bReceivedMeas(3));
     [dCentroidResidual, dCentroidJac, dCentroidCov] = EvaluateCentroidObservation( ...
@@ -84,6 +97,7 @@ if bReceivedMeas(2)
     
     strBatch = InsertObservationBlock(strBatch, dCentroidResidual, dCentroidJac, dCentroidCov, ...
         zeros(ui32StateSize, 2), uint32(2));
+    strBatch.bPredictionValid(2) = true;
     
     if coder.target('MATLAB') || coder.target('MEX')
         fprintf('Centroiding: OK.\t');
@@ -99,6 +113,7 @@ if bReceivedMeas(1)
     
     strBatch = InsertObservationBlock(strBatch, dDirectionResidual, dDirectionJac, dDirectionCov, ...
         dDirectionCrossCov, uint32(3));
+    strBatch.bPredictionValid(3) = true;
 
     if coder.target('MATLAB') || coder.target('MEX')
         fprintf('Direction of motion update: OK.\t');

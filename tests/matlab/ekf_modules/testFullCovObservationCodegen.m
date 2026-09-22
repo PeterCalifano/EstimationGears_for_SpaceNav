@@ -18,6 +18,7 @@ function tests = testFullCovObservationCodegen
 % 09-09-2026  Pietro Califano, Codex gpt-6    Verify fixed-size generated observation updates.
 % 09-09-2026  Pietro Califano, Codex gpt-6    Exercise zero and nonzero camera lever arms.
 % 10-09-2026  Pietro Califano, Codex gpt-6    Cross-compile both constant window-frame modes.
+% 19-09-2026  Pietro Califano, Codex gpt-5.6  Verify generated recursive-update diagnostics parity.
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % MATLAB Coder, BuildFullCovObservationTestProblem, EKF_SlideWindow_FullCov_ObsUp.
@@ -77,8 +78,8 @@ for bCorrelated = [false, true]
                     strScenario.strMutable.i8CentroidingAlgorithmMode = uint8(bConsider);
                     strScenario.strMeasurements.bMeasTypeFlags = logical(bitget(ui8Mask, uint8(1:3)))';
                     cellInputs = BuildInputs_(strScenario);
-                    cellMatlab = cell(1, 10);
-                    cellMex = cell(1, 10);
+                    cellMatlab = cell(1, 11);
+                    cellMex = cell(1, 11);
                     [cellMatlab{:}] = EKF_SlideWindow_FullCov_ObsUp(cellInputs{:});
                     [cellMex{:}] = FullCovObsFixed_test_mex(cellInputs{:});
                     for ui32Output = [1, 2, 3, 6, 7, 8, 9, 10]
@@ -87,6 +88,7 @@ for bCorrelated = [false, true]
                     end
                     verifyEqual(testCase, cellMex{4}, cellMatlab{4});
                     verifyEqual(testCase, cellMex{5}, cellMatlab{5});
+                    VerifyRecursiveDiagnostics_(testCase, cellMex{11}, cellMatlab{11});
                 end
             end
         end
@@ -131,8 +133,8 @@ VerifyNativeOutputs_(testCase, BuildInputs_(strScenario));
 end
 
 function VerifyNativeOutputs_(testCase, cellInputs)
-cellMatlab = cell(1, 10);
-cellMex = cell(1, 10);
+cellMatlab = cell(1, 11);
+cellMex = cell(1, 11);
 [cellMatlab{:}] = EKF_SlideWindow_FullCov_ObsUp(cellInputs{:});
 [cellMex{:}] = FullCovObsFixed_test_mex(cellInputs{:});
 for ui32Output = [1, 2, 3, 6, 7, 8, 9, 10]
@@ -140,6 +142,30 @@ for ui32Output = [1, 2, 3, 6, 7, 8, 9, 10]
 end
 verifyEqual(testCase, cellMex{4}, cellMatlab{4});
 verifyEqual(testCase, cellMex{5}, cellMatlab{5});
+VerifyRecursiveDiagnostics_(testCase, cellMex{11}, cellMatlab{11});
+end
+
+function VerifyRecursiveDiagnostics_(testCase, strActual, strExpected)
+% Compare numerical diagnostics with the observation-update tolerance while
+% requiring exact parity for schema, provenance, and editing decisions.
+cellExactFields = { ...
+    'ui8ObservationModelId', 'ui8ModelResidualCapacity', ...
+    'bMeasurementReceived', 'bPredictionValid', 'ui32RowRanges', ...
+    'ui8ResidualSize', 'ui32ActiveRowCount', 'bRejectionEvaluated', ...
+    'bRejectionProposed', 'bRejectionApplied', 'bUsedInUpdate'};
+for ui32FieldIndex = uint32(1):uint32(numel(cellExactFields))
+    charFieldName = cellExactFields{ui32FieldIndex};
+    verifyEqual(testCase, strActual.(charFieldName), strExpected.(charFieldName));
+end
+
+cellFloatingFields = { ...
+    'dApplicationTimestamp', 'dMeasurementTimestamp', 'dResidual', ...
+    'dInnovationCov', 'dNisByModel'};
+for ui32FieldIndex = uint32(1):uint32(numel(cellFloatingFields))
+    charFieldName = cellFloatingFields{ui32FieldIndex};
+    verifyEqual(testCase, strActual.(charFieldName), strExpected.(charFieldName), ...
+        'AbsTol', 2e-9, 'RelTol', 2e-12);
+end
 end
 
 function testArm64StandaloneBuild(testCase)

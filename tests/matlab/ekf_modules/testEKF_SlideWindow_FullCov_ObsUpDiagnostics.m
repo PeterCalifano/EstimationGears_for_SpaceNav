@@ -19,6 +19,64 @@ classdef testEKF_SlideWindow_FullCov_ObsUpDiagnostics < matlab.unittest.TestCase
             self.verifyTrue(all(isfinite(dxStateCovPost), 'all'));
         end
 
+        function testLidarUpdateReturnsTypedInnovationDiagnostics(self)
+            strScenario = BuildLidarDiagnosticScenario_();
+            strScenario.dStateTimetag = 42.0;
+            strScenario.strMeasBus.dMeasTimetags(3) = 41.5;
+
+            [~, ~, strDiagnostics] = RunObservationUpdate_(strScenario);
+
+            self.verifyEqual(strDiagnostics.dApplicationTimestamp, 42.0);
+            self.verifyEqual(strDiagnostics.ui8ObservationModelId, uint8([ ...
+                EnumRecursiveObservationModel.LIDAR_RANGE; ...
+                EnumRecursiveObservationModel.IMAGE_CENTROID; ...
+                EnumRecursiveObservationModel.RELATIVE_DIRECTION]));
+            self.verifyEqual(strDiagnostics.dMeasurementTimestamp(1), 41.5);
+            self.verifyEqual(strDiagnostics.bMeasurementReceived, logical([1; 0; 0]));
+            self.verifyEqual(strDiagnostics.bPredictionValid, logical([1; 0; 0]));
+            self.verifyEqual(strDiagnostics.ui32RowRanges(1, :), uint32([1, 1]));
+            self.verifyEqual(strDiagnostics.ui8ResidualSize, uint8([1; 0; 0]));
+            self.verifyTrue(isfinite(strDiagnostics.dResidual(1)));
+            self.verifyTrue(isfinite(strDiagnostics.dInnovationCov(1, 1)));
+            self.verifyTrue(isfinite(strDiagnostics.dNisByModel(1)));
+            self.verifyFalse(strDiagnostics.bRejectionEvaluated(1));
+            self.verifyTrue(strDiagnostics.bUsedInUpdate(1));
+        end
+
+        function testEditingOverrideRetainsProposalAndUse(self)
+            strScenario = BuildLidarDiagnosticScenario_();
+            strScenario.strMeasBus.dRangeLidarCentroid(1) = ...
+                strScenario.strMeasBus.dRangeLidarCentroid(1) + 0.25;
+            [~, ~, strBaseline] = RunObservationUpdate_(strScenario);
+            dNis = strBaseline.dNisByModel(1);
+            self.assertGreaterThan(dNis, 0);
+
+            strScenario.strFilterMutabConfig.bEnableEditing = true;
+            strScenario.strFilterMutabConfig.dMahaDist2MeasThr = 0.5 * dNis;
+            strScenario.strFilterMutabConfig.ui32MeasEditingCounter = ...
+                strScenario.strFilterMutabConfig.ui32MaxMeasEditingOccurrence + uint32(1);
+            [~, ~, strDiagnostics] = RunObservationUpdate_(strScenario);
+
+            self.verifyTrue(strDiagnostics.bRejectionEvaluated(1));
+            self.verifyTrue(strDiagnostics.bRejectionProposed(1));
+            self.verifyFalse(strDiagnostics.bRejectionApplied(1));
+            self.verifyTrue(strDiagnostics.bUsedInUpdate(1));
+        end
+
+        function testAllMissingMeasurementsReturnEmptyAttempt(self)
+            strScenario = BuildLidarDiagnosticScenario_();
+            strScenario.strMeasBus.bMeasTypeFlags(:) = false;
+
+            [~, ~, strDiagnostics] = RunObservationUpdate_(strScenario);
+
+            self.verifyEqual(strDiagnostics.ui32ActiveRowCount, uint32(0));
+            self.verifyFalse(any(strDiagnostics.bMeasurementReceived));
+            self.verifyFalse(any(strDiagnostics.bPredictionValid));
+            self.verifyTrue(all(isnan(strDiagnostics.dResidual)));
+            self.verifyTrue(all(isnan(strDiagnostics.dNisByModel)));
+            self.verifyFalse(any(strDiagnostics.bUsedInUpdate));
+        end
+
         function testRejectsNonFiniteActivePriorState(self)
             strScenario = BuildEntryDiagnosticScenario_();
             strScenario.dxStatePrior(1) = NaN;
@@ -125,8 +183,8 @@ strScenario = struct('dxStatePrior', dxStatePrior, ...
                      'strFilterConstConfig', strFilterConstConfig);
 end
 
-function [dxStatePost, dxStateCovPost] = RunObservationUpdate_(strScenario)
-[dxStatePost, dxStateCovPost] = ...
+function [dxStatePost, dxStateCovPost, strUpdateDiagnostics] = RunObservationUpdate_(strScenario)
+[dxStatePost, dxStateCovPost, ~, ~, ~, ~, ~, ~, ~, ~, strUpdateDiagnostics] = ...
     EKF_SlideWindow_FullCov_ObsUp(strScenario.dxStatePrior, ...
                                   strScenario.dxStateCovPrior, ...
                                   strScenario.dStateTimetag, ...
