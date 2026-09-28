@@ -1,49 +1,55 @@
-function [drvSRPwithBiasJac] = evalJAC_SRPwithBias(dxState, ...
-                                                   strDynParams, ...
-                                                   strFilterMutabConfig, ...
-                                                   strFilterConstConfig) %#codegen
-arguments
-    dxState                 (:,1) double 
-    strDynParams            (1,1) struct
-    strFilterMutabConfig    (1,1) struct
-    strFilterConstConfig    (1,1) struct {coder.mustBeConst}
-end
-%% PROTOTYPE
-% [drvSRPwithBiasJac] = evalJAC_SRPwithBias(dxState, ...
-%                                           strDynParams, ...
-%                                           strFilterConstConfig)
+function drvSRPwithBiasJac = evalJAC_SRPwithBias(dxState, ...
+                                               strDynParams, ...
+                                               strFilterMutabConfig, ...
+                                               strFilterConstConfig) %#codegen
+%% SIGNATURE
+% drvSRPwithBiasJac = evalJAC_SRPwithBias(dxState, strDynParams, ...
+%                                       strFilterMutabConfig, strFilterConstConfig)
 % -------------------------------------------------------------------------------------------------------------
 %% DESCRIPTION
-% Function computing the jacobian of velocity RHS wrt SRP cannonbal acceleration, with optional SRP
-% coefficient bias. Sun position is assumed as first entry in strDynParams.dBodyEphemeris.
-% ACHTUNG: this function currently assumes all inputs are in meters for computation of SRP coefficient.
+% Differentiate cannonball SRP acceleration with respect to position and an optional additive
+% acceleration-coefficient bias. Recompute pressure from the onboard reference at 1 AU, including
+% its inverse-square position dependence. Return zero when SRP is disabled or Sun data are absent.
+% Use the configured metre/kilometre dynamics units for state, pressure, area, and bias.
 % -------------------------------------------------------------------------------------------------------------
 %% INPUT
-% dxState                 (:,1) double
-% strDynParams            (1,1) struct
-% strFilterMutabConfig    (1,1) struct
-% strFilterConstConfig    (1,1) struct {coder.mustBeConst}
+% dxState                 (:,1) double   Filter state, with optional additive SRP coefficient bias.
+% strDynParams            (1,1) struct   Sun position in dBodyEphemerides(1:3), eclipse flag, and
+%                                     spacecraft data; strSRPdata.dP_SRP0 uses selected pressure units.
+% strFilterMutabConfig    (1,1) struct   Mutable settings retained by the common filter interface.
+% strFilterConstConfig    (1,1) struct   Fixed state indices and length-scale selection.
 % -------------------------------------------------------------------------------------------------------------
 %% OUTPUT
-% drvSRPwithBiasJac
+% drvSRPwithBiasJac       (6,3 or 4) double   Position/velocity derivative rows; columns are position
+%                                         components followed by the bias when its state exists.
 % -------------------------------------------------------------------------------------------------------------
 %% CHANGELOG
 % 24-02-2025    Pietro Califano     First version implemented from evalJAC_DynLEO
 % 07-05-2025    Pietro Califano     Modify jacobian to include dependence of P_SRP from position
 % 07-12-2025    Pietro Califano     [MAJOR] Change interface and debug implementation of jacobian (was
 %                                           incorrectly including P_SRP dependence)
+% 29-09-2026    Pietro Califano, Codex gpt-6    Retain configured reference pressure and align
+%                                             disabled-SRP derivatives.
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
-% [-]
+% ComputeSolarRadPressure
 % -------------------------------------------------------------------------------------------------------------
+
+arguments (Input)
+    dxState                 (:,1) double
+    strDynParams            (1,1) struct
+    strFilterMutabConfig    (1,1) struct %#ok<INUSA> Retain the common filter call signature.
+    strFilterConstConfig    (1,1) struct {coder.mustBeConst}
+end
+
+arguments (Output)
+    drvSRPwithBiasJac (:,:) double
+end
 
 %% Function code
 
-% Get indices for allocation
+% Allocate the fixed orbit rows and the optional bias column from the configured state layout.
 ui8PosVelIdx        = strFilterConstConfig.strStatesIdx.ui8posVelIdx;
-% ui8attBiasDeltaIdx  = strFilterConstConfig.strStatesIdx.ui8attBiasDeltaIdx;
-% ui8ResidualAccelIdx = strFilterConstConfig.strStatesIdx.ui8ResidualAccelIdx;
-% ui8LidarMeasBiasIdx = strFilterConstConfig.strStatesIdx.ui8LidarMeasBiasIdx;
 
 if coder.const(isfield(strFilterConstConfig.strStatesIdx, "ui8CoeffSRPidx"))
     ui8CoeffSRPidx = strFilterConstConfig.strStatesIdx.ui8CoeffSRPidx;
@@ -60,6 +66,11 @@ else
 end
 
 %% Compute distance from the Sun and P_SRP
+% Preserve the allocated shape while suppressing derivatives of an inactive force.
+if strDynParams.bIsInEclipse || isempty(strDynParams.dBodyEphemerides)
+    return;
+end
+
 dSunPositionFromMain_IN = strDynParams.dBodyEphemerides(1:3);
 
 bSunPosValid = all(isfinite(dSunPositionFromMain_IN)) && any(abs(dSunPositionFromMain_IN) > eps('single'));
@@ -77,39 +88,30 @@ end
 
 dInvNormSunPositionFromSC = 1/dNormSunPositionFromSC_IN;
 
-% Compute SRP value from SRP0 at 1AU
-[strDynParams.strSRPdata.dP_SRP, ~] = ComputeSolarRadPressure(dInvNormSunPositionFromSC, ...
-                                                              strFilterConstConfig.bUseKilometersScale);
+% Use the same onboard pressure and zero-pressure policy as the orbital RHS.
+strDynParams.strSRPdata.dP_SRP = ComputeSolarRadPressure(dInvNormSunPositionFromSC, ...
+    strFilterConstConfig.bUseKilometersScale, strDynParams.strSRPdata.dP_SRP0);
+if strDynParams.strSRPdata.dP_SRP == 0.0
+    return;
+end
 
-%% Compute jacobian wrt SRP acceleration
-% DEVNOTE this coefficient is recomputed here, instead of re-using calculation from PropagateDyn
+%% Differentiate position dependence
+% Recompute the coefficient at this state so pressure and its derivative share one geometry.
 dCoeffSRP = (strDynParams.strSRPdata.dP_SRP * strDynParams.strSCdata.dReflCoeff * ...
-             strDynParams.strSCdata.dA_SRP)/strDynParams.strSCdata.dSCmass; % Move to compute outside, since this
+             strDynParams.strSCdata.dA_SRP)/strDynParams.strSCdata.dSCmass;
 
-%%% Compute Jacobian of position and velocity
-% Jacobian neglecting dependence of P_SRP due to position
-% drvSRPwithBiasJac(ui8PosVelIdx(4:6), 1:3) = - ( dCoeffSRP + dBiasCoeffSRP ) * ( (1 / dNormSunPositionFromSC_IN) * eye(3)  ...
-%                                                                              - (1 /( dNormSunPositionFromSC_IN^3 )) ...
-%                                                                                  * (dSunPositionFromSC_IN * dSunPositionFromSC_IN') ) ; % [6x3]
-
-% Compute auxiliary coefficient
+% Include inverse-square pressure and Sun-line rotation; keep bias independent of pressure.
 dInvNormSunPositionFromSC3 = dInvNormSunPositionFromSC^3;
+drvSRPwithBiasJac(ui8PosVelIdx(4:6), 1:3) = ...
+    (dCoeffSRP + dBiasCoeffSRP)*dInvNormSunPositionFromSC * eye(3) ...
+    - (3*dCoeffSRP + dBiasCoeffSRP)*(dInvNormSunPositionFromSC3 * ...
+        (dSunPositionToSC_IN * transpose(dSunPositionToSC_IN)));
 
-% Complete jacobian including dependence of P_SRP from spacecraft position
-% Bias is assumed independent of position
-drvSRPwithBiasJac(ui8PosVelIdx(4:6), 1:3) = (dCoeffSRP + dBiasCoeffSRP)*dInvNormSunPositionFromSC * eye(3)  ...
-                                                      - (3*dCoeffSRP + dBiasCoeffSRP)*( dInvNormSunPositionFromSC3 * ...
-                                                                (dSunPositionToSC_IN * transpose(dSunPositionToSC_IN)) ); % [3x3]
-
-
-
-
-%% Compute jacobian wrt SRP bias coefficient
+%% Differentiate the additive bias
 if coder.const(ui8CoeffSRPidx > 0)
-    % DEVNOTE not sure if need to be disabled because in principle the stochastic process affecting the C_SRP
-    % coefficient does not enter the deterministic part of the dynamics (hence in A).
-    dJacCoeffSRP = 1.0 * (dInvNormSunPositionFromSC * dSunPositionToSC_IN);
-    drvSRPwithBiasJac(4:6, 4) = dJacCoeffSRP; % [6x1]
+    % Use the unit Sun-to-spacecraft direction as the derivative of the additive acceleration.
+    dJacCoeffSRP = dInvNormSunPositionFromSC * dSunPositionToSC_IN;
+    drvSRPwithBiasJac(4:6, 4) = dJacCoeffSRP;
 end
 
 end
