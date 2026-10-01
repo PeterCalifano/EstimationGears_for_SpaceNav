@@ -10,6 +10,7 @@ function strCodegen = CodegenSrpLutFilterModules(charOutputRoot, dxState, strDyn
 % Remove that constant input from MEX calls and disable dynamic allocation and
 % variable sizing. Default MEX and Jacobian libraries to one output. Retain
 % all RHS outputs for C++ libraries unless a smaller prefix is requested.
+% Compile transverse inclusion into each target; omit vector storage in scalar targets.
 % Request two Jacobian outputs explicitly to reuse acceleration in the same call.
 % Example: strCodegen = CodegenSrpLutFilterModules(charNewRoot, dxState, strDynParams, ...
 %     strMutable, strConstant, charTarget='lib', charEntryPoint='EvalJac_SRPLutWithBias');
@@ -19,22 +20,24 @@ function strCodegen = CodegenSrpLutFilterModules(charOutputRoot, dxState, strDyn
 % charOutputRoot          New empty directory outside source trees.
 % dxState                 Representative fixed filter state.
 % strDynParams            Resolved Sun/pressure/mass and supplied pointing data.
-% strFilterMutabConfig    Runtime transverse/consider settings.
-% strFilterConstConfig    Constant units, state mapping and numeric strResponseLut.
-% kwargs.charTarget      'mex' or 'lib'; default 'mex'.
-% kwargs.charKernelName  Generated basename; empty derives the selected entry name.
-% kwargs.charEntryPoint  EvalFilterSRPLutWithBias or EvalJac_SRPLutWithBias.
-% kwargs.ui8OutputCount  Leading outputs to generate; zero selects the target default.
-% kwargs.bForceOnly      Compatibility option selecting one RHS output; default false.
+% strFilterMutabConfig     Runtime consider-state settings.
+% strFilterConstConfig     Constant transverse selection, units, state mapping and numeric strResponseLut.
+% kwargs.charTarget       'mex' or 'lib'; default 'mex'.
+% kwargs.charKernelName   Generated basename; empty derives the selected entry name.
+% kwargs.charEntryPoint   EvalFilterSRPLutWithBias or EvalJac_SRPLutWithBias.
+% kwargs.ui8OutputCount   Leading outputs to generate; zero selects the target default.
+% kwargs.bForceOnly       Compatibility option selecting one RHS output; default false.
 % -------------------------------------------------------------------------------------------------------------
 %% OUTPUT
 % strCodegen              Target/signature/capacity and fixed-allocation metadata.
 % -------------------------------------------------------------------------------------------------------------
 %% CHANGELOG
+% 01-10-2026  Pietro Califano, Codex GPT-6  Correct nodal transverse samples and constant inclusion.
 % 29-09-2026  Pietro Califano, Codex gpt-6  Generate the optional SRP model without orbit wrappers.
 % 29-09-2026  Pietro Califano, Codex gpt-6  Specialize generated output prefixes.
 % 30-09-2026  Pietro Califano, Codex gpt-6  Preserve Jacobian defaults with optional force reuse.
 % 01-10-2026  Pietro Califano, Codex gpt-6  Rename the filter-module code-generation builder.
+% 01-10-2026  Pietro Califano, Codex gpt-6  Document the shared generated types and build steps.
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % MATLAB Coder, EvalFilterSRPLutWithBias, EvalJac_SRPLutWithBias, ValidateSrpResponseLut.
@@ -52,12 +55,21 @@ arguments (Input)
     kwargs.bForceOnly (1, 1) logical = false
     kwargs.ui8OutputCount (1, 1) uint8 = uint8(0)
 end
+
 arguments (Output)
     strCodegen (1, 1) struct
 end
 
 % Validate the immutable table and build prerequisites before creating artifacts.
 ValidateSrpResponseLut(strFilterConstConfig.strResponseLut);
+if strFilterConstConfig.bIncludeTransverseSrp
+    assert(isfield(strFilterConstConfig.strResponseLut, 'dTransverseForcePerPressure'), ...
+        'CodegenSrpLutFilterModules:MissingTransverse', 'Supply transverse samples for this specialization.');
+elseif isfield(strFilterConstConfig.strResponseLut, 'dTransverseForcePerPressure')
+    % Keep vector storage out of the scalar generated configuration.
+    strFilterConstConfig.strResponseLut = ...
+        rmfield(strFilterConstConfig.strResponseLut, 'dTransverseForcePerPressure');
+end
 assert(exist('codegen', 'file') ~= 0, ...
     'CodegenSrpLutFilterModules:MissingCoder', 'Install MATLAB Coder before generating the model.');
 
@@ -106,8 +118,14 @@ objConfig.EnableVariableSizing = false;
 if strcmp(kwargs.charTarget, 'mex')
     objConfig.ConstantInputs = 'Remove';
 end
-cellArguments = {dxState, coder.typeof(strDynParams), ...
-    coder.typeof(strFilterMutabConfig), coder.Constant(strFilterConstConfig)};
+
+% Name runtime inputs before entering helpers; preserve names on nested pointing data.
+objDynParamsType = coder.typeof(strDynParams);
+objDynParamsType.Fields.strSrpPointing = ...
+    coder.cstructname(objDynParamsType.Fields.strSrpPointing, 'SSrpPointing');
+objDynParamsType = coder.cstructname(objDynParamsType, 'SDynParams');
+objMutableConfigType = coder.cstructname(coder.typeof(strFilterMutabConfig), 'SFilterMutabConfig');
+cellArguments = {dxState, objDynParamsType, objMutableConfigType, coder.Constant(strFilterConstConfig)};
 codegen('-config', objConfig, kwargs.charEntryPoint, '-args', cellArguments, ...
         '-nargout', num2str(ui8OutputCount), ...
         '-d', fullfile(charOutputRoot, 'Build'), '-o', fullfile(charOutputRoot, charKernelName));
@@ -115,7 +133,8 @@ codegen('-config', objConfig, kwargs.charEntryPoint, '-args', cellArguments, ...
 % Return the generated interface and capacities for consumer verification.
 strCodegen = struct('charTarget', kwargs.charTarget, 'charOutputRoot', charOutputRoot, ...
     'charKernelName', charKernelName, 'charEntryPoint', kwargs.charEntryPoint, ...
-    'bFreezeTable', true, 'ui8OutputCount', ui8OutputCount, ...
+    'bFreezeTable', true, 'bIncludeTransverse', strFilterConstConfig.bIncludeTransverseSrp, ...
+    'ui8OutputCount', ui8OutputCount, ...
     'bForceOnly', strcmp(kwargs.charEntryPoint, 'EvalFilterSRPLutWithBias') && ui8OutputCount == 1, ...
     'bDynamicMemoryAllocation', false, 'bVariableSizing', false, ...
     'ui32AzimuthCapacity', uint32(size(strFilterConstConfig.strResponseLut.dAzimuth, 2)), ...

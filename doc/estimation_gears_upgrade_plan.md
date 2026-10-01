@@ -421,3 +421,61 @@ its caller harness. Confirm that source changes are identifier substitutions,
 one declaration-alignment correction and a changelog entry. Preserve generated
 model names and output contracts. Keep external validation artifacts under
 `/tmp/srp-filter-builder-rename-20261001-sgs4src5`.
+
+
+### Transverse SRP table correction - 1 October 2026
+
+- [x] Move only `bIncludeTransverseSrp` to constant filter configuration; keep
+      consider-state flags and numerical inputs mutable.
+- [x] Pass inclusion separately through the existing filter/shared orbital
+      interfaces; consume SimulationGears nodal transverse samples.
+- [x] Validate both scalar/transverse source and generated targets; review and
+      stage scoped source, test and documentation updates.
+
+Reviewer: Codex GPT-6. Pass twelve source unit/mode/bias cases, sixteen pole
+cases, the existing RK/STM checks and 34 fresh filter/dispatch MEX/C++ builds.
+Preserve optional-bias layouts, units, output pruning and runtime consider flags.
+Keep scalar generated targets free of vector storage. Report zero analyzer
+findings in the changed MATLAB files. Record complete commands, refinement
+metrics, resolved Coder discrepancies and storage checks in the SimulationGears
+worktree consolidation plan, section "Correct transverse SRP tables"; retain
+evidence under `/tmp/srp-transverse-correction-20261001-0160gjc4`.
+
+Stage only this correction and preserve unrelated plans and existing index
+entries. Keep recorded-dependency integration separate from composed-source
+validation. Run no mission simulation and create no commit.
+
+
+### Selected SRP acceleration diagnostics - 1 October 2026
+
+- [x] Rename the LEO acceleration record to `dAccSRP`; preserve its force law.
+- [x] Pass all eight existing LEO/third-body unit tests and the independent SRP
+      diagnostic check; introduce no MATLAB analyzer findings.
+- [x] Review and stage only the source/header change and this progress note.
+
+Reviewer: Codex GPT-6. Record cross-repo consumers and generated validation in
+the SimulationGears worktree consolidation plan's "Unify selected SRP
+acceleration diagnostics" section. Keep evidence under
+`/tmp/srp-diagnostics-unification-20261001-kgidqwta`; preserve unrelated work
+and dependency pointers. Create no commit.
+
+### Review EstimationGears after SimulationGears consolidation - 1 October 2026
+
+- [x] Compare all twelve staged files with the qualified SRP batch and verify
+      the SRP provider against SimulationGears commit `361076a`.
+- [x] Review the complete index for documentation, imperative comments,
+      formatting, readability and unnecessary duplication. Align continuation
+      arguments and specify transverse inclusion in the documented example.
+- [x] Rerun the filter source harness against the committed provider: pass twelve
+      unit/mode/bias cases, sixteen pole cases and RK/STM checks. Pass all eight
+      LEO/third-body tests and the independent selected-SRP diagnostic check.
+- [x] Report zero Code Analyzer findings in ten staged MATLAB files and clean
+      cached whitespace. Reuse the 34 generated filter/dispatch checks after
+      verifying that only comments and whitespace changed executable sources.
+- [ ] Complete user review and commit the twelve-file SRP batch.
+
+Reviewer: Codex GPT-6. Keep evidence under
+`/tmp/estimationgears-srp-consolidation-20261001-bt4i9_qn`. Use the reviewed
+SimulationGears worktree for these checks; keep dependency-pointer integration
+separate. Preserve unrelated plans, sibling indexes and dependency pointers.
+Run no mission simulation and create no commit.

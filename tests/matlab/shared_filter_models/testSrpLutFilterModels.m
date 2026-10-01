@@ -18,16 +18,21 @@ function strVerification = testSrpLutFilterModels()
 % strVerification   Contract counts and numerical discrepancies.
 % -------------------------------------------------------------------------------------------------------------
 %% CHANGELOG
+% 01-10-2026  Pietro Califano, Codex GPT-6  Cover nodal transverse data and constant inclusion.
 % 29-09-2026  Pietro Califano, Codex gpt-6  Validate optional SRP/filter integration and bias.
 % 30-09-2026  Pietro Califano, Codex gpt-6  Verify force reuse in the mapped Jacobian call.
 % 30-09-2026  Pietro Califano, Codex gpt-6  Review helper contracts and pole-case readability.
 % 30-09-2026  Pietro Califano, Codex gpt-6  Verify orbital model selection and optional bias inputs.
+% 01-10-2026  Pietro Califano, Codex gpt-6  Retain eclipse and attitude checks without penumbra inputs.
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % BuildSrpLutFilterTestFixture, EvalFilterSRPLutWithBias, EvalJac_SRPLutWithBias,
 % EvalFilterDynOrbit, EvalJac_SRPwithBias, EvalJac_InertialPosVelDyn,
 % IntegratorStepRK4, getDiscreteTimeSTM; SimulationGears test fixture.
 % -------------------------------------------------------------------------------------------------------------
+arguments (Input)
+end
+
 arguments (Output)
     strVerification (1, 1) struct
 end
@@ -50,7 +55,7 @@ for bKilometers = [false, true]
     [dxState, strParams, strMutable, strConstant] = BuildSrpLutFilterTestFixture(bKilometers);
     dLengthScale = 1 + 999 * double(bKilometers);
     for bTransverse = [false, true]
-        strMutable.bIncludeTransverseSrp = bTransverse;
+        strConstant.bIncludeTransverseSrp = bTransverse;
         for ui32BiasMode = uint32(1):uint32(3)
             strCaseConstant = strConstant;
             strCaseMutable = strMutable;
@@ -61,11 +66,11 @@ for bKilometers = [false, true]
             end
             [dAcceleration, dJacPosition, dJacBias] = EvalFilterSRPLutWithBias( ...
                 dxState, strParams, strCaseMutable, strCaseConstant);
-            [dSrpJacobian, dReusedAcceleration] = EvalJac_SRPLutWithBias( ...
+            [dJacSRPOrbital, dReusedAcceleration] = EvalJac_SRPLutWithBias( ...
                 dxState, strParams, strCaseMutable, strCaseConstant);
             assert(isequal(dReusedAcceleration, dAcceleration));
-            assert(isequal(dSrpJacobian(1:3, :), zeros(3, size(dSrpJacobian, 2))));
-            assert(norm(dSrpJacobian(4:6, 1:3) - dJacPosition, 'fro') == 0);
+            assert(isequal(dJacSRPOrbital(1:3, :), zeros(3, size(dJacSRPOrbital, 2))));
+            assert(norm(dJacSRPOrbital(4:6, 1:3) - dJacPosition, 'fro') == 0);
 
             % Differentiate actual SRP-only force and the existing complete orbit RHS.
             dNumericalSrp = zeros(3, 10);
@@ -108,9 +113,9 @@ for bKilometers = [false, true]
             dWithoutSrp = EvalFilterDynOrbit(0, dxState, strInactive, strCaseMutable, strCaseConstant);
             assert(norm(dFull(4:6) - dWithoutSrp(4:6) - dAcceleration) < 1e-20);
             if ui32BiasMode ~= 3
-                dSunUnit = (strParams.dBodyEphemerides - dxState(1:3));
-                dSunUnit = dSunUnit / norm(dSunUnit);
-                assert(norm(dSrpJacobian(4:6, 4) + 0.9 * dSunUnit) < 1e-14);
+                dPosSCtoSun_IN = strParams.dBodyEphemerides - dxState(1:3);
+                dSunDir_IN = dPosSCtoSun_IN / norm(dPosSCtoSun_IN);
+                assert(norm(dJacSRPOrbital(4:6, 4) + dSunDir_IN) < 1e-14);
             end
             ui32Cases = ui32Cases + 1;
         end
@@ -131,7 +136,7 @@ for bKilometers = [false, true]
     for dPoleSign = [-1, 1]
         strPoleParams.dBodyEphemerides = dxPole(1:3) + [0; 0; dPoleSign * 1e4] / dLengthScale;
         for bTransverse = [false, true]
-            strPoleMutable.bIncludeTransverseSrp = bTransverse;
+            strPoleConstant.bIncludeTransverseSrp = bTransverse;
             for bConsider = [false, true]
                 strPoleMutable.bConsiderStatesMode(7) = bConsider;
                 [dForce, dPoleJac, dBiasJac, bRegular] = EvalFilterSRPLutWithBias( ...
@@ -170,7 +175,7 @@ assert(norm(dJacSi - dJacKm, 'fro') < 1e-23 && norm(dBiasSi - dBiasKm) < 1e-14);
 % Exercise the retained table through real RK stages and the existing STM approximation.
 dMaxStmDifference = 0;
 for bTransverse = [false, true]
-    strMutableSi.bIncludeTransverseSrp = bTransverse;
+    strConstantSi.bIncludeTransverseSrp = bTransverse;
     [dxFinal, dPhi] = PropagateInterval_(dxSi, strSi, strMutableSi, strConstantSi);
     dNumericalPhi = zeros(10, 10);
     for ui32State = uint32(1):uint32(10)
@@ -209,7 +214,7 @@ fprintf('SRP-only filter contracts passed: %u unit/mode/bias cases; STM relative
 end
 
 function dMaxDifference = VerifyPointingChain_(dxState, strParams, strMutable, strConstant, dLengthScale)
-% Differentiate supplied attitude and illumination laws through the actual filter adapter.
+% Differentiate supplied attitude through the actual filter adapter.
 arguments (Input)
     dxState (10, 1) double
     strParams (1, 1) struct
@@ -217,20 +222,21 @@ arguments (Input)
     strConstant (1, 1) struct
     dLengthScale (1, 1) double
 end
+
 arguments (Output)
     dMaxDifference (1, 1) double
 end
 
 dAngularGradient = [2e-4, -1e-4, 3e-4; -3e-4, 2e-4, 1e-4; 1e-4, 3e-4, -2e-4] * dLengthScale;
-dIlluminationGradient = [1e-4, -2e-4, 3e-4] * dLengthScale;
-strParams.strSrpPointing.dIlluminationGradient = dIlluminationGradient;
 for ui32Axis = uint32(1):uint32(3)
-    strParams.strSrpPointing.dAttitudePositionPartials(:, :, ui32Axis) = ...
-        strParams.strSrpPointing.dDcm * CrossMatrix_(dAngularGradient(:, ui32Axis));
+    strParams.strSrpPointing.dJacDCMWrtPos_INfromSCB(:, :, ui32Axis) = ...
+        strParams.strSrpPointing.dDCM_INfromSCB * CrossMatrix_(dAngularGradient(:, ui32Axis));
 end
+
+% Compare attitude-dependent position partials in both transverse modes.
 dMaxDifference = 0;
 for bTransverse = [false, true]
-    strMutable.bIncludeTransverseSrp = bTransverse;
+    strConstant.bIncludeTransverseSrp = bTransverse;
     [~, dAnalytical] = EvalFilterSRPLutWithBias(dxState, strParams, strMutable, strConstant);
     dNumerical = zeros(3, 3);
     dStep = 1e-2 / dLengthScale;
@@ -240,12 +246,8 @@ for bTransverse = [false, true]
         strPlus = strParams;
         strMinus = strParams;
         dRotationStep = expm(CrossMatrix_(dAngularGradient(:, ui32Axis) * dStep));
-        strPlus.strSrpPointing.dDcm = strParams.strSrpPointing.dDcm * dRotationStep;
-        strMinus.strSrpPointing.dDcm = strParams.strSrpPointing.dDcm * dRotationStep.';
-        strPlus.strSrpPointing.dIllumination = strParams.strSrpPointing.dIllumination + ...
-            dIlluminationGradient(ui32Axis) * dStep;
-        strMinus.strSrpPointing.dIllumination = strParams.strSrpPointing.dIllumination - ...
-            dIlluminationGradient(ui32Axis) * dStep;
+        strPlus.strSrpPointing.dDCM_INfromSCB = strParams.strSrpPointing.dDCM_INfromSCB * dRotationStep;
+        strMinus.strSrpPointing.dDCM_INfromSCB = strParams.strSrpPointing.dDCM_INfromSCB * dRotationStep.';
         dNumerical(:, ui32Axis) = ( ...
             EvalFilterSRPLutWithBias(dxState + dxDelta, strPlus, strMutable, strConstant) ...
             - EvalFilterSRPLutWithBias(dxState - dxDelta, strMinus, strMutable, strConstant)) / (2 * dStep);
@@ -260,6 +262,7 @@ function dCrossMatrix = CrossMatrix_(dVector)
 arguments (Input)
     dVector (3, 1) double
 end
+
 arguments (Output)
     dCrossMatrix (3, 3) double
 end
@@ -278,19 +281,19 @@ arguments (Input)
 end
 
 strConstant.strResponseLut = BuildSrpLutTestFixture(true);
-strMutable.bIncludeTransverseSrp = false;
-dSunToSc = dxState(1:3) - strParams.dBodyEphemerides;
-dRange = norm(dSunToSc);
-dUnit = dSunToSc / dRange;
+strConstant.bIncludeTransverseSrp = false;
+dPosSuntoSC_IN = dxState(1:3) - strParams.dBodyEphemerides;
+dRange = norm(dPosSuntoSC_IN);
+dUnit = dPosSuntoSC_IN / dRange;
 dPressure = strParams.strSRPdata.dP_SRP0 * (1.495978707e11 / dLengthScale / dRange)^2;
 dCoefficient = dPressure * (1 / dLengthScale^2) / strParams.strSCdata.dSCmass;
-dExpected = 0.9 * (dCoefficient + dxState(7)) * dUnit;
-dExpectedJac = 0.9 / dRange * ((dCoefficient + dxState(7)) * eye(3) ...
+dExpected = (dCoefficient + dxState(7)) * dUnit;
+dExpectedJac = 1 / dRange * ((dCoefficient + dxState(7)) * eye(3) ...
     - (3 * dCoefficient + dxState(7)) * (dUnit * dUnit.'));
 [dForce, dJac, dBiasJac] = EvalFilterSRPLutWithBias(dxState, strParams, strMutable, strConstant);
 assert(norm(dForce - dExpected) < 1e-20);
 assert(norm(dJac - dExpectedJac, 'fro') < 1e-23);
-assert(norm(dBiasJac - 0.9 * dUnit) < 1e-14);
+assert(norm(dBiasJac - dUnit) < 1e-14);
 end
 
 function VerifyInactiveAndBias_(dxState, strParams, strMutable, strConstant)
@@ -304,28 +307,28 @@ end
 
 dxNoBias = dxState;
 dxNoBias(7) = 0;
-dSunUnit = (strParams.dBodyEphemerides - dxState(1:3));
-dSunUnit = dSunUnit / norm(dSunUnit);
+dPosSCtoSun_IN = strParams.dBodyEphemerides - dxState(1:3);
+dSunDir_IN = dPosSCtoSun_IN / norm(dPosSCtoSun_IN);
 for bTransverse = [false, true]
-    strMutable.bIncludeTransverseSrp = bTransverse;
+    strConstant.bIncludeTransverseSrp = bTransverse;
     for dPressureScale = [0.4, 2.3]
         strCase = strParams;
         strCase.strSRPdata.dP_SRP0 = dPressureScale * strParams.strSRPdata.dP_SRP0;
         dBiased = EvalFilterSRPLutWithBias(dxState, strCase, strMutable, strConstant);
         dUnbiased = EvalFilterSRPLutWithBias(dxNoBias, strCase, strMutable, strConstant);
-        assert(norm(dBiased - dUnbiased + 0.9 * dxState(7) * dSunUnit) < 1e-20);
+        assert(norm(dBiased - dUnbiased + dxState(7) * dSunDir_IN) < 1e-20);
     end
 end
-for ui32Mode = uint32(1):uint32(4)
+
+% Suppress all SRP outputs for eclipse, zero pressure or missing Sun data.
+for ui32Mode = uint32(1):uint32(3)
     strCase = strParams;
     if ui32Mode == 1
         strCase.bIsInEclipse = true;
     elseif ui32Mode == 2
         strCase.strSRPdata.dP_SRP0 = 0;
-    elseif ui32Mode == 3
-        strCase.dBodyEphemerides(:) = 0;
     else
-        strCase.strSrpPointing.dIllumination = 0;
+        strCase.dBodyEphemerides(:) = 0;
     end
     [dForce, dJac, dBiasJac] = EvalFilterSRPLutWithBias(dxState, strCase, strMutable, strConstant);
     assert(all(dForce == 0) && all(dJac == 0, 'all') && all(dBiasJac == 0));
@@ -398,6 +401,7 @@ arguments (Input)
     strMutable (1, 1) struct
     strConstant (1, 1) struct
 end
+
 arguments (Output)
     dxFinal (10, 1) double
     dPhi (10, 10) double

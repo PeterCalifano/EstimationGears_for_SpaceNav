@@ -36,8 +36,12 @@ with `BuildFilterSrpLutInputs` and forward them to SimulationGears
 `EvalJac_InertialPosVelDyn` selects the SRP component and assembles its state
 columns for either model. Keep `EvalJac_SRPwithBias` specific to cannonball SRP.
 An absent or false selector retains the existing
-cannonball model. Set runtime `strFilterMutabConfig.bIncludeTransverseSrp`
-to include the table's transverse response.
+cannonball model. Set `strFilterConstConfig.bIncludeTransverseSrp` explicitly
+when selecting LUT SRP. Compile separate scalar and transverse targets; keep
+consider-state flags mutable.
+
+Pass transverse inclusion separately from mixed numerical structs so Coder
+can preserve its constant value across helper calls.
 
 SimulationGears owns table preparation, interpolation and physical SRP
 evaluation, unit conversion, additive-bias physics and orbital force composition.
@@ -55,10 +59,13 @@ reference pressure at 1 AU in `strSRPdata.dP_SRP0`, spacecraft mass in
 
 | Field | Convention and units |
 | --- | --- |
-| `dDcm` | Body-to-inertial proper rotation, 3 by 3 |
-| `dAttitudePositionPartials` | Three `dR/dr_j` slices, 3 by 3 by 3, per length unit |
-| `dIllumination` | External illumination fraction in [0, 1] |
-| `dIlluminationGradient` | Position gradient, 1 by 3, per length unit |
+| `dDCM_INfromSCB` | Body-to-inertial proper rotation, 3 by 3 |
+| `dJacDCMWrtPos_INfromSCB` | Three `dR/dr_j` slices, 3 by 3 by 3, per length unit |
+
+Name the generated pointing type `SSrpPointing`, the resolved physical input
+type `SSrpData`, and table type `SSrpResponseLut` with the selected scalar or
+transverse layout. Keep the two layouts in separate generated targets.
+Reuse these definitions across filter and SimulationGears entry points in a build.
 
 Use consistent metre or kilometre filter units (LU). Pressure is in
 kg/(LU s²); table geometry and area remain in metres and square metres.
@@ -67,10 +74,11 @@ in LU/s² and its position partial in 1/s². Hold the supplied attitude fixed
 unless its position partial is provided. Velocity partials are zero.
 
 Retain the optional `strStatesIdx.ui8CoeffSRPidx` as an additive acceleration
-bias in LU/s². Its nominal contribution is illumination times the bias times
-the unit Sun-to-spacecraft direction. Include Sun-line rotation and the
-illumination gradient in position partials. Eclipse, zero pressure or
-unavailable Sun geometry suppress nominal force and all partials.
+bias in LU/s². Its nominal contribution is the bias times the unit
+Sun-to-spacecraft direction. Include Sun-line rotation in position partials.
+Use `bIsInEclipse` to suppress nominal force and all partials; zero pressure or
+unavailable Sun geometry also suppress them. Keep spacecraft self-shadowing
+in the prepared LUT and supply no partial-eclipse fraction or gradient.
 
 For a consider bias, exclude its stored value from nominal acceleration and
 position partials while retaining its sensitivity for uncertainty propagation.
@@ -81,10 +89,11 @@ with respect to the ignored nominal state value.
 
 ```matlab
 strConstant.bUseSrpLut = true;
+strConstant.bIncludeTransverseSrp = true;
 strConstant.strResponseLut = strPreparedLut;
 % Request mapped partials and force together for identical inputs.
 [dSrpJacobian, dAcceleration] = EvalJac_SRPLutWithBias(dxState, strDynParams, ...
-                                                      strMutable, strConstant);
+                                                       strMutable, strConstant);
 ```
 
 The Jacobian has six orbital rows and three position columns, plus a bias
@@ -108,8 +117,8 @@ and dynamic allocation; MATLAB gateways still allocate output storage.
 Set `ui8OutputCount` to the number of leading outputs needed. Request
 `uint8(2)` explicitly for the combined Jacobian/acceleration interface.
 Keep `bForceOnly=true` as the one-output RHS shorthand. Bias columns are
-compiled out when omitted from the state mapping. Transverse selection and
-consider mode remain runtime choices.
+compiled out when omitted from the state mapping. Compile transverse inclusion
+into each target; retain consider mode as a runtime choice.
 
 Run `testSrpLutFilterModels` for units, independent force/partial references,
 bias modes, inactive radiation, poles and the existing RK4/STM path. Run

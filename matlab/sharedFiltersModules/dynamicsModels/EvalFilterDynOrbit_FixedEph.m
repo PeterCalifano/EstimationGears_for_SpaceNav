@@ -18,13 +18,14 @@ function dDrvDt = EvalFilterDynOrbit_FixedEph(dStateTimetag, dxState, strDynPara
 % strDynParams           Supplied attitude, third-body orbit coefficients,
 %                        cached cannonball pressure and spacecraft data. Supply
 %                        strSRPdata.dP_SRP0 and strSrpPointing for LUT SRP.
-% strFilterMutabConfig   Runtime transverse and active/consider state settings.
-% strFilterConstConfig   Fixed units/state mapping and optional immutable LUT.
+% strFilterMutabConfig   Runtime active/consider-state settings.
+% strFilterConstConfig   Fixed transverse selection, units/state mapping and optional LUT.
 % -------------------------------------------------------------------------------------------------------------
 %% OUTPUT
 % dDrvDt                 Six orbital derivatives [LU/s; LU/s^2].
 % -------------------------------------------------------------------------------------------------------------
 %% CHANGELOG
+% 01-10-2026  Pietro Califano, Codex GPT-6  Correct nodal transverse samples and constant inclusion.
 % 24-02-2025    Pietro Califano     Implement version taking from legact filterDynOrbit and
 %                                   for compatibility with EvalRHS_InertialDynOrbit
 % 29-09-2026  Pietro Califano, Codex gpt-6  Add SRP-only selection and bounded ephemeris capacity.
@@ -80,7 +81,7 @@ for idB = 1:ui8NumOf3rdBodies
     dBodyEphemerides(ui16PtrAlloc:ui16PtrAlloc+2) = evalChbvPolyWithCoeffs( ...
         strOrbitData.ui32PolyDeg, uint32(3), dEvalPoint, strOrbitData.dChbvPolycoeffs, ...
         strOrbitData.dTimeLowBound, strOrbitData.dTimeUpBound, ui32OrbitCoeffCount, ui32OrbitMaxDegree);
-    
+
     d3rdBodiesGM(idB) = strDynParams.strBody3rdData(idB).dGM;
 
     ui16PtrAlloc = ui16PtrAlloc + 3;
@@ -92,7 +93,7 @@ if isfield(strDynParams, "dDCMmainAtt_INfromTF")
 end
 
 % Resolve optional physical SRP inputs and preserve the existing cannonball coefficient.
-[bUseSrpLut, strResponseLut, strSrpData] = ...
+[bUseSrpLut, strResponseLut, strSrpData, bIncludeTransverse] = ...
     BuildFilterSrpLutInputs(dxState, strDynParams, strFilterMutabConfig, strFilterConstConfig);
 dCoeffSRP = 0;
 % Retain the legacy cached-pressure branch's eclipse handling; the LUT uses the supplied flag.
@@ -122,6 +123,6 @@ dDrvDt(strFilterConstConfig.strStatesIdx.ui8posVelIdx) = ...
                             dCoeffSRP, d3rdBodiesGM, dBodyEphemerides, ...
                             [], uint32(0), ... % Keep harmonics disabled in this filter model.
                             ui16StatesIdx, dResidualAccel, bIsInEclipse, ...
-                            bUseSrpLut, strResponseLut, strSrpData);
+                            bUseSrpLut, strResponseLut, strSrpData, bIncludeTransverse);
 
 end

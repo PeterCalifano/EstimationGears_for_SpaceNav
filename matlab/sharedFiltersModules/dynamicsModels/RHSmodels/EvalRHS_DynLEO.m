@@ -71,9 +71,11 @@ end
 % ui16StatesIdx           (:,2) uint16 {mustBeInteger, coder.mustBeConst}
 % -------------------------------------------------------------------------------------------------------------
 %% OUTPUT
-% dPosVeldt, strAccelInfo
+% dPosVeldt       Inertial orbital derivatives in the input length/time units.
+% strAccelInfo    Force components; report SRP as dAccSRP in the same acceleration units.
 % -------------------------------------------------------------------------------------------------------------
 %% CHANGELOG
+% 01-10-2026  Pietro Califano, Codex GPT-6  Align the selected-SRP diagnostic field.
 % 19-02-2024        Pietro Califano     Preliminary prototype coded for evaluation and develop. iterations.
 % 22-02-2024        Pietro Califano     Added code to evaluate atmospheric density based on estimated
 %                                       state (exponential model)
@@ -268,9 +270,9 @@ end
 
 %% Cannonball SRP acceleration
 if coder.const(~isempty(dBodyEphemerides))
-    dAccCannonBallSRP = dCoeffSRP * dPosSunToSC./dSCdistToSun;
+    dAccSRP = dCoeffSRP * dPosSunToSC./dSCdistToSun;
 else
-    dAccCannonBallSRP = zeros(3,1);
+    dAccSRP = zeros(3,1);
 end
 
 dAccJ3 = zeros(3, 1);
@@ -282,14 +284,14 @@ if nargout > 1
     strAccelInfo.dAccMain           = dAccTot;
     strAccelInfo.dTotAcc3rdBody     = dTotAcc3rdBody;
     strAccelInfo.dAcc3rdSun         = dAcc3rdSun;
-    strAccelInfo.dAccCannonBallSRP  = dAccCannonBallSRP;
+    strAccelInfo.dAccSRP            = dAccSRP;
     strAccelInfo.dAccDrag           = dAccDrag;
     strAccelInfo.dResidualAccel     = dResidualAccel;
     strAccelInfo.dAccJ2             = dAccJ2;
 end
 
 dAccTot = dAccTot + dAccJ2 + dAccJ3 + dTotAcc3rdBody +...
-          dAcc3rdSun + dAccDrag + dAccCannonBallSRP + dResidualAccel;
+          dAcc3rdSun + dAccDrag + dAccSRP + dResidualAccel;
 
 %% Compute output state time derivative
 % Replace to be more general, using indices

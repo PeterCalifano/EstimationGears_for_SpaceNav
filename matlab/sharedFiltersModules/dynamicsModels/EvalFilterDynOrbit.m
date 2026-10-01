@@ -23,13 +23,14 @@ function dDrvDt = EvalFilterDynOrbit(dStateTimetag, dxState, strDynParams, ...
 % strFilterMutabConfig    (1, 1) struct   Active/consider-state flags for additional accelerations.
 % strFilterConstConfig    (1, 1) struct   Fixed state indices and length-scale selection.
 %                                     Optional bUseSrpLut selects constant strResponseLut.
-%                                     Require runtime bIncludeTransverseSrp and strSrpPointing
-%                                     only when the LUT is selected.
+%                                     Require constant bIncludeTransverseSrp and numerical
+%                                     strDynParams.strSrpPointing only when the LUT is selected.
 % -------------------------------------------------------------------------------------------------------------
 %% OUTPUT
 % dDrvDt                  (6, 1) double   Position/velocity derivatives in configured dynamics units.
 % -------------------------------------------------------------------------------------------------------------
 %% CHANGELOG
+% 01-10-2026  Pietro Califano, Codex GPT-6  Correct nodal transverse samples and constant inclusion.
 % 17-03-2024    Pietro Califano     Updated version for use in MSKCF
 % 17-08-2024    Pietro Califano     Version adapted from FUTURE EKF to use general purpose evalRHS_DynOrbit
 % 28-07-2025    Pietro Califano     Update version to recompute P_SRP and eclipse flag
@@ -137,16 +138,16 @@ for idB = 1:ui8NumOf3rdBodies
         strOrbitData.ui32PolyDeg, uint32(3), dEvalPoint, strOrbitData.dChbvPolycoeffs, ...
         strOrbitData.dTimeLowBound, strOrbitData.dTimeUpBound, ...
         ui32OrbitCoeffCount, ui32OrbitMaxDegree);
-    
+
     d3rdBodiesGM(idB) = strDynParams.strBody3rdData(idB).dGM;
 
     ui16PtrAlloc = ui16PtrAlloc + 3;
 end
 
 % Resolve optional physical inputs without evaluating SRP in the filter wrapper.
-% DEVNOTE: call is no-op if bUseSrpLut is false; otherwise, it returns the LUT and resolved physical inputs.
-[bUseSrpLut, strResponseLut, strSrpData] = BuildFilterSrpLutInputs(dxState, strDynParams,...
-                                     strFilterMutabConfig, strFilterConstConfig);
+% Keep compile-time selectors separate from resolved numerical inputs.
+[bUseSrpLut, strResponseLut, strSrpData, bIncludeTransverse] = ...
+    BuildFilterSrpLutInputs(dxState, strDynParams, strFilterMutabConfig, strFilterConstConfig);
 dCoeffSRP = 0;
 
 if ~coder.const(bUseSrpLut)
@@ -220,7 +221,7 @@ dDrvDt(:) = EvalRHS_InertialDynOrbit(dxState, ...
                                   uint32(0), ... % strDynParams.strMainData.ui16MaxSHdegree
                                   ui16StatesIdx, ...
                                   dResidualAccel, strDynParams.bIsInEclipse, ...
-                                  bUseSrpLut, strResponseLut, strSrpData);
+                                  bUseSrpLut, strResponseLut, strSrpData, bIncludeTransverse);
 
 % dxdt(ui16StatesIdx(2, :)) = EvalRHS_DynFOGM(dxState, ...
 %     dTimeConst, ...

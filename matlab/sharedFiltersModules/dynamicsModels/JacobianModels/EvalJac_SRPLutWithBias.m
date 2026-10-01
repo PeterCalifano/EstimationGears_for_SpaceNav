@@ -1,7 +1,7 @@
-function [dSrpJacobian, dAccSrp] = ...
+function [dJacSRPOrbital, dSRPaccel_IN] = ...
     EvalJac_SRPLutWithBias(dxState, strDynParams, strFilterMutabConfig, strFilterConstConfig) %#codegen
 %% SIGNATURE
-% [dSrpJacobian, dAccSrp] = EvalJac_SRPLutWithBias(dxState, strDynParams, ...
+% [dJacSRPOrbital, dSRPaccel_IN] = EvalJac_SRPLutWithBias(dxState, strDynParams, ...
 %     strFilterMutabConfig, strFilterConstConfig)
 % -------------------------------------------------------------------------------------------------------------
 %% DESCRIPTION
@@ -18,21 +18,23 @@ function [dSrpJacobian, dAccSrp] = ...
 % Output: Six orbital Jacobian rows and the shared inertial SRP acceleration.
 % -------------------------------------------------------------------------------------------------------------
 %% INPUT
-% dxState                 Configured filter state [LU and owner bias units].
-% strDynParams            Resolved Sun data and supplied spacecraft attitude/illumination.
-% strFilterMutabConfig    Runtime transverse and active/consider bias settings.
-% strFilterConstConfig    Constant units, mapping and immutable numeric LUT.
+% dxState                Configured filter state [LU and owner bias units].
+% strDynParams           Resolved Sun data, eclipse flag and supplied spacecraft attitude.
+% strFilterMutabConfig   Runtime active/consider bias settings.
+% strFilterConstConfig   Constant transverse selection, units, mapping and numeric LUT.
 % -------------------------------------------------------------------------------------------------------------
 %% OUTPUT
-% dSrpJacobian            Fixed (6, 3) or (6, 4) SRP partials [1/s^2; bias column -].
-% dAccSrp                 Optional inertial SRP acceleration [LU/s^2].
+% dJacSRPOrbital         Fixed (6, 3) or (6, 4) SRP partials [1/s^2; bias column -].
+% dSRPaccel_IN           Optional inertial SRP acceleration [LU/s^2].
 % -------------------------------------------------------------------------------------------------------------
 %% CHANGELOG
+% 01-10-2026  Pietro Califano, Codex GPT-6  Document constant transverse selection.
 % 29-09-2026  Pietro Califano, Codex gpt-6  Add the SRP-only analytical filter Jacobian.
 % 29-09-2026  Pietro Califano, Codex gpt-6  Compile out an absent bias output.
 % 30-09-2026  Pietro Califano, Codex gpt-6  Reuse acceleration for paired force/Jacobian requests.
 % 30-09-2026  Pietro Califano, Codex gpt-6  Document optional bias state and output requests.
 % 01-10-2026  Pietro Califano, Codex gpt-6  Standardize SRP acronym in entry-point names.
+% 01-10-2026  Pietro Califano, Codex gpt-6  Clarify frames, physical inputs and generated struct types.
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % EvalFilterSRPLutWithBias.
@@ -43,31 +45,32 @@ arguments (Input)
     strFilterMutabConfig (1, 1) struct
     strFilterConstConfig (1, 1) struct {coder.mustBeConst}
 end
+
 arguments (Output)
-    dSrpJacobian (:, :) double
-    dAccSrp (3, 1) double
+    dJacSRPOrbital (:, :) double
+    dSRPaccel_IN (3, 1) double
 end
 
 % Fix the output shape from the compile-time state layout.
-bHasBias = coder.const(isfield(strFilterConstConfig.strStatesIdx, 'ui8CoeffSRPidx'));
-if bHasBias
-    bHasBias = coder.const(strFilterConstConfig.strStatesIdx.ui8CoeffSRPidx > 0);
+bHasBiasState = coder.const(isfield(strFilterConstConfig.strStatesIdx, 'ui8CoeffSRPidx'));
+if bHasBiasState
+    bHasBiasState = coder.const(strFilterConstConfig.strStatesIdx.ui8CoeffSRPidx > 0);
 end
 
 % Evaluate force and position partials together; request bias only when mapped.
-if coder.const(bHasBias)
-    dSrpJacobian = zeros(6, 4);
-    [dAccSrp, dJacPosition, dJacBias] = EvalFilterSRPLutWithBias(dxState, strDynParams, ...
-                                                           strFilterMutabConfig, strFilterConstConfig);
+if coder.const(bHasBiasState)
+    dJacSRPOrbital = zeros(6, 4);
+    [dSRPaccel_IN, dJacAccSRP_IN, dJacAccSRPWrtBias_IN] = ...
+        EvalFilterSRPLutWithBias(dxState, strDynParams, strFilterMutabConfig, strFilterConstConfig);
 else
-    dSrpJacobian = zeros(6, 3);
-    [dAccSrp, dJacPosition] = EvalFilterSRPLutWithBias(dxState, strDynParams, ...
-                                                 strFilterMutabConfig, strFilterConstConfig);
+    dJacSRPOrbital = zeros(6, 3);
+    [dSRPaccel_IN, dJacAccSRP_IN] = EvalFilterSRPLutWithBias(dxState, strDynParams, ...
+                                                             strFilterMutabConfig, strFilterConstConfig);
 end
 
 % Map the shared partials without repeating interpolation or force evaluation.
-dSrpJacobian(4:6, 1:3) = dJacPosition;
-if bHasBias
-    dSrpJacobian(4:6, 4) = dJacBias;
+dJacSRPOrbital(4:6, 1:3) = dJacAccSRP_IN;
+if bHasBiasState
+    dJacSRPOrbital(4:6, 4) = dJacAccSRPWrtBias_IN;
 end
 end

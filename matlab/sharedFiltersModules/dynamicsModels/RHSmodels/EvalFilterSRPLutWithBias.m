@@ -1,7 +1,7 @@
-function [dAccSrp, dJacPosition, dJacBias, bDerivativeRegular] = ...
+function [dSRPaccel_IN, dJacAccSRP_IN, dJacAccSRPWrtBias_IN, bDerivativeRegular] = ...
     EvalFilterSRPLutWithBias(dxState, strDynParams, strFilterMutabConfig, strFilterConstConfig) %#codegen
 %% SIGNATURE
-% [dAccSrp, dJacPosition, dJacBias, bDerivativeRegular] = ...
+% [dSRPaccel_IN, dJacAccSRP_IN, dJacAccSRPWrtBias_IN, bDerivativeRegular] = ...
 %     EvalFilterSRPLutWithBias(dxState, strDynParams, strFilterMutabConfig, strFilterConstConfig)
 % -------------------------------------------------------------------------------------------------------------
 %% DESCRIPTION
@@ -14,22 +14,24 @@ function [dAccSrp, dJacPosition, dJacBias, bDerivativeRegular] = ...
 % Output: SRP acceleration [LU/s^2] and position partials [1/s^2].
 % -------------------------------------------------------------------------------------------------------------
 %% INPUT
-% dxState                 Configured filter state [LU, LU/s, LU/s^2].
-% strDynParams            Resolved Sun-first dBodyEphemerides, bIsInEclipse,
-%                         reference pressure, mass and supplied strSrpPointing.
-% strFilterMutabConfig    Transverse selection and active/consider-state flags.
-% strFilterConstConfig    Constant units, state mapping, selector and immutable LUT.
+% dxState                Configured filter state [LU, LU/s, LU/s^2].
+% strDynParams           Resolved Sun-first dBodyEphemerides, bIsInEclipse,
+%                        reference pressure, mass and supplied strSrpPointing.
+% strFilterMutabConfig   Runtime active/consider-state flags.
+% strFilterConstConfig   Constant model/transverse selectors, units, state mapping and LUT.
 % -------------------------------------------------------------------------------------------------------------
 %% OUTPUT
-% dAccSrp             Inertial SRP acceleration [LU/s^2].
-% dJacPosition        Acceleration/spacecraft-position partial [1/s^2].
-% dJacBias            Additive acceleration-bias sensitivity [-].
-% bDerivativeRegular  Shared LUT smoothness indicator; true when inactive.
+% dSRPaccel_IN           Inertial SRP acceleration [LU/s^2].
+% dJacAccSRP_IN          Acceleration/spacecraft-position partial [1/s^2].
+% dJacAccSRPWrtBias_IN   Additive acceleration-bias sensitivity [-].
+% bDerivativeRegular     Shared LUT smoothness indicator; true when inactive.
 % -------------------------------------------------------------------------------------------------------------
 %% CHANGELOG
+% 01-10-2026  Pietro Califano, Codex GPT-6  Correct nodal transverse samples and constant inclusion.
 % 29-09-2026  Pietro Califano, Codex gpt-6  Add SRP-only filter bias handoff.
 % 30-09-2026  Pietro Califano, Codex gpt-6  Keep only filter input adaptation; move force physics to SimulationGears.
 % 01-10-2026  Pietro Califano, Codex gpt-6  Standardize SRP acronym in entry-point names.
+% 01-10-2026  Pietro Califano, Codex gpt-6  Clarify frames, physical inputs and generated struct types.
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % BuildFilterSrpLutInputs, EvalRHS_SRPLutWithBias (SimulationGears).
@@ -40,42 +42,51 @@ arguments (Input)
     strFilterMutabConfig (1, 1) struct
     strFilterConstConfig (1, 1) struct {coder.mustBeConst}
 end
+
 arguments (Output)
-    dAccSrp (3, 1) double
-    dJacPosition (3, 3) double
-    dJacBias (3, 1) double
+    dSRPaccel_IN (3, 1) double
+    dJacAccSRP_IN (3, 3) double
+    dJacAccSRPWrtBias_IN (3, 1) double
     bDerivativeRegular (1, 1) logical
 end
 
 % Preserve fixed outputs without interpreting unavailable Sun geometry.
-dAccSrp = zeros(3, 1);
-dJacPosition = zeros(3, 3);
-dJacBias = zeros(3, 1);
+dSRPaccel_IN = zeros(3, 1);
+dJacAccSRP_IN = zeros(3, 3);
+dJacAccSRPWrtBias_IN = zeros(3, 1);
 bDerivativeRegular = true;
+
+% Gate radiation before adapting optional LUT inputs.
 if strDynParams.bIsInEclipse || isempty(strDynParams.dBodyEphemerides)
     return
 end
-dSunPosition = strDynParams.dBodyEphemerides(1:3);
-if ~all(isfinite(dSunPosition)) || ~any(abs(dSunPosition) > eps('single'))
+
+% Require available, finite Sun ephemerides before forming relative geometry.
+dSunPosition_IN = strDynParams.dBodyEphemerides(1:3);
+if ~all(isfinite(dSunPosition_IN)) || ~any(abs(dSunPosition_IN) > eps('single'))
     return
 end
 
 % Translate filter inputs once and pass only resolved physical data to SimulationGears.
-[bUseSrpLut, strResponseLut, strSrpData] = ...
+[bUseSrpLut, strResponseLut, strSrpData, bIncludeTransverse] = ...
     BuildFilterSrpLutInputs(dxState, strDynParams, strFilterMutabConfig, strFilterConstConfig);
 assert(bUseSrpLut, 'EvalFilterSRPLutWithBias:ModelNotSelected', 'Select LUT SRP for this adapter.');
+
+% Form the inertial spacecraft-to-Sun displacement from the configured position rows.
 ui8PosVelIdx = strFilterConstConfig.strStatesIdx.ui8posVelIdx;
-dPosSCtoSun = dSunPosition - dxState(ui8PosVelIdx(1:3));
+dPosSCtoSun_IN = dSunPosition_IN - dxState(ui8PosVelIdx(1:3));
 
 % Preserve output specialization through the shared force call.
 if nargout < 2
-    dAccSrp = EvalRHS_SRPLutWithBias(dPosSCtoSun, strSrpData, strResponseLut);
+    dSRPaccel_IN = EvalRHS_SRPLutWithBias(dPosSCtoSun_IN, strSrpData, strResponseLut, bIncludeTransverse);
 elseif nargout < 3
-    [dAccSrp, dJacPosition] = EvalRHS_SRPLutWithBias(dPosSCtoSun, strSrpData, strResponseLut);
+    [dSRPaccel_IN, dJacAccSRP_IN] = ...
+        EvalRHS_SRPLutWithBias(dPosSCtoSun_IN, strSrpData, strResponseLut, bIncludeTransverse);
 elseif nargout < 4
-    [dAccSrp, dJacPosition, dJacBias] = EvalRHS_SRPLutWithBias(dPosSCtoSun, strSrpData, strResponseLut);
+    [dSRPaccel_IN, dJacAccSRP_IN, dJacAccSRPWrtBias_IN] = ...
+        EvalRHS_SRPLutWithBias(dPosSCtoSun_IN, strSrpData, strResponseLut, bIncludeTransverse);
 else
-    [dAccSrp, dJacPosition, dJacBias, bDerivativeRegular] = ...
-        EvalRHS_SRPLutWithBias(dPosSCtoSun, strSrpData, strResponseLut);
+    [dSRPaccel_IN, dJacAccSRP_IN, dJacAccSRPWrtBias_IN, bDerivativeRegular] = ...
+        EvalRHS_SRPLutWithBias(dPosSCtoSun_IN, strSrpData, strResponseLut, bIncludeTransverse);
 end
 end
