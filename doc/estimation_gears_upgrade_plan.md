@@ -398,3 +398,26 @@ both COSMICA indexes. Create no commits or simulation runs.
 
 Resolve a staging retry by adding `--add` for the renamed index paths.
 Preserve source and all unrelated index entries during the retry.
+
+### Filter-module code-generation builder rename - 1 October 2026
+
+- [x] Rename `CodegenSrpLutFilter` to `CodegenSrpLutFilterModules`, including
+      its file, declaration, examples, callers and error identifiers.
+- [x] Validate the existing generated-interface harness and Code Analyzer.
+- [x] Review documentation, imperative comments, formatting and complete index.
+- [x] Stage and commit only the builder rename, linked test and documentation;
+      preserve unrelated changes and the SimulationGears/COSMICA indexes.
+
+Reviewer: Codex GPT-6. Preserve numerical kernels, argument contracts and
+generated model names. Use the existing SRP filter code-generation harness;
+introduce no configuration-value tests or simulation runs. The user explicitly
+authorized a commit for this correction. Keep dependency integration separate
+from validation against the reviewed provider sources.
+
+Pass seventeen fresh MEX/C++ builds and 48 runtime parity queries through
+`testSrpLutFilterCodegen`, including both units, optional bias and existing
+orbital dispatch. Report zero analyzer findings in the renamed builder and
+its caller harness. Confirm that source changes are identifier substitutions,
+one declaration-alignment correction and a changelog entry. Preserve generated
+model names and output contracts. Keep external validation artifacts under
+`/tmp/srp-filter-builder-rename-20261001-sgs4src5`.

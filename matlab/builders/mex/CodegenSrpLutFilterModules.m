@@ -1,7 +1,7 @@
-function strCodegen = CodegenSrpLutFilter(charOutputRoot, dxState, strDynParams, ...
-                                        strFilterMutabConfig, strFilterConstConfig, kwargs)
+function strCodegen = CodegenSrpLutFilterModules(charOutputRoot, dxState, strDynParams, ...
+                                                 strFilterMutabConfig, strFilterConstConfig, kwargs)
 %% SIGNATURE
-% strCodegen = CodegenSrpLutFilter(charOutputRoot, dxState, strDynParams, ...
+% strCodegen = CodegenSrpLutFilterModules(charOutputRoot, dxState, strDynParams, ...
 %     strFilterMutabConfig, strFilterConstConfig, Name=Value)
 % -------------------------------------------------------------------------------------------------------------
 %% DESCRIPTION
@@ -11,7 +11,7 @@ function strCodegen = CodegenSrpLutFilter(charOutputRoot, dxState, strDynParams,
 % variable sizing. Default MEX and Jacobian libraries to one output. Retain
 % all RHS outputs for C++ libraries unless a smaller prefix is requested.
 % Request two Jacobian outputs explicitly to reuse acceleration in the same call.
-% Example: strCodegen = CodegenSrpLutFilter(charNewRoot, dxState, strDynParams, ...
+% Example: strCodegen = CodegenSrpLutFilterModules(charNewRoot, dxState, strDynParams, ...
 %     strMutable, strConstant, charTarget='lib', charEntryPoint='EvalJac_SRPLutWithBias');
 % Output: Fixed-allocation C++/MEX artifacts with no runtime LUT transport.
 % -------------------------------------------------------------------------------------------------------------
@@ -34,6 +34,7 @@ function strCodegen = CodegenSrpLutFilter(charOutputRoot, dxState, strDynParams,
 % 29-09-2026  Pietro Califano, Codex gpt-6  Generate the optional SRP model without orbit wrappers.
 % 29-09-2026  Pietro Califano, Codex gpt-6  Specialize generated output prefixes.
 % 30-09-2026  Pietro Califano, Codex gpt-6  Preserve Jacobian defaults with optional force reuse.
+% 01-10-2026  Pietro Califano, Codex gpt-6  Rename the filter-module code-generation builder.
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % MATLAB Coder, EvalFilterSRPLutWithBias, EvalJac_SRPLutWithBias, ValidateSrpResponseLut.
@@ -58,7 +59,7 @@ end
 % Validate the immutable table and build prerequisites before creating artifacts.
 ValidateSrpResponseLut(strFilterConstConfig.strResponseLut);
 assert(exist('codegen', 'file') ~= 0, ...
-    'CodegenSrpLutFilter:MissingCoder', 'Install MATLAB Coder before generating the model.');
+    'CodegenSrpLutFilterModules:MissingCoder', 'Install MATLAB Coder before generating the model.');
 
 % Derive one valid artifact basename from the selected entry point and target.
 charKernelName = kwargs.charKernelName;
@@ -68,15 +69,15 @@ if isempty(charKernelName)
         charKernelName = [charKernelName, '_mex'];
     end
 end
-assert(isvarname(charKernelName), 'CodegenSrpLutFilter:InvalidName', 'Supply a valid basename.');
+assert(isvarname(charKernelName), 'CodegenSrpLutFilterModules:InvalidName', 'Supply a valid basename.');
 assert(~kwargs.bForceOnly || strcmp(kwargs.charEntryPoint, 'EvalFilterSRPLutWithBias'), ...
-    'CodegenSrpLutFilter:InvalidOutputs', 'Select the RHS entry for force-only generation.');
+    'CodegenSrpLutFilterModules:InvalidOutputs', 'Select the RHS entry for force-only generation.');
 
 % Resolve one output contract and reject contradictory compatibility options.
 ui8AvailableOutputs = uint8(nargout(kwargs.charEntryPoint));
 ui8OutputCount = kwargs.ui8OutputCount;
 assert(~kwargs.bForceOnly || ui8OutputCount <= 1, ...
-    'CodegenSrpLutFilter:InvalidOutputs', 'Force-only generation requires one output.');
+    'CodegenSrpLutFilterModules:InvalidOutputs', 'Force-only generation requires one output.');
 if ui8OutputCount == 0
     ui8OutputCount = ui8AvailableOutputs;
     if strcmp(kwargs.charTarget, 'mex') || kwargs.bForceOnly || ...
@@ -85,14 +86,14 @@ if ui8OutputCount == 0
         ui8OutputCount = uint8(1);
     end
 end
-assert(ui8OutputCount <= ui8AvailableOutputs, 'CodegenSrpLutFilter:InvalidOutputs', ...
+assert(ui8OutputCount <= ui8AvailableOutputs, 'CodegenSrpLutFilterModules:InvalidOutputs', ...
     'Request at most %u outputs for %s.', ui8AvailableOutputs, kwargs.charEntryPoint);
 
 % Preserve existing artifacts by accepting only an absent or empty directory.
 if isfolder(charOutputRoot)
     strEntries = dir(charOutputRoot);
     assert(all(ismember({strEntries.name}, {'.', '..'})), ...
-        'CodegenSrpLutFilter:ExistingOutput', 'Select an empty generated-artifact directory.');
+        'CodegenSrpLutFilterModules:ExistingOutput', 'Select an empty generated-artifact directory.');
 end
 mkdir(charOutputRoot);
 

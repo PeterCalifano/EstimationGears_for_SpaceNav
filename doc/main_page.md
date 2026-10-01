@@ -95,7 +95,7 @@ configuration. Keep distinct integration stages separate.
 
 ### Code generation and validation
 
-Use `CodegenSrpLutFilter` to generate a fixed-size MEX or C++ library with the
+Use `CodegenSrpLutFilterModules` to generate a fixed-size MEX or C++ library with the
 table and state mapping embedded in constant configuration. Constant inputs
 are removed from MEX signatures. Numerical kernels disable variable sizing
 and dynamic allocation; MATLAB gateways still allocate output storage.
