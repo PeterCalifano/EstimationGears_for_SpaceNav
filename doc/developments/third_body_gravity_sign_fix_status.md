@@ -9,8 +9,8 @@ multi-stage planning artifact.
 
 ## EstimationGears-owned correction
 
-- [x] Correct the generic-body and Sun differential-gravity signs in `evalRHS_DynLEO`.
-- [x] Correct `evalJAC_3rdBodyGrav` to evaluate
+- [x] Correct the generic-body and Sun differential-gravity signs in `EvalRHS_DynLEO`.
+- [x] Correct `EvalJac_3rdBodyGrav` to evaluate
   `mu*(3*u*u'/|u|^5-I/|u|^3)` for `u = r_body-r_sc`.
 - [x] Document the main-body-relative inertial-frame convention in the RHS and Jacobian headers.
 - [x] Add independent axial and arbitrary three-dimensional RHS oracles.

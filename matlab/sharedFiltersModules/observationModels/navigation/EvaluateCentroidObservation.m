@@ -29,8 +29,8 @@ function [dCentroidResidual, dObservationJac, dObservationCov] = EvaluateCentroi
 % 10-09-2026    Pietro Califano, Codex gpt-6    Remove the obsolete orbit-only ablation selector.
 % ---------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
-% pinholeProjectHP, evalJAC_NormProject_FeatPos, evalJAC_FeatProj_CurrentState,
-% evalJAC_AnalyticCOB_CamPosition, ComputeCenMeasEstCorrection, ComputeCentroidingMeasCov.
+% pinholeProjectHP, EvalJac_NormProject_FeatPos, EvalJac_FeatProj_CurrentState,
+% EvalJac_AnalyticCOB_CamPosition, ComputeCenMeasEstCorrection, ComputeCentroidingMeasCov.
 % ---------------------------------------------------------------------------------------------------
 
 arguments (Input)
@@ -63,8 +63,8 @@ dCentroidCoord_uv = pinholeProjectHP(dKcam, dCameraFromIN, dPosition_IN, zeros(3
 dTargetVector_CAM = -dCameraFromIN*dPosition_IN;
 
 dCentroidObsMatrix = diag([dKcam(1, 1), dKcam(2, 2)]) * ...
-    evalJAC_NormProject_FeatPos(dTargetVector_CAM) * ...
-    evalJAC_FeatProj_CurrentState(dxStatePost(1:ui16StateSize), zeros(3, 1), zeros(3, 3), ...
+    EvalJac_NormProject_FeatPos(dTargetVector_CAM) * ...
+    EvalJac_FeatProj_CurrentState(dxStatePost(1:ui16StateSize), zeros(3, 1), zeros(3, 3), ...
         zeros(3, 3), strMeasModelParams.dDCM_SCBiFromIN(:, :, 1), strFilterMutabConfig, strFilterConstConfig);
 
 % Both centroid corrections use the same Sun ephemeris. Its coefficient
@@ -100,7 +100,7 @@ if strFilterMutabConfig.i8CentroidingAlgorithmMode == uint8(1)
     % Subtract from the Jacobian the contribution of the CoB to CoF correction
     % NOTE: jacobian assumes measurement has been corrected on the image processing side!
     dCentroidObsMatrix(:, ui8PositionIdx) = dCentroidObsMatrix(:, ui8PositionIdx) ...
-        - evalJAC_AnalyticCOB_CamPosition(dCameraPosition_IN, dPhaseAngleInRad, dSunPosition_IN, ...
+        - EvalJac_AnalyticCOB_CamPosition(dCameraPosition_IN, dPhaseAngleInRad, dSunPosition_IN, ...
             dCameraFromIN, strFilterMutabConfig.dReferenceMetricRadius, ...
             strFilterMutabConfig.dMeanInstFOVinRadPx, coder.const(0.0062), coder.const(false));
 end

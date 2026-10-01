@@ -20,8 +20,8 @@ function tests = testThirdBodyGravityConsistency
 % 09-09-2026  Pietro Califano, Codex gpt-6    Retain small physical derivatives and reuse MathCore differences.
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
-% evalRHS_DynLEO()
-% evalJAC_3rdBodyGrav()
+% EvalRHS_DynLEO()
+% EvalJac_3rdBodyGrav()
 % ComputeFiniteDiffJacobian()
 % -------------------------------------------------------------------------------------------------------------
 tests = functiontests(localfunctions);
@@ -159,7 +159,7 @@ end
 
 function dRhs = EvalLeoRhs_(dxState, dBodyEphemerides, dThirdBodyGMs)
 dAtmosphereTable = [linspace(0.0, 1000.0, 25).', ones(25, 2)];
-dRhs = evalRHS_DynLEO( ...
+dRhs = EvalRHS_DynLEO( ...
     dxState, dBodyEphemerides, eye(3), dAtmosphereTable, ...
     0.0, 0.0, 6378.0, 0.0, 0.0, 0.0, 1.0, ...
     dThirdBodyGMs, 0.0, zeros(3, 1), uint16([1, 6]));
@@ -170,7 +170,7 @@ strDynParams = struct();
 strDynParams.strBody3rdData = struct('dGM', dBodyGM);
 strDynParams.dBodyEphemerides = dBodyPosition_IN;
 strFilterConstConfig.strStatesIdx.ui8posVelIdx = uint8((1:6).');
-dJacobian = evalJAC_3rdBodyGrav(dxState, strDynParams, strFilterConstConfig);
+dJacobian = EvalJac_3rdBodyGrav(dxState, strDynParams, strFilterConstConfig);
 end
 
 function dAcceleration_IN = ComputePhysicalThirdBodyAcceleration_( ...

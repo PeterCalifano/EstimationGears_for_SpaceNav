@@ -138,7 +138,7 @@
   - [ ] `EvaluateDirectionOfMotionModel` overlaps with `ComputeDirOfMotionAndJacobian`; consolidate the contract before moving it.
   - [ ] `ApplyManoeuvreDeltaV` currently mixes mean-state handling with covariance mutation; split it before sharing any representation-neutral part.
   - [ ] `UpdateGlobalQuat` should be reviewed against MathCore quaternion utilities and fixed before moving.
-  - [ ] `evalJAC_RayEllipsoidIntersect` is incomplete and must not be promoted until implemented and tested.
+  - [ ] `EvalJac_RayEllipsoidIntersect` is incomplete and must not be promoted until implemented and tested.
 
 ### Tests
 

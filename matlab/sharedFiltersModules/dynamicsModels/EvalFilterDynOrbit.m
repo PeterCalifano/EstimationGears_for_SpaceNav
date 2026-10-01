@@ -1,8 +1,5 @@
-function dDrvDt = EvalFilterDynOrbit(dStateTimetag, ...
-                                    dxState, ...
-                                    strDynParams, ...
-                                    strFilterMutabConfig, ...
-                                    strFilterConstConfig) %#codegen
+function dDrvDt = EvalFilterDynOrbit(dStateTimetag, dxState, strDynParams, ...
+                                   strFilterMutabConfig, strFilterConstConfig) %#codegen
 %% SIGNATURE
 % dDrvDt = EvalFilterDynOrbit(dStateTimetag, dxState, strDynParams, ...
 %                            strFilterMutabConfig, strFilterConstConfig)
@@ -14,17 +11,23 @@ function dDrvDt = EvalFilterDynOrbit(dStateTimetag, ...
 % Use the selected metre/kilometre dynamics units consistently for state, pressure, and area.
 % Reserve the first third-body entry for the Sun; disable SRP when that entry is absent or invalid.
 % Keep the additive SRP coefficient bias active only when its existing filter-mode flag permits it.
+% Forward the optional SRP table and resolved physical inputs to the shared
+% orbital RHS. Keep force selection/composition in SimulationGears and keep
+% residual acceleration independent of the selected SRP model.
 % -------------------------------------------------------------------------------------------------------------
 %% INPUT
-% dStateTimetag           (1,1) double   Epoch in the ephemeris time domain.
-% dxState                 (:,1) double   Filter state, including position/velocity and optional biases.
-% strDynParams            (1,1) struct   Main/third-body ephemerides and spacecraft dynamics data.
+% dStateTimetag           (1, 1) double   Epoch in the ephemeris time domain.
+% dxState                 (:, 1) double   Filter state, including position/velocity and optional biases.
+% strDynParams            (1, 1) struct   Main/third-body ephemerides and spacecraft dynamics data.
 %                                     Supply strSRPdata.dP_SRP0 in kg/(m*s^2) or kg/(km*s^2).
-% strFilterMutabConfig    (1,1) struct   Active/consider-state flags for additional accelerations.
-% strFilterConstConfig    (1,1) struct   Fixed state indices and length-scale selection.
+% strFilterMutabConfig    (1, 1) struct   Active/consider-state flags for additional accelerations.
+% strFilterConstConfig    (1, 1) struct   Fixed state indices and length-scale selection.
+%                                     Optional bUseSrpLut selects constant strResponseLut.
+%                                     Require runtime bIncludeTransverseSrp and strSrpPointing
+%                                     only when the LUT is selected.
 % -------------------------------------------------------------------------------------------------------------
 %% OUTPUT
-% dDrvDt                  (6,1) double   Position/velocity derivatives in configured dynamics units.
+% dDrvDt                  (6, 1) double   Position/velocity derivatives in configured dynamics units.
 % -------------------------------------------------------------------------------------------------------------
 %% CHANGELOG
 % 17-03-2024    Pietro Califano     Updated version for use in MSKCF
@@ -35,13 +38,17 @@ function dDrvDt = EvalFilterDynOrbit(dStateTimetag, ...
 % 11-09-2026  Pietro Califano, Codex gpt-6    Remove unused runtime sign-switch metadata.
 % 29-09-2026    Pietro Califano, Codex gpt-6    Retain onboard reference solar pressure and handle
 %                                             absent Sun entries; bound orbit interpolation by capacity.
+% 29-09-2026    Pietro Califano, Codex gpt-6    Add optional SRP-only LUT selection and retain bias units.
+% 30-09-2026    Pietro Califano, Codex gpt-6    Review SRP dispatch documentation and call formatting.
+% 30-09-2026    Pietro Califano, Codex gpt-6    Restore shared orbital-RHS ownership of LUT force composition.
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % evalAttQuatChbvPolyWithCoeffs()
 % evalChbvPolyWithCoeffs()
-% evalRHS_InertialDynOrbit
+% EvalRHS_InertialDynOrbit
 % Quat2DCM
 % ComputeSolarRadPressure
+% BuildFilterSrpLutInputs (optional SRP inputs)
 % -------------------------------------------------------------------------------------------------------------
 %% Future upgrades
 % TODO make more general purpose
@@ -49,20 +56,20 @@ function dDrvDt = EvalFilterDynOrbit(dStateTimetag, ...
 % -------------------------------------------------------------------------------------------------------------
 
 arguments (Input)
-    dStateTimetag           (1,1) double
-    dxState                 (:,1) double
-    strDynParams            (1,1) struct
-    strFilterMutabConfig    (1,1) struct
-    strFilterConstConfig    (1,1) struct {coder.mustBeConst}
+    dStateTimetag           (1, 1) double
+    dxState                 (:, 1) double
+    strDynParams            (1, 1) struct
+    strFilterMutabConfig    (1, 1) struct
+    strFilterConstConfig    (1, 1) struct {coder.mustBeConst}
 end
 
 arguments (Output)
-    dDrvDt (6,1) double
+    dDrvDt (6, 1) double
 end
 
 %% Function code
 % ui16StateSize = strFilterConstConfig.ui16StateSize;
-% dMainPosition_W = zeros(3,1); % DEVNOTE: hardcoded. Must come from ephemerides if necessary
+% dMainPosition_W = zeros(3, 1); % DEVNOTE: hardcoded. Must come from ephemerides if necessary
 
 % Check for 3rd bodies
 if coder.target('MATLAB') || coder.target('MEX')
@@ -81,7 +88,7 @@ dDrvDt = zeros(6, 1);
 dBodyEphemerides = coder.nullcopy(zeros(3*ui8NumOf3rdBodies, 1));
 d3rdBodiesGM = coder.nullcopy(zeros(ui8NumOf3rdBodies, 1));
 dDCMmainAtt_INfromTF  = zeros(3, 3);
-dResidualAccel = zeros(3,1);
+dResidualAccel = zeros(3, 1);
 
 ui16StatesIdx = uint16([strFilterConstConfig.strStatesIdx.ui8posVelIdx(1), strFilterConstConfig.strStatesIdx.ui8posVelIdx(end)]);
 
@@ -109,7 +116,7 @@ end
 % Keep the workspace bound fixed while the active degree remains runtime data.
 ui32AttMaxDegree = coder.const(uint32(floor( ...
     numel(strDynParams.strMainData.strAttData.dChbvPolycoeffs) / 4)) - 1);
-dTmpQuat = evalAttQuatChbvPolyWithCoeffs(strDynParams.strMainData.strAttData.ui32PolyDeg, 4, dEvalPoint,...
+dTmpQuat = evalAttQuatChbvPolyWithCoeffs(strDynParams.strMainData.strAttData.ui32PolyDeg, 4, dEvalPoint, ...
                                         strDynParams.strMainData.strAttData.dChbvPolycoeffs, ...
                                         strDynParams.strMainData.strAttData.dTimeLowBound, ...
                                         strDynParams.strMainData.strAttData.dTimeUpBound, ui32AttMaxDegree);
@@ -136,37 +143,48 @@ for idB = 1:ui8NumOf3rdBodies
     ui16PtrAlloc = ui16PtrAlloc + 3;
 end
 
-% Compute SRP coefficient
-dBiasCoeffSRP = 0.0;
-if isfield(strFilterConstConfig.strStatesIdx, "ui8CoeffSRPidx") && ...
-        all(strFilterMutabConfig.bConsiderStatesMode(strFilterConstConfig.strStatesIdx.ui8CoeffSRPidx) == false)
+% Resolve optional physical inputs without evaluating SRP in the filter wrapper.
+% DEVNOTE: call is no-op if bUseSrpLut is false; otherwise, it returns the LUT and resolved physical inputs.
+[bUseSrpLut, strResponseLut, strSrpData] = BuildFilterSrpLutInputs(dxState, strDynParams,...
+                                     strFilterMutabConfig, strFilterConstConfig);
+dCoeffSRP = 0;
 
-    dBiasCoeffSRP(:) = dxState( strFilterConstConfig.strStatesIdx.ui8CoeffSRPidx);
-end
+if ~coder.const(bUseSrpLut)
+    % Resolve inputs for cannonball SRP (no LUT evaluation)
+    dBiasCoeffSRP = 0.0;
+    if isfield(strFilterConstConfig.strStatesIdx, "ui8CoeffSRPidx") && ...
+            all(strFilterMutabConfig.bConsiderStatesMode(strFilterConstConfig.strStatesIdx.ui8CoeffSRPidx) == false)
 
-% Recompute pressure from onboard knowledge; keep SRP inactive without usable Sun geometry.
-strDynParams.strSRPdata.dP_SRP = 0.0;
-if ui8NumOf3rdBodies > 0
-    dSunPositionFromSC_W = dBodyEphemerides(1:3) - ...
-        dxState(strFilterConstConfig.strStatesIdx.ui8posVelIdx(1:3));
-    dSunDistance = norm(dSunPositionFromSC_W);
-    bSunPosValid = all(isfinite(dBodyEphemerides(1:3))) && ...
-        any(abs(dBodyEphemerides(1:3)) > eps('single'));
-
-    if bSunPosValid && isfinite(dSunDistance) && dSunDistance > eps('single')
-        strDynParams.strSRPdata.dP_SRP = ComputeSolarRadPressure(1.0 / dSunDistance, ...
-            strFilterConstConfig.bUseKilometersScale, strDynParams.strSRPdata.dP_SRP0);
+        dBiasCoeffSRP(:) = dxState(strFilterConstConfig.strStatesIdx.ui8CoeffSRPidx);
     end
-end
 
-% Add the active bias only when the configured pressure enables SRP.
-dCoeffSRP = (strDynParams.strSRPdata.dP_SRP * strDynParams.strSCdata.dReflCoeff * ...
-             strDynParams.strSCdata.dA_SRP)/strDynParams.strSCdata.dSCmass;
+    % Recompute pressure from onboard knowledge; keep SRP inactive without usable Sun geometry.
+    strDynParams.strSRPdata.dP_SRP = 0.0;
+    if ui8NumOf3rdBodies > 0
 
-if strDynParams.strSRPdata.dP_SRP > 0.0
-    dCoeffSRP = dCoeffSRP + dBiasCoeffSRP;
-else
-    dCoeffSRP = 0.0;
+        dSunPositionFromSC_W = dBodyEphemerides(1:3) - ...
+            dxState(strFilterConstConfig.strStatesIdx.ui8posVelIdx(1:3));
+
+        dSunDistance = norm(dSunPositionFromSC_W);
+        bSunPosValid = all(isfinite(dBodyEphemerides(1:3))) && ...
+            any(abs(dBodyEphemerides(1:3)) > eps('single'));
+
+        if bSunPosValid && isfinite(dSunDistance) && dSunDistance > eps('single')
+            strDynParams.strSRPdata.dP_SRP = ComputeSolarRadPressure(1.0 / dSunDistance, ...
+                                                                  strFilterConstConfig.bUseKilometersScale, ...
+                                                                  strDynParams.strSRPdata.dP_SRP0);
+        end
+    end
+
+    % Add the active bias only when the configured pressure enables SRP.
+    dCoeffSRP = (strDynParams.strSRPdata.dP_SRP * strDynParams.strSCdata.dReflCoeff * ...
+                 strDynParams.strSCdata.dA_SRP) / strDynParams.strSCdata.dSCmass;
+
+    if strDynParams.strSRPdata.dP_SRP > 0.0
+        dCoeffSRP = dCoeffSRP + dBiasCoeffSRP;
+    else
+        dCoeffSRP = 0.0;
+    end
 end
 
 % Get residual acceleration if any
@@ -190,8 +208,8 @@ end
 % TODO compare with Alban's one
 
 %% Evaluate RHS
-% ACHTUNG: Sun must be first in ephemerides and GM data
-dDrvDt(:) = evalRHS_InertialDynOrbit(dxState, ...
+% Let the shared RHS compose all forces; keep the Sun first in ephemerides and GM data.
+dDrvDt(:) = EvalRHS_InertialDynOrbit(dxState, ...
                                   dDCMmainAtt_INfromTF, ...
                                   strDynParams.strMainData.dGM, ...
                                   strDynParams.strMainData.dRefRadius, ...
@@ -201,10 +219,10 @@ dDrvDt(:) = evalRHS_InertialDynOrbit(dxState, ...
                                   [], ...        % strDynParams.strMainData.dSHcoeff
                                   uint32(0), ... % strDynParams.strMainData.ui16MaxSHdegree
                                   ui16StatesIdx, ...
-                                  dResidualAccel, ...
-                                  strDynParams.bIsInEclipse);
+                                  dResidualAccel, strDynParams.bIsInEclipse, ...
+                                  bUseSrpLut, strResponseLut, strSrpData);
 
-% dxdt(ui16StatesIdx(2,:)) = evalRHS_DynFOGM(dxState, ...
+% dxdt(ui16StatesIdx(2, :)) = EvalRHS_DynFOGM(dxState, ...
 %     dTimeConst, ...
 %     ui16StatesIdx(2, :));
 

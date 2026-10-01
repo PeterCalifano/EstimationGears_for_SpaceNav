@@ -51,9 +51,10 @@ ctest --test-dir build --output-on-failure
 
 ## MATLAB Setup and Tests
 
-Run `SetupPaths_EstimationGears.m` from the repo root to set up MATLAB paths (adds `matlab/`, `simulink/`, `lib/`, `tests/` to path).
+Run `SetupPaths_EstimationGears.m` from the repo root to set up MATLAB paths (adds `matlab/`, `simulink/`, `lib/` to path; `tests/` is intentionally not on the path — tests are run via the unittest runner from `tests/matlab/`).
 
-MATLAB tests live in `tests/matlab/` with subdirs per module (ekf_modules, jacobians, shared_filter_models, srif_modules, uncertainty_propagation, test_helpers). Tests use `matlab.unittest.TestCase` with `verifyEqual()`/`assertDifference()` assertions. Some tests load reference data from `.mat` files and validate against known solutions (e.g., Tapley ch5.6.4 for SRIF). MEX equivalence testing is also supported where applicable.
+MATLAB tests live in `tests/matlab/` with subdirs per module (ekf_modules, jacobians, shared_filter_models, shared_filter_modules, sigma_points_filters_modules, srif_modules, uncertainty_propagation, test_helpers). Tests use `matlab.unittest.TestCase` with `verifyEqual()`/`assertDifference()` assertions. Some tests load reference data from `.mat` files and validate against known solutions (e.g., Tapley ch5.6.4 for SRIF). MEX equivalence testing is also supported where applicable.
+
 
 ## Architecture
 
@@ -66,7 +67,7 @@ MATLAB tests live in `tests/matlab/` with subdirs per module (ekf_modules, jacob
 
 ### MATLAB Module Map (`matlab/`)
 
-- **`+filter_tailoring/`** — Mission-specific tailoring layer. This package is intended to contain all and only the functions that a user is expected to edit manually to adapt the generic filter implementations: `BuildArchitectureTemplate`, `BuildInputStructsTemplate`, `ComputeMeasPred`, `ComputeObsMatrix`, `ComputeMeasResiduals`, and `ComputeProcessNoiseCov`. Shared/public filter entrypoints such as `ComputeDynFcn`, `ComputeDynMatrix`, `PropagateDyn`, and `ManageMeasLatency` live outside this package.
+- **`+filter_tailoring/`** — Mission-specific tailoring layer. This package is intended to contain all and only the functions that a user is expected to edit manually to adapt the generic filter implementations: `BuildArchitectureTemplate`, `BuildInputStructsTemplate`, `ComputeMeasPredAndObsJacobian`, `ComputeMeasResiduals`, and `ComputeProcessNoiseCov`. `ComputeMeasPredAndObsJacobian` returns both the predicted measurement and the observation Jacobian from the same measurement-model branch (EKF/SRIF updates should use its three-output form so both products stay consistent). Shared/public filter entrypoints such as `ComputeDynFcn`, `ComputeDynMatrix`, `PropagateDyn`, and `ManageMeasLatency` live outside this package.
 - **`ekf_modules/`** — EKF implementations (see detailed breakdown below)
 - **`sigma_points_filters_modules/`** — Adaptive square-root UKF observation update (`SR_UKF_Adaptive_ObsUp`) plus the UD-form observation-update wrapper (`SRUSKF_UDcov_ObsUpDT`); common subfolder has `ComputeFactorProcessNoiseCov`
 - **`srif_modules/`** — Square Root Information Filter via Givens rotations (`GivensRotSRIF`). Information form avoids explicit covariance inversion. Reference: Tapley 2004 ch5, Mourikis MSCKF 2007
@@ -75,6 +76,7 @@ MATLAB tests live in `tests/matlab/` with subdirs per module (ekf_modules, jacob
 - **`filters_eval_utils/`** — `computeEstimError` (additive + multiplicative/quaternion errors), `filterNMEtest` (Normalized Mean Error), `filterNEStest` (Normalized Estimation Error Squared), `evalFilterConsistency` (plots + statistics), `EvalRE` (relative error)
 - **`datastructs/`** — Enum definitions (`EnumManCovModel`: MAG_DIR_THR, HERA_GNC, MAG_DIR_DIRECT, GATES)
 - **`utils/`** — `GenCubeVertices` for landmark generation; `.legacy/` has visualization and statistics helpers
+- **`uncertainty_propagation_utils/`** — Uncertainty/covariance propagation helpers (e.g. density-function propagator)
 
 ### EKF Modules Detail (`ekf_modules/`)
 
@@ -91,11 +93,11 @@ Three sub-architectures:
 Organized into subdirectories:
 
 - **`dynamicsModels/`** — `EvalFilterDynOrbit` (main orbit dynamics evaluator), `EvalFilterDynOrbit_FixedEph`. Sub-dirs:
-  - `RHSmodels/`: `evalRHS_DynLEO`, `evalRHS_DynFOGM`, `evalRHS_VariationalEqs`, `evalRHS_ContinuousTimeLinCov`, `evalRHS_RotatingFrame`
-  - `RHSmodels/acceleration_components/`: `evalRHS_ExponentialAtmDrag`, `evalRHS_ZonalHarmonics20`, `CheckForEclipseMainSphereBody`, `evalAtmExpDensity`
-  - `JacobianModels/`: `evalJAC_DynLEO`, `evalJAC_DynFOGM`, `evalJAC_InertialPosVelDyn`, `evalJAC_InertialMainBodyGrav`, `evalJAC_SRPwithBias`
-  - `JacobianModels/jacobian_components/`: `evalJAC_AtmExpDrag`, `evalJAC_3rdBodyGrav`, `evalJAC_ZonalHarmonics20`
-  - `attitude/`: `evalRHS_QuatKin`, `BuildQuatOmegaMatrix`, `ComputeAngVelFromIMU`
+  - `RHSmodels/`: `EvalRHS_DynLEO`, `EvalRHS_DynFOGM`, `EvalRHS_VariationalEqs`, `EvalRHS_ContinuousTimeLinCov`, `EvalRHS_RotatingFrame`
+  - `RHSmodels/acceleration_components/`: `EvalRHS_ExponentialAtmDrag`, `EvalRHS_ZonalHarmonics20`, `CheckForEclipseMainSphereBody`, `evalAtmExpDensity`
+  - `JacobianModels/`: `EvalJac_DynLEO`, `EvalJac_DynFOGM`, `EvalJac_InertialPosVelDyn`, `EvalJac_InertialMainBodyGrav`, `EvalJac_SRPwithBias`
+  - `JacobianModels/jacobian_components/`: `EvalJac_AtmExpDrag`, `EvalJac_3rdBodyGrav`, `EvalJac_ZonalHarmonics20`
+  - `attitude/`: `EvalRHS_QuatKin`, `BuildQuatOmegaMatrix`, `ComputeAngVelFromIMU`
   - `STMmodels/`: `getDiscreteTimeSTM`
 - **`observationModels/`** — `AnalyticalCoBMeasModel` (center-of-brightness with pinhole camera), `ComputeCamRelPoses`, `Pixel2LoS_NoDistorsion`, `normalizedProjectIDP`/`pinholeProjectIDP`/`pinholeProjectSymHP` (projection models), IDP<->EP transforms. Subfolder `Jacobians/` has corresponding measurement Jacobians.
 - **`processNoise/`** — `GetDiscreteQforPosVelSNC` (SNC for pos/vel), `evalProcessNoiseResidualAccel`, `computeProcessNoiseCovGMresAccel` (Gauss-Markov), `evalMappedProcessNoiseFOGM`, `ComputeManoeuvreInputNoise`

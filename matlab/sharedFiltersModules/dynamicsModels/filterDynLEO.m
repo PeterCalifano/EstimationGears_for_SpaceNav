@@ -48,8 +48,8 @@ end
 %% DEPENDENCIES
 % evalAttQuatChbvPolyWithCoeffs()
 % evalChbvPolyWithCoeffs()
-% evalRHS_DynLEO()
-% evalRHS_DynFOGM()
+% EvalRHS_DynLEO()
+% EvalRHS_DynFOGM()
 % -------------------------------------------------------------------------------------------------------------
 
 %% Function code
@@ -186,7 +186,7 @@ strDynParams.bIsInEclipse = CheckForEclipseMainSphereBody(dSunPositionFromMain_W
 % Evaluate Position and Velocity states dynamics
 
 % tmpIdx = strStatesIdx(1,1):strStatesIdx(2,2);
-dDrvDt(strStatesIdx.ui8posVelIdx) = evalRHS_DynLEO(dxState, ...
+dDrvDt(strStatesIdx.ui8posVelIdx) = EvalRHS_DynLEO(dxState, ...
                                                 dBodyEphemerides, ...
                                                 dDCMmainAtt_INfromTF, ...
                                                 dAtmCoeffsData, ...
