@@ -7,8 +7,11 @@ function drvSRPwithBiasJac = EvalJac_SRPwithBias(dxState, strDynParams, ...
 % -------------------------------------------------------------------------------------------------------------
 %% DESCRIPTION
 % Differentiate cannonball SRP acceleration with respect to position and an optional additive
-% acceleration-coefficient bias. Recompute pressure from the onboard reference at 1 AU, including
-% its inverse-square position dependence. Return zero when SRP is disabled or Sun data are absent.
+% acceleration-coefficient bias. Recompute live pressure from the onboard reference at 1 AU,
+% including its inverse-square position dependence. When bUseFixedEphemeridesOnStep is true,
+% use the prepared pressure cache and differentiate only Sun-line rotation.
+% Exclude considered means from position partials; retain their bias sensitivity for covariance.
+% Return zero when SRP is disabled, Sun data are unusable or the nominal optical response is zero.
 % Use the configured metre/kilometre dynamics units for state, pressure, area, and bias.
 % Leave SRP model selection and state-column assembly to EvalJac_InertialPosVelDyn.
 % -------------------------------------------------------------------------------------------------------------
@@ -16,13 +19,14 @@ function drvSRPwithBiasJac = EvalJac_SRPwithBias(dxState, strDynParams, ...
 % dxState                 (:, 1) double   Filter state, with optional additive SRP coefficient bias.
 % strDynParams            (1, 1) struct   Sun position in dBodyEphemerides(1:3), eclipse flag, and
 %                                     spacecraft data; strSRPdata.dP_SRP0 uses selected pressure units.
-% strFilterMutabConfig    (1, 1) struct   Retain the existing uniform component-call interface.
-%                                     No mutable settings enter this cannonball calculation.
+%                                     Hold strSRPdata.dP_SRP when bUseFixedEphemeridesOnStep is true.
+% strFilterMutabConfig    (1, 1) struct   Active/consider-state flags; exclude considered bias means.
 % strFilterConstConfig    (1, 1) struct   Fixed state indices and length-scale selection.
 % -------------------------------------------------------------------------------------------------------------
 %% OUTPUT
 % drvSRPwithBiasJac       (6, 3 or 4) double   Position/velocity derivative rows; columns are position
 %                                         components followed by the bias when its state exists.
+%                                         Retain the last column for a considered bias parameter.
 % -------------------------------------------------------------------------------------------------------------
 %% CHANGELOG
 % 24-02-2025    Pietro Califano     First version implemented from EvalJac_DynLEO
@@ -32,6 +36,7 @@ function drvSRPwithBiasJac = EvalJac_SRPwithBias(dxState, strDynParams, ...
 % 29-09-2026    Pietro Califano, Codex gpt-6    Retain configured reference pressure and align
 %                                             disabled-SRP derivatives.
 % 30-09-2026    Pietro Califano, Codex gpt-6    Keep model selection in the orbital Jacobian.
+% 04-10-2026    Pietro Califano, Codex GPT-6   Align held pressure, consider and zero-response derivatives.
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % ComputeSolarRadPressure
@@ -40,7 +45,7 @@ function drvSRPwithBiasJac = EvalJac_SRPwithBias(dxState, strDynParams, ...
 arguments (Input)
     dxState                 (:, 1) double
     strDynParams            (1, 1) struct
-    strFilterMutabConfig    (1, 1) struct %#ok<INUSA>
+    strFilterMutabConfig    (1, 1) struct
     strFilterConstConfig    (1, 1) struct {coder.mustBeConst}
 end
 
@@ -59,11 +64,15 @@ else
     ui8CoeffSRPidx = coder.const(0);
 end
 
+dBiasCoeffSRP = 0.0;
 if coder.const(ui8CoeffSRPidx > 0)
-    dBiasCoeffSRP = dxState(ui8CoeffSRPidx);
     drvSRPwithBiasJac = zeros(6, 4);
+
+    % Freeze the considered mean while preserving its allocated uncertainty column.
+    if ~strFilterMutabConfig.bConsiderStatesMode(ui8CoeffSRPidx)
+        dBiasCoeffSRP = dxState(ui8CoeffSRPidx);
+    end
 else
-    dBiasCoeffSRP = 0.0;
     drvSRPwithBiasJac = zeros(6, 3);
 end
 
@@ -90,23 +99,34 @@ end
 
 dInvNormSunPositionFromSC = 1/dNormSunPositionFromSC_IN;
 
-% Use the same onboard pressure and zero-pressure policy as the orbital RHS.
-strDynParams.strSRPdata.dP_SRP = ComputeSolarRadPressure(dInvNormSunPositionFromSC, ...
-    strFilterConstConfig.bUseKilometersScale, strDynParams.strSRPdata.dP_SRP0);
-if strDynParams.strSRPdata.dP_SRP == 0.0
+% Match the selected orbital wrapper's pressure authority.
+dPressureRadialFactor = 3.0;
+if isfield(strDynParams, 'bUseFixedEphemeridesOnStep') && strDynParams.bUseFixedEphemeridesOnStep
+    dPressure = strDynParams.strSRPdata.dP_SRP;
+    dPressureRadialFactor = 1.0;
+else
+    dPressure = ComputeSolarRadPressure(dInvNormSunPositionFromSC, ...
+        strFilterConstConfig.bUseKilometersScale, strDynParams.strSRPdata.dP_SRP0);
+end
+
+if dPressure == 0.0
     return;
 end
 
 %% Differentiate position dependence
-% Recompute the coefficient at this state so pressure and its derivative share one geometry.
-dCoeffSRP = (strDynParams.strSRPdata.dP_SRP * strDynParams.strSCdata.dReflCoeff * ...
+% Suppress all SRP columns when the nominal model supplies no force direction.
+dCoeffSRP = (dPressure * strDynParams.strSCdata.dReflCoeff * ...
              strDynParams.strSCdata.dA_SRP)/strDynParams.strSCdata.dSCmass;
 
-% Include inverse-square pressure and Sun-line rotation; keep bias independent of pressure.
+if dCoeffSRP == 0.0
+    return;
+end
+
+% Rotate the nominal force and additive bias; include pressure variation only in live mode.
 dInvNormSunPositionFromSC3 = dInvNormSunPositionFromSC^3;
 drvSRPwithBiasJac(ui8PosVelIdx(4:6), 1:3) = ...
     (dCoeffSRP + dBiasCoeffSRP)*dInvNormSunPositionFromSC * eye(3) ...
-    - (3*dCoeffSRP + dBiasCoeffSRP)*(dInvNormSunPositionFromSC3 * ...
+    - (dPressureRadialFactor*dCoeffSRP + dBiasCoeffSRP)*(dInvNormSunPositionFromSC3 * ...
         (dSunPositionToSC_IN * transpose(dSunPositionToSC_IN)));
 
 %% Differentiate the additive bias

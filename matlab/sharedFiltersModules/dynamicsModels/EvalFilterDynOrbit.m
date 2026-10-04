@@ -10,7 +10,8 @@ function dDrvDt = EvalFilterDynOrbit(dStateTimetag, dxState, strDynParams, ...
 % Exclude non-inertial force terms.
 % Use the selected metre/kilometre dynamics units consistently for state, pressure, and area.
 % Reserve the first third-body entry for the Sun; disable SRP when that entry is absent or invalid.
-% Keep the additive SRP coefficient bias active only when its existing filter-mode flag permits it.
+% Exclude considered bias means from nominal acceleration; retain their uncertainty in the Jacobian.
+% Suppress SRP and its bias for eclipse, unusable Sun data or zero nominal optical response.
 % Forward the optional SRP table and resolved physical inputs to the shared
 % orbital RHS. Keep force selection/composition in SimulationGears and keep
 % residual acceleration independent of the selected SRP model.
@@ -42,6 +43,7 @@ function dDrvDt = EvalFilterDynOrbit(dStateTimetag, dxState, strDynParams, ...
 % 29-09-2026    Pietro Califano, Codex gpt-6    Add optional SRP-only LUT selection and retain bias units.
 % 30-09-2026    Pietro Califano, Codex gpt-6    Review SRP dispatch documentation and call formatting.
 % 30-09-2026    Pietro Califano, Codex gpt-6    Restore shared orbital-RHS ownership of LUT force composition.
+% 04-10-2026    Pietro Califano, Codex GPT-6   Handle absent bias indices and zero optical response.
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % evalAttQuatChbvPolyWithCoeffs()
@@ -151,9 +153,10 @@ end
 dCoeffSRP = 0;
 
 if ~coder.const(bUseSrpLut)
-    % Resolve inputs for cannonball SRP (no LUT evaluation)
+    % Exclude considered means and resolve only a positive configured bias index.
     dBiasCoeffSRP = 0.0;
     if isfield(strFilterConstConfig.strStatesIdx, "ui8CoeffSRPidx") && ...
+            strFilterConstConfig.strStatesIdx.ui8CoeffSRPidx > 0 && ...
             all(strFilterMutabConfig.bConsiderStatesMode(strFilterConstConfig.strStatesIdx.ui8CoeffSRPidx) == false)
 
         dBiasCoeffSRP(:) = dxState(strFilterConstConfig.strStatesIdx.ui8CoeffSRPidx);
@@ -177,11 +180,11 @@ if ~coder.const(bUseSrpLut)
         end
     end
 
-    % Add the active bias only when the configured pressure enables SRP.
+    % Add bias only when the nominal model supplies an SRP direction.
     dCoeffSRP = (strDynParams.strSRPdata.dP_SRP * strDynParams.strSCdata.dReflCoeff * ...
                  strDynParams.strSCdata.dA_SRP) / strDynParams.strSCdata.dSCmass;
 
-    if strDynParams.strSRPdata.dP_SRP > 0.0
+    if dCoeffSRP ~= 0.0
         dCoeffSRP = dCoeffSRP + dBiasCoeffSRP;
     else
         dCoeffSRP = 0.0;

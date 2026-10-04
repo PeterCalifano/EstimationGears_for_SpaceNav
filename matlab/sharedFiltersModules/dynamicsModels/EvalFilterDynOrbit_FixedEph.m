@@ -7,8 +7,10 @@ function dDrvDt = EvalFilterDynOrbit_FixedEph(dStateTimetag, dxState, strDynPara
 %% DESCRIPTION
 % Evaluate orbital dynamics using supplied main-body attitude and interpolated
 % third-body data. Forward optional SRP inputs to the shared orbital RHS;
-% retain the existing cached-pressure cannonball coefficient when the selector
-% is absent/false. Leave force selection and composition to SimulationGears.
+% use the prepared strSRPdata.dP_SRP cache for cannonball SRP. Hold that pressure
+% over the integration interval while retaining Sun-line rotation with position.
+% Exclude considered bias/residual means and apply the supplied eclipse flag.
+% Suppress bias for zero nominal optical response. Leave force composition to SimulationGears.
 % Example: dRhs = EvalFilterDynOrbit_FixedEph(0, dxState, strDynParams, strMutable, strConstant);
 % Output: Six derivatives using the selected SRP force and unchanged other dynamics.
 % -------------------------------------------------------------------------------------------------------------
@@ -16,7 +18,8 @@ function dDrvDt = EvalFilterDynOrbit_FixedEph(dStateTimetag, dxState, strDynPara
 % dStateTimetag          Ephemeris epoch [s].
 % dxState                Filter state in configured length units [LU].
 % strDynParams           Supplied attitude, third-body orbit coefficients,
-%                        cached cannonball pressure and spacecraft data. Supply
+%                        cached cannonball pressure and spacecraft data. Prepare
+%                        strSRPdata.dP_SRP at the interval start. Supply
 %                        strSRPdata.dP_SRP0 and strSrpPointing for LUT SRP.
 % strFilterMutabConfig   Runtime active/consider-state settings.
 % strFilterConstConfig   Fixed transverse selection, units/state mapping and optional LUT.
@@ -31,11 +34,13 @@ function dDrvDt = EvalFilterDynOrbit_FixedEph(dStateTimetag, dxState, strDynPara
 % 29-09-2026  Pietro Califano, Codex gpt-6  Add SRP-only selection and bounded ephemeris capacity.
 % 30-09-2026  Pietro Califano, Codex gpt-6  Clarify supplied/interpolated inputs and SRP dispatch.
 % 30-09-2026  Pietro Califano, Codex gpt-6  Remove LUT force evaluation and residual injection from this wrapper.
+% 04-10-2026  Pietro Califano, Codex GPT-6  Align consider, eclipse and inactive-force gates.
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % EvalRHS_InertialDynOrbit()
 % BuildFilterSrpLutInputs, evalChbvPolyWithCoeffs
 % -------------------------------------------------------------------------------------------------------------
+
 arguments (Input)
     dStateTimetag         (1, 1) double
     dxState               (:, 1) double
@@ -43,6 +48,7 @@ arguments (Input)
     strFilterMutabConfig  (1, 1) struct
     strFilterConstConfig  (1, 1) struct {coder.mustBeConst}
 end
+
 arguments (Output)
     dDrvDt (6, 1) double
 end
@@ -92,27 +98,34 @@ if isfield(strDynParams, "dDCMmainAtt_INfromTF")
     dDCMmainAtt_INfromTF(:, :) = strDynParams.dDCMmainAtt_INfromTF;
 end
 
-% Resolve optional physical SRP inputs and preserve the existing cannonball coefficient.
+% Resolve optional physical inputs without evaluating the selected SRP model.
 [bUseSrpLut, strResponseLut, strSrpData, bIncludeTransverse] = ...
     BuildFilterSrpLutInputs(dxState, strDynParams, strFilterMutabConfig, strFilterConstConfig);
 dCoeffSRP = 0;
-% Retain the legacy cached-pressure branch's eclipse handling; the LUT uses the supplied flag.
-bIsInEclipse = false;
-if coder.const(bUseSrpLut)
-    bIsInEclipse = strDynParams.bIsInEclipse;
-else
-    % Preserve the existing cached-pressure cannonball branch for legacy profiles.
+
+if ~coder.const(bUseSrpLut)
+    % Exclude considered means and resolve only a positive configured bias index.
     dBiasCoeffSRP = 0.0;
-    if isfield(strFilterConstConfig.strStatesIdx, "ui8CoeffSRPidx")
+    if isfield(strFilterConstConfig.strStatesIdx, "ui8CoeffSRPidx") && ...
+            strFilterConstConfig.strStatesIdx.ui8CoeffSRPidx > 0 && ...
+            all(strFilterMutabConfig.bConsiderStatesMode(strFilterConstConfig.strStatesIdx.ui8CoeffSRPidx) == false)
+
         dBiasCoeffSRP(:) = dxState(strFilterConstConfig.strStatesIdx.ui8CoeffSRPidx);
     end
+
+    % Hold the prepared pressure and suppress bias when no nominal response exists.
     dCoeffSRP = (strDynParams.strSRPdata.dP_SRP * strDynParams.strSCdata.dReflCoeff * ...
                  strDynParams.strSCdata.dA_SRP) / strDynParams.strSCdata.dSCmass;
-    dCoeffSRP = dCoeffSRP + dBiasCoeffSRP;
+
+    if dCoeffSRP ~= 0.0
+        dCoeffSRP = dCoeffSRP + dBiasCoeffSRP;
+    end
 end
 
-% Add the existing residual acceleration without changing its state semantics.
-if isfield(strFilterConstConfig.strStatesIdx, "ui8ResidualAccelIdx")
+% Exclude considered residual means consistently with the live orbital wrapper.
+if isfield(strFilterConstConfig.strStatesIdx, "ui8ResidualAccelIdx") && ...
+        all(strFilterMutabConfig.bConsiderStatesMode(strFilterConstConfig.strStatesIdx.ui8ResidualAccelIdx) == false)
+
     dResidualAccel(:) = dxState(strFilterConstConfig.strStatesIdx.ui8ResidualAccelIdx);
 end
 
@@ -122,7 +135,7 @@ dDrvDt(strFilterConstConfig.strStatesIdx.ui8posVelIdx) = ...
                             strDynParams.strMainData.dGM, strDynParams.strMainData.dRefRadius, ...
                             dCoeffSRP, d3rdBodiesGM, dBodyEphemerides, ...
                             [], uint32(0), ... % Keep harmonics disabled in this filter model.
-                            ui16StatesIdx, dResidualAccel, bIsInEclipse, ...
+                            ui16StatesIdx, dResidualAccel, strDynParams.bIsInEclipse, ...
                             bUseSrpLut, strResponseLut, strSrpData, bIncludeTransverse);
 
 end
