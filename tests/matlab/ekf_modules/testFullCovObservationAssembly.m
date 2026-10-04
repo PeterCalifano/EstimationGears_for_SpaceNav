@@ -5,6 +5,7 @@ function tests = testFullCovObservationAssembly
 %% DESCRIPTION
 % Verify that a failed LiDAR prediction does not discard other sensors or shift
 % their measurement covariance away from the corresponding residual rows.
+% A received range without an intersection must preserve the prior when no other sensor is available.
 % -------------------------------------------------------------------------------------------------------------
 %% INPUT
 % None.
@@ -14,6 +15,7 @@ function tests = testFullCovObservationAssembly
 % -------------------------------------------------------------------------------------------------------------
 %% CHANGELOG
 % 09-09-2026  Pietro Califano, Codex gpt-6    Cover failed-sensor assembly and empty updates.
+% 04-10-2026  Pietro Califano, Codex    Preserve the prior on missed or failed LiDAR predictions.
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % BuildFullCovObservationTestProblem, EKF_SlideWindow_FullCov_ObsUp.
@@ -35,7 +37,6 @@ end
 function testFailedLidarPreservesOtherMeasurements(testCase)
 strScenario = CreateScenario_();
 strScenario.strMutable.dLidarBeamDirection_SCB = -strScenario.strMutable.dLidarBeamDirection_SCB;
-strScenario.strMutable.bEnableLidarFallbackPrediction = false;
 for bOtherFlags = logical([0, 1, 1;1, 0, 1])
     strScenario.strMeasurements.bMeasTypeFlags = [bOtherFlags;false];
     strScenario.strMeasurements.dRangeLidarCentroid = [300;350;0];
@@ -49,20 +50,41 @@ for bOtherFlags = logical([0, 1, 1;1, 0, 1])
     for ui32Output = [1, 2, 6, 7, 8, 9, 10]
         verifyEqual(testCase, cellActual{ui32Output}, cellExpected{ui32Output},'AbsTol', 2e-10);
     end
-    verifyTrue(testCase, cellActual{4}.bLidarIntersectFailure);
+    verifyTrue(testCase, cellActual{11}.bMeasurementReceived(1));
+    verifyFalse(testCase, cellActual{11}.bPredictionValid(1));
+    verifyFalse(testCase, cellActual{11}.bUsedInUpdate(1));
+    verifyEqual(testCase, cellActual{11}.ui32RowRanges(1, :), uint32([0, 0]));
 end
 end
 
 function testFailedOnlyMeasurementPreservesPrior(testCase)
-strScenario = CreateScenario_();
-strScenario.strMutable.dLidarBeamDirection_SCB = -strScenario.strMutable.dLidarBeamDirection_SCB;
-strScenario.strMutable.bEnableLidarFallbackPrediction = false;
-strScenario.strMeasurements.bMeasTypeFlags = logical([0;0;1]);
-cellActual = RunUpdate_(strScenario);
-verifyEqual(testCase, cellActual{1}, strScenario.dxState);
-verifyEqual(testCase, cellActual{2}, strScenario.dCovariance);
-for ui32Output = [6, 7, 8, 9, 10]
-    verifyEqual(testCase, cellActual{ui32Output}, zeros(size(cellActual{ui32Output})));
+% Geometry validity must gate the update independently of outlier editing.
+for ui8ShapeMode = uint8([1, 2])
+    for bEnableEditing = [false, true]
+        for dMissDirection_IN = [0, 0; 1, 0; 0, 0]
+            strScenario = CreateScenario_();
+            strScenario.strMutable.ui8LidarShapeModelMode = ui8ShapeMode;
+            strScenario.strMutable.bEnableEditing = bEnableEditing;
+            strScenario.strMutable.dLidarBeamDirection_SCB = ...
+                strScenario.strModel.dDCM_SCBiFromIN(:, :, 1) * dMissDirection_IN;
+            strScenario.strMeasurements.bMeasTypeFlags = logical([0; 0; 1]);
+            cellActual = RunUpdate_(strScenario);
+            verifyEqual(testCase, cellActual{1}, strScenario.dxState);
+            verifyEqual(testCase, cellActual{2}, strScenario.dCovariance);
+            verifyEqual(testCase, cellActual{3}, strScenario.dTimestamps);
+            verifyEqual(testCase, cellActual{4}, strScenario.strMutable);
+            for ui32Output = [6, 7, 8, 9, 10]
+                verifyEqual(testCase, cellActual{ui32Output}, zeros(size(cellActual{ui32Output})));
+            end
+
+            % Availability stays recorded even though prediction contributes no rows or update.
+            verifyTrue(testCase, cellActual{11}.bMeasurementReceived(1));
+            verifyFalse(testCase, cellActual{11}.bPredictionValid(1));
+            verifyFalse(testCase, cellActual{11}.bUsedInUpdate(1));
+            verifyEqual(testCase, cellActual{11}.ui32ActiveRowCount, uint32(0));
+            verifyTrue(testCase, isnan(cellActual{11}.dNisByModel(1)));
+        end
+    end
 end
 end
 
@@ -105,7 +127,7 @@ strScenario.strMeasurements.dDirectionOfMotion_CurrentCamFromPrevCam_Cam = dDire
 end
 
 function cellOutputs = RunUpdate_(strScenario)
-cellOutputs = cell(1, 10);
+cellOutputs = cell(1, 11);
 [cellOutputs{:}] = EKF_SlideWindow_FullCov_ObsUp(strScenario.dxState, strScenario.dCovariance, ...
     strScenario.dTimestamps, strScenario.strMeasurements, strScenario.strDynamics, ...
     strScenario.strModel, strScenario.strMutable, strScenario.strConstant);

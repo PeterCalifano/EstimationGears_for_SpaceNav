@@ -1,36 +1,35 @@
-function [dRangeLidarResidual, dRangeLidarObsMatrix, dRangeVariance, bPredictionValid, ...
-    dxStatePost, strFilterMutabConfig] = EvaluateLidarObservation(dxStatePost, dStateTimetag, ...
-        dMeasurement, strDynParams, strMeasModelParams, strFilterMutabConfig, strFilterConstConfig) %#codegen
+function [dRangeLidarResidual, dRangeLidarObsMatrix, dRangeVariance, bPredictionValid] = ...
+    EvaluateLidarObservation(dxStatePost, dStateTimetag, dMeasurement, strDynParams, ...
+                             strMeasModelParams, strFilterMutabConfig, strFilterConstConfig) %#codegen
 %% SIGNATURE
-% [dResidual, dJacobian, dVariance, bValid, dxPrediction, strMutable] = EvaluateLidarObservation(...)
+% [dResidual, dJacobian, dVariance, bValid] = EvaluateLidarObservation(...)
 % ---------------------------------------------------------------------------------------------------
 %% DESCRIPTION
-% Build a navigation LiDAR observation from the ray/shape prediction and optional range fallback.
+% Build a navigation LiDAR observation only from a valid forward ray/shape intersection.
 % The configured state indices define the Jacobian columns. This adapter does not read or update
 % a covariance/information factor. The ray geometry remains owned by RayEllipsoidIntersection.
-% On first fallback, return the existing range-bias reset for subsequent predictions; the caller
-% owns applying state corrections. A failed prediction with fallback disabled returns bValid=false.
+% A missed or failed intersection returns bValid=false and zero residual/Jacobian outputs.
+% Prediction does not change the nominal state, range bias, or configuration.
 % ---------------------------------------------------------------------------------------------------
 %% INPUT
 % dxStatePost              Nominal navigation state, including configured bias entries.
 % dStateTimetag            Current epoch in entry one.
 % dMeasurement             Received LiDAR range [filter length unit].
-% strDynParams             Target attitude ephemeris and reference radius.
+% strDynParams             Target attitude ephemeris for ellipsoidal prediction.
 % strMeasModelParams       Independent current spacecraft attitude.
-% strFilterMutabConfig     Beam, shape, noise, fallback and previous failure settings.
-% strFilterConstConfig     Constant state layout and orbit-only mode.
+% strFilterMutabConfig     Beam, shape and sensor-noise settings.
+% strFilterConstConfig     Constant state layout and observation indices.
 % ---------------------------------------------------------------------------------------------------
 %% OUTPUT
 % dRangeLidarResidual      Measured minus predicted range [filter length unit].
 % dRangeLidarObsMatrix     Current-state prediction Jacobian.
-% dRangeVariance          Range noise variance [filter length unit squared], enlarged on fallback.
+% dRangeVariance          Sensor range noise variance [filter length unit squared].
 % bPredictionValid        Whether the complete block may be assembled.
-% dxStatePost             Prediction state after the existing first-fallback bias reset.
-% strFilterMutabConfig    Configuration with the intersection-failure flag updated.
 % ---------------------------------------------------------------------------------------------------
 %% CHANGELOG
 % 09-09-2026  Pietro Califano, Codex gpt-6    Extract observation-model ownership.
 % 10-09-2026    Pietro Califano, Codex gpt-6    Remove the obsolete orbit-only ablation selector.
+% 04-10-2026    Pietro Califano, Codex GPT-6    Remove radial fallback and prediction-side state changes.
 % ---------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % RayEllipsoidIntersection, EvalChbvAttInterp_InFromTarget, ComputeTargetAttitudeBias.
@@ -51,8 +50,6 @@ arguments (Output)
     dRangeLidarObsMatrix (1, :) double
     dRangeVariance (1, 1) double
     bPredictionValid (1, 1) logical
-    dxStatePost (:, 1) double
-    strFilterMutabConfig (1, 1) struct
 end
 
 ui16StateSize = coder.const(strFilterConstConfig.ui16StateSize);
@@ -61,6 +58,8 @@ dRangeLidarObsMatrix = zeros(1, ui16StateSize); % TODO determine if can be coder
 dRangeVariance = strFilterMutabConfig.dRangeLidarSigma^2;
 bPredictionValid = false;
 
+% Set default Jacobian evaluation flags. 
+% NOTE: The first flag is for the ray origin, the second for the target attitude.
 bEvaluateJacs = [true, true];
 
 dRayOrigin_IN       = dxStatePost(strFilterConstConfig.strStatesIdx.ui8posVelIdx(1:3));
@@ -77,6 +76,7 @@ dInvDiagShapeCoeffs = strFilterMutabConfig.dSphericalInvDiagShapeCoeffs;
 
 if strFilterMutabConfig.ui8LidarShapeModelMode == 1
     % Spherical model
+    bEvaluateJacs(1)    = true;
     bEvaluateJacs(2)    = false;
 
 elseif strFilterMutabConfig.ui8LidarShapeModelMode == 2
@@ -133,49 +133,11 @@ if bIntersectFlag && not(bFailureFlag)
     if coder.target("MATLAB") || coder.target("MEX")
         fprintf('Lidar: OK.\t')
     end
-elseif ~strFilterMutabConfig.bEnableLidarFallbackPrediction
-
-    % Set failure flag
-    strFilterMutabConfig.bLidarIntersectFailure = true;
-
-    if coder.target('MATLAB') || coder.target('MEX')
-        warning('ERROR: Lidar measurement received but not processed due to error in filter prediction model (Ray Ellipsoid intersection test)!')
-    end
-
-    bPredictionValid = false;
 else
-
-    % Lidar fallback model (radial only)
+    % Keep the invalid block out of the update even when measurement editing is disabled.
     if coder.target('MATLAB') || coder.target('MEX')
-        warning('WARNING: Lidar measurement received but ellipsoid intersection test failed. Processing using fallback (range) model.')
-    end
-
-    % Preserve the first-fallback bias reset used by subsequent predictions.
-    if strFilterMutabConfig.bLidarIntersectFailure == false
-        dxStatePost(strFilterConstConfig.strStatesIdx.ui8LidarMeasBiasIdx) = 0.0;
-    end
-
-    % Set failure flag
-    strFilterMutabConfig.bLidarIntersectFailure = true;
-
-    % Form the range residual and its current-state derivatives.
-    dOriginNorm = norm(dRayOrigin_IN);
-    dIntersectDistance = dOriginNorm-strDynParams.strMainData.dRefRadius;
-    dRangeLidarPredict = dIntersectDistance + dxStatePost(strFilterConstConfig.strStatesIdx.ui8LidarMeasBiasIdx);
-
-    dRangeLidarResidual = dMeasurement - dRangeLidarPredict;
-
-    % Increase autocovariance of measurement to account for simplified model
-    dRangeVariance = strFilterMutabConfig.dRangeLidarSigma.^2 + strFilterMutabConfig.dRangeLidarShapeSigma^2;
-
-    dRangeLidarObsMatrix(1, strFilterConstConfig.strStatesIdx.ui8posVelIdx(1:3))    = dRayOrigin_IN/dOriginNorm;
-
-    dRangeLidarObsMatrix(1, strFilterConstConfig.strStatesIdx.ui8LidarMeasBiasIdx)  = 1.0;
-
-    bPredictionValid = true;
-
-    if coder.target("MATLAB") || coder.target("MEX")
-        fprintf('Lidar: OK.  ')
+        warning('EvaluateLidarObservation:PredictionFailed', ...
+                'LiDAR range received but ray/shape prediction failed; skipping measurement.');
     end
 end
 

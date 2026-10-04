@@ -59,7 +59,7 @@ function [dxStatePost, ...
 % dxStatePost             Corrected current/window nominal state; unused slots retain their prior.
 % dxStateCovPost          Full covariance with current/window cross terms and consider handling.
 % dStateTimetag           Input epochs, unchanged by the observation update.
-% strFilterMutabConfig    Updated sensor-failure, consider-mode and measurement-editing fields.
+% strFilterMutabConfig    Updated consider-mode and measurement-editing fields.
 % strDynParams            Dynamics parameters synchronized with estimated state values.
 % dAllPriorResVector      Unwhitened assembled residual, before editing; unused rows are zero.
 % dAllObservJac           Assembled prediction Jacobian in the full error-state layout.
@@ -90,6 +90,7 @@ function [dxStatePost, ...
 % 10-09-2026    Pietro Califano, Codex gpt-6    Remove the obsolete orbit-only ablation selector.
 % 10-09-2026    Pietro Califano, Codex gpt-6    Exclude unused capacity from covariance checks.
 % 19-09-2026    Pietro Califano, Codex gpt-5.6  Retain typed innovation and rejection diagnostics.
+% 04-10-2026    Pietro Califano, Codex    Skip failed LiDAR predictions without a bias reset.
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % BuildNavObservationBatch, ComputeFullCovObsGain, EvaluateNavMeasEditing,
@@ -160,7 +161,7 @@ if coder.target('MATLAB') || coder.target('MEX')
 end
 
 % Assemble sensor outputs before selecting a numerical update representation.
-[strBatch, dxStatePost, strFilterMutabConfig] = BuildNavObservationBatch(dxStatePost, ...
+strBatch = BuildNavObservationBatch(dxStatePost, ...
     dStateTimetag, strMeasBus, strDynParams, strMeasModelParams, strFilterMutabConfig, strFilterConstConfig);
 
 dAllObservJac = strBatch.dJacobian;

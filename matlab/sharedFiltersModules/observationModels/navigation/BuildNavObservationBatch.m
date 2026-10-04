@@ -1,14 +1,15 @@
-function [strBatch, dxPrediction, strFilterMutabConfig] = BuildNavObservationBatch( ...
-    dxPrediction, dStateTimetag, strMeasBus, strDynParams, strMeasModelParams, ...
-    strFilterMutabConfig, strFilterConstConfig) %#codegen
+function strBatch = BuildNavObservationBatch(dxPrediction, dStateTimetag, strMeasBus, ...
+                                           strDynParams, strMeasModelParams, ...
+                                           strFilterMutabConfig, strFilterConstConfig) %#codegen
 %% SIGNATURE
-% [strBatch, dxPrediction, strMutable] = BuildNavObservationBatch(...)
+% strBatch = BuildNavObservationBatch(...)
 % ---------------------------------------------------------------------------------------------------
 %% DESCRIPTION
 % Decode the navigation sensor bus and insert complete unwhitened observations in LiDAR,
 % centroid, relative-direction order. Input offsets follow received flags; output offsets
 % follow successful predictions. The caller owns covariance/information updates and editing.
 % Sensor availability does not alter configured state-estimation policy or propagated bias states.
+% A received LiDAR range with an invalid ray prediction contributes no observation rows.
 % ---------------------------------------------------------------------------------------------------
 %% INPUT
 % dxPrediction             Nominal current/window state used for prediction.
@@ -17,20 +18,19 @@ function [strBatch, dxPrediction, strFilterMutabConfig] = BuildNavObservationBat
 %                          are packed with the range first only when it was received.
 % strDynParams             Target/Sun ephemerides and shape reference.
 % strMeasModelParams       Attitude history and inter-observation dynamics.
-% strFilterMutabConfig      Sensor settings, failure flags and consider policy.
+% strFilterMutabConfig      Sensor settings and consider policy.
 % strFilterConstConfig      Constant navigation state layout and storage capacities.
 % ---------------------------------------------------------------------------------------------------
 %% OUTPUT
 % strBatch                 Fixed residual/H/R/N arrays plus model identity, source epoch, availability,
 %                          prediction validity, sensor row ranges, and active count.
-% dxPrediction             Nominal state after any valid LiDAR prediction correction.
-% strFilterMutabConfig      Updated LiDAR failure flag; state-estimation policy is preserved.
 % ---------------------------------------------------------------------------------------------------
 %% CHANGELOG
 % 09-09-2026  Pietro Califano, Codex gpt-6    Extract observation-model ownership.
 % 10-09-2026  Pietro Califano, Codex gpt-6    Remove the obsolete orbit-only ablation selector.
 % 19-09-2026  Pietro Califano, Codex gpt-5.6  Preserve estimated bias dynamics across image gaps.
 % 19-09-2026  Pietro Califano, Codex gpt-5.6  Retain typed observation provenance for diagnostics.
+% 04-10-2026  Pietro Califano, Codex    Assemble observations without prediction-side state changes.
 % ---------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % InitObservationBatch, InsertObservationBlock, EvaluateLidarObservation,
@@ -48,8 +48,6 @@ arguments (Input)
 end
 arguments (Output)
     strBatch (1, 1) struct
-    dxPrediction (:, 1) double
-    strFilterMutabConfig (1, 1) struct
 end
 
 ui32StateSize = coder.const(uint32(strFilterConstConfig.ui16StateSize));
@@ -76,7 +74,7 @@ end
 
 % Lidar model block
 if bReceivedMeas(3)
-    [dResidual, dJacobian, dVariance, bValid, dxPrediction, strFilterMutabConfig] = ...
+    [dResidual, dJacobian, dVariance, bValid] = ...
         EvaluateLidarObservation(dxPrediction, dStateTimetag, strMeasBus.dRangeLidarCentroid(1), ...
             strDynParams, strMeasModelParams, strFilterMutabConfig, strFilterConstConfig);
     if bValid

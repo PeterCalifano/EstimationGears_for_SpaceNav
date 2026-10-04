@@ -4,7 +4,7 @@ function tests = testObservationModules
 % -------------------------------------------------------------------------------------------------------------
 %% DESCRIPTION
 % Test LiDAR and centroid predictions independently of filter updates. Validate geometry
-% derivatives and the state changes returned by LiDAR fallback.
+% derivatives and rejection of missed or failed LiDAR ray predictions.
 % -------------------------------------------------------------------------------------------------------------
 %% INPUT
 % None.
@@ -17,6 +17,7 @@ function tests = testObservationModules
 % 10-09-2026  Pietro Califano, Codex gpt-6    Verify state-dependent centroid covariance geometry.
 % 19-09-2026  Pietro Califano, Codex gpt-5.6  Verify ACOB correction Jacobian reaches the filter update.
 % 19-09-2026  Pietro Califano, Codex gpt-5.6  Preserve centroid identity after failed LiDAR prediction.
+% 04-10-2026  Pietro Califano, Codex    Require a valid intersection for each LiDAR observation.
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % EvaluateCentroidObservation, EvaluateLidarObservation,
@@ -102,31 +103,46 @@ verifyEqual(testCase, dAppliedJacobian(1:2,1:17), dAcobJacobian, ...
 verifyGreaterThan(testCase, norm(dAppliedGain(1:17,1:2), 'fro'), 0);
 end
 
-function testLidarFallbackReturnsExplicitPredictionChanges(testCase)
+function testLidarMissOrFailureHasNoObservation(testCase)
+% Both a geometric miss and an invalid direction must leave the block unusable.
+for ui8ShapeMode = uint8([1, 2])
+    for dMissDirection_IN = [0, 0; 1, 0; 0, 0]
+        strScenario = BuildFullCovObservationTestProblem();
+        strScenario.strMutable.ui8LidarShapeModelMode = ui8ShapeMode;
+        strScenario.strMutable.dLidarBeamDirection_SCB = ...
+            strScenario.strModel.dDCM_SCBiFromIN(:, :, 1) * dMissDirection_IN;
+        [dResidual, dJacobian, dVariance, bValid] = EvaluateLidarObservation( ...
+            strScenario.dxState, strScenario.dTimestamps, 1.1, strScenario.strDynamics, ...
+            strScenario.strModel, strScenario.strMutable, strScenario.strConstant);
+        verifyFalse(testCase, bValid);
+        verifyEqual(testCase, dResidual, 0);
+        verifyEqual(testCase, dJacobian, zeros(size(dJacobian)));
+        verifyEqual(testCase, dVariance, strScenario.strMutable.dRangeLidarSigma^2);
+    end
+end
+end
+
+function testNearTangentLidarHasNoObservation(testCase)
 strScenario = BuildFullCovObservationTestProblem();
-strScenario.strMutable.dLidarBeamDirection_SCB = -strScenario.strMutable.dLidarBeamDirection_SCB;
-strScenario.strMutable.bEnableLidarFallbackPrediction = true;
-strScenario.strMutable.bLidarIntersectFailure = false;
-strScenario.strMutable.dRangeLidarShapeSigma = .7;
-[dResidual, dJacobian, dVariance, bValid, dxPrediction, strMutable] = EvaluateLidarObservation( ...
-    strScenario.dxState, strScenario.dTimestamps, 1.1, strScenario.strDynamics, strScenario.strModel, ...
-    strScenario.strMutable, strScenario.strConstant);
-verifyTrue(testCase, bValid);
-verifyTrue(testCase, strMutable.bLidarIntersectFailure);
-verifyEqual(testCase, dxPrediction(14), 0);
-verifyEqual(testCase, dxPrediction([1:13, 15:end]), strScenario.dxState([1:13, 15:end]));
-verifyEqual(testCase, dVariance, strMutable.dRangeLidarSigma^2+.7^2, 'AbsTol', 1e-14);
-verifyEqual(testCase, dResidual, 1.1-norm(strScenario.dxState(1:3))+ ...
-    strScenario.strDynamics.strMainData.dRefRadius, 'AbsTol', 1e-14);
-verifyEqual(testCase, dJacobian(1, 1:3), strScenario.dxState(1:3)'/norm(strScenario.dxState(1:3)), ...
-    'AbsTol', 1e-14);
+strScenario.strMutable.ui8LidarShapeModelMode = uint8(1);
+strScenario.dxState(1:3) = [2; 0; 0];
+
+% A unit-sphere tangent has an ill-conditioned range derivative and must be skipped.
+dTangentDirection_IN = [-sqrt(3)/2; 0.5; 0];
+strScenario.strMutable.dLidarBeamDirection_SCB = ...
+    strScenario.strModel.dDCM_SCBiFromIN(:, :, 1) * dTangentDirection_IN;
+[dResidual, dJacobian, ~, bValid] = EvaluateLidarObservation( ...
+    strScenario.dxState, strScenario.dTimestamps, 1.1, strScenario.strDynamics, ...
+    strScenario.strModel, strScenario.strMutable, strScenario.strConstant);
+verifyFalse(testCase, bValid);
+verifyEqual(testCase, dResidual, 0);
+verifyEqual(testCase, dJacobian, zeros(size(dJacobian)));
 end
 
 function testFailedLidarDoesNotRelabelCentroidDiagnostics(testCase)
 strScenario = BuildFullCovObservationTestProblem();
 strScenario.strMutable.dLidarBeamDirection_SCB = ...
     -strScenario.strMutable.dLidarBeamDirection_SCB;
-strScenario.strMutable.bEnableLidarFallbackPrediction = false;
 strScenario.strMutable.bEnableEditing = false;
 strScenario.strMutable.i8CentroidingAlgorithmMode = uint8(0);
 strScenario.strMeasurements.bMeasTypeFlags = logical([0; 1; 1]);
@@ -186,14 +202,12 @@ dNumeric = ComputeFiniteDiffJacobian(@(dInputs) PredictLidar_( ...
 verifyEqual(testCase, dJacobian(:, ui8InputIdx), dNumeric, 'AbsTol', 5e-8);
 verifyTrue(testCase, isfinite(dResidual));
 
-% An unsuccessful prediction must report failure without resetting the bias.
+% An outward beam must report an invalid observation.
 strScenario.strMutable.dLidarBeamDirection_SCB = -strScenario.strMutable.dLidarBeamDirection_SCB;
-[~, ~, ~, bValid, dxPrediction, strMutable] = EvaluateLidarObservation( ...
+[~, ~, ~, bValid] = EvaluateLidarObservation( ...
     strScenario.dxState, strScenario.dTimestamps, 1.1, strScenario.strDynamics, ...
     strScenario.strModel, strScenario.strMutable, strScenario.strConstant);
 verifyFalse(testCase, bValid);
-verifyTrue(testCase, strMutable.bLidarIntersectFailure);
-verifyEqual(testCase, dxPrediction, strScenario.dxState);
 end
 
 function dPrediction = PredictLidar_(dInputs, ui8InputIdx, strScenario)

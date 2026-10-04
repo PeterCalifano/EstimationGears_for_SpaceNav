@@ -7,6 +7,7 @@ function tests = testFullCovObservationCodegen
 % Cross-compile standalone C for ARM64 and inspect the linked allocation contract.
 % Compare MATLAB and MEX outputs while measurement flags, window count, editing,
 % underweighting and consider mode change at runtime. Exercise two compiled capacities.
+% Missed or failed LiDAR predictions contribute no update in either representation.
 % -------------------------------------------------------------------------------------------------------------
 %% INPUT
 % None. MATLAB Coder and a configured C compiler are required for this acceptance test.
@@ -19,6 +20,7 @@ function tests = testFullCovObservationCodegen
 % 09-09-2026  Pietro Califano, Codex gpt-6    Exercise zero and nonzero camera lever arms.
 % 10-09-2026  Pietro Califano, Codex gpt-6    Cross-compile both constant window-frame modes.
 % 19-09-2026  Pietro Califano, Codex gpt-5.6  Verify generated recursive-update diagnostics parity.
+% 04-10-2026  Pietro Califano, Codex    Skip invalid LiDAR predictions in both shape and editing modes.
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % MATLAB Coder, BuildFullCovObservationTestProblem, EKF_SlideWindow_FullCov_ObsUp.
@@ -95,13 +97,19 @@ for bCorrelated = [false, true]
 
         % A received LiDAR sample may fail prediction while the other sensor blocks remain usable.
         strScenario.strMutable.ui16WindowStateCounter = uint16(1);
-        strScenario.strMutable.bEnableEditing = false;
-        strScenario.strMutable.dLidarBeamDirection_SCB = -strScenario.strMutable.dLidarBeamDirection_SCB;
-        for bFallback = [false, true]
-            strScenario.strMutable.bEnableLidarFallbackPrediction = bFallback;
-            for ui8Mask = uint8([4, 5, 6, 7])
-                strScenario.strMeasurements.bMeasTypeFlags = logical(bitget(ui8Mask, uint8(1:3)))';
-                VerifyNativeOutputs_(testCase, BuildInputs_(strScenario));
+        for ui8ShapeMode = uint8([1, 2])
+            strScenario.strMutable.ui8LidarShapeModelMode = ui8ShapeMode;
+            for bEnableEditing = [false, true]
+                strScenario.strMutable.bEnableEditing = bEnableEditing;
+                for dMissDirection_IN = [0, 0; 1, 0; 0, 0]
+                    strScenario.strMutable.dLidarBeamDirection_SCB = ...
+                        strScenario.strModel.dDCM_SCBiFromIN(:, :, 1) * dMissDirection_IN;
+                    for ui8Mask = uint8([4, 5, 6, 7])
+                        strScenario.strMeasurements.bMeasTypeFlags = ...
+                            logical(bitget(ui8Mask, uint8(1:3)))';
+                        VerifyNativeOutputs_(testCase, BuildInputs_(strScenario), true);
+                    end
+                end
             end
         end
     end
@@ -129,10 +137,10 @@ clear FullCovObsFixed_test_mex
 codegen('-config', objConfig,'EKF_SlideWindow_FullCov_ObsUp','-args', cellCodegenArgs, ...
     '-d', fullfile(charBuildRoot,'build'), ...
     '-o', fullfile(charBuildRoot,'FullCovObsFixed_test_mex'));
-VerifyNativeOutputs_(testCase, BuildInputs_(strScenario));
+VerifyNativeOutputs_(testCase, BuildInputs_(strScenario), false);
 end
 
-function VerifyNativeOutputs_(testCase, cellInputs)
+function VerifyNativeOutputs_(testCase, cellInputs, bExpectInvalidLidar)
 cellMatlab = cell(1, 11);
 cellMex = cell(1, 11);
 [cellMatlab{:}] = EKF_SlideWindow_FullCov_ObsUp(cellInputs{:});
@@ -143,6 +151,23 @@ end
 verifyEqual(testCase, cellMex{4}, cellMatlab{4});
 verifyEqual(testCase, cellMex{5}, cellMatlab{5});
 VerifyRecursiveDiagnostics_(testCase, cellMex{11}, cellMatlab{11});
+
+% Matching outputs alone must not hide an invalid LiDAR block being used by both implementations.
+if bExpectInvalidLidar
+    verifyTrue(testCase, cellMatlab{11}.bMeasurementReceived(1));
+    verifyFalse(testCase, cellMatlab{11}.bPredictionValid(1));
+    verifyFalse(testCase, cellMex{11}.bPredictionValid(1));
+    verifyFalse(testCase, cellMatlab{11}.bUsedInUpdate(1));
+    verifyFalse(testCase, cellMex{11}.bUsedInUpdate(1));
+    verifyEqual(testCase, cellMex{11}.ui32RowRanges(1, :), uint32([0, 0]));
+
+    % With no other received sensor, the generated update must preserve the complete prior.
+    if ~any(cellInputs{4}.bMeasTypeFlags(1:2))
+        verifyEqual(testCase, cellMex{1}, cellInputs{1});
+        verifyEqual(testCase, cellMex{2}, cellInputs{2});
+        verifyEqual(testCase, cellMex{4}, cellInputs{7});
+    end
+end
 end
 
 function VerifyRecursiveDiagnostics_(testCase, strActual, strExpected)

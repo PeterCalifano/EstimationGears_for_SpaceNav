@@ -12,6 +12,7 @@ function [strFilterMutabConfig, strDynParams, strMeasModelParams, strMeasBus] = 
 % expressed in the filter's length unit and defaults to zero. Current position refers to the
 % spacecraft origin; camera clones and camera observations apply the mounting offset.
 % External camera-attitude uncertainty is supplied separately to the direction/range model.
+% LiDAR prediction requires an intersection and carries no radial fallback state or tuning.
 % -------------------------------------------------------------------------------------------------------------
 %% INPUT
 % strFilterConstConfig       Fixed filter architecture and storage capacities.
@@ -40,6 +41,7 @@ function [strFilterMutabConfig, strDynParams, strMeasModelParams, strMeasBus] = 
 % 10-09-2026    Pietro Califano, Codex gpt-6    Include the full-covariance EKF editing limit.
 % 10-09-2026    Pietro Califano, Codex gpt-6    Configure isotropic external attitude uncertainty.
 % 11-09-2026  Pietro Califano, Codex gpt-6    Remove unused runtime sign-switch metadata.
+% 04-10-2026  Pietro Califano, Codex    Remove fallback-only LiDAR configuration fields.
 % -------------------------------------------------------------------------------------------------------------
 
 %% DEPENDENCIES
@@ -150,9 +152,6 @@ strFilterMutabConfig.dTargetPosition_IN = zeros(3,1);
 strFilterMutabConfig.dMeanInstFOVinRadPx = 0.0;
 strFilterMutabConfig.dReferenceMetricRadius = 0.0;
 strFilterMutabConfig.dRangeLidarSigma = 0.0;
-strFilterMutabConfig.dRangeLidarShapeSigma = 0.0;
-strFilterMutabConfig.bLidarIntersectFailure = false;
-strFilterMutabConfig.bEnableLidarFallbackPrediction = false;
 strFilterMutabConfig.dLidarBeamDirection_SCB = [1.0; 0.0; 0.0];
 strFilterMutabConfig.dEllipsoidInvDiagShapeCoeffs = ones(3,1);
 strFilterMutabConfig.dSphericalInvDiagShapeCoeffs = ones(3,1);

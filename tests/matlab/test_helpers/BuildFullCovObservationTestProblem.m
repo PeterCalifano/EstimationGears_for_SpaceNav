@@ -36,7 +36,6 @@ strMutable.dMeasUnderweightCoeff = 0;
 strMutable.dRangeLidarSigma = 0.2;
 strMutable.ui8LidarShapeModelMode = uint8(2);
 strMutable.dEllipsoidInvDiagShapeCoeffs = [1/9;1/4;1/1.44];
-strMutable.bEnableLidarFallbackPrediction = false;
 
 % Use nontrivial spacecraft and target attitudes and a displaced ray origin.
 dBeam_IN = [-1;0.2;-0.1];

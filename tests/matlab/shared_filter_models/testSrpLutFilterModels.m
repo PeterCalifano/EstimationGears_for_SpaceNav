@@ -6,6 +6,8 @@ function strVerification = testSrpLutFilterModels()
 % Validate SRP-only LUT/bias functions and their actual optional filter dispatch.
 % Compare independent constant-coefficient physics, finite position/bias state
 % perturbations, metre/kilometre units, consider sensitivity and inactive modes.
+% Align the bias sensitivity with unbiased selected SRP, including transverse
+% response. Preserve its magnitude independently of positive pressure scaling.
 % Exercise the existing RK4 integrator and discrete STM over a 60-second interval.
 % Restore caller paths after the test callback override. Run no mission simulation.
 % Example: strVerification = testSrpLutFilterModels();
@@ -18,6 +20,7 @@ function strVerification = testSrpLutFilterModels()
 % strVerification   Contract counts and numerical discrepancies.
 % -------------------------------------------------------------------------------------------------------------
 %% CHANGELOG
+% 04-10-2026  Pietro Califano     Verify selected-SRP bias direction through filter dispatch.
 % 01-10-2026  Pietro Califano, Codex GPT-6  Cover nodal transverse data and constant inclusion.
 % 29-09-2026  Pietro Califano, Codex gpt-6  Validate optional SRP/filter integration and bias.
 % 30-09-2026  Pietro Califano, Codex gpt-6  Verify force reuse in the mapped Jacobian call.
@@ -113,9 +116,12 @@ for bKilometers = [false, true]
             dWithoutSrp = EvalFilterDynOrbit(0, dxState, strInactive, strCaseMutable, strCaseConstant);
             assert(norm(dFull(4:6) - dWithoutSrp(4:6) - dAcceleration) < 1e-20);
             if ui32BiasMode ~= 3
-                dPosSCtoSun_IN = strParams.dBodyEphemerides - dxState(1:3);
-                dSunDir_IN = dPosSCtoSun_IN / norm(dPosSCtoSun_IN);
-                assert(norm(dJacSRPOrbital(4:6, 4) + dSunDir_IN) < 1e-14);
+                % Resolve direction from zero-bias force, including consider-mode sensitivity.
+                dxUnbiased = dxState;
+                dxUnbiased(7) = 0;
+                dNominalSRP = EvalFilterSRPLutWithBias( ...
+                    dxUnbiased, strParams, strCaseMutable, strCaseConstant);
+                assert(norm(dJacSRPOrbital(4:6, 4) - dNominalSRP / norm(dNominalSRP)) < 1e-14);
             end
             ui32Cases = ui32Cases + 1;
         end
@@ -297,7 +303,7 @@ assert(norm(dBiasJac - dUnit) < 1e-14);
 end
 
 function VerifyInactiveAndBias_(dxState, strParams, strMutable, strConstant)
-% Keep additive bias independent of pressure and the transverse selection.
+% Keep bias magnitude pressure-independent and align it with the selected response.
 arguments (Input)
     dxState (10, 1) double
     strParams (1, 1) struct
@@ -307,8 +313,6 @@ end
 
 dxNoBias = dxState;
 dxNoBias(7) = 0;
-dPosSCtoSun_IN = strParams.dBodyEphemerides - dxState(1:3);
-dSunDir_IN = dPosSCtoSun_IN / norm(dPosSCtoSun_IN);
 for bTransverse = [false, true]
     strConstant.bIncludeTransverseSrp = bTransverse;
     for dPressureScale = [0.4, 2.3]
@@ -316,7 +320,7 @@ for bTransverse = [false, true]
         strCase.strSRPdata.dP_SRP0 = dPressureScale * strParams.strSRPdata.dP_SRP0;
         dBiased = EvalFilterSRPLutWithBias(dxState, strCase, strMutable, strConstant);
         dUnbiased = EvalFilterSRPLutWithBias(dxNoBias, strCase, strMutable, strConstant);
-        assert(norm(dBiased - dUnbiased + dxState(7) * dSunDir_IN) < 1e-20);
+        assert(norm(dBiased - dUnbiased - dxState(7) * dUnbiased / norm(dUnbiased)) < 1e-20);
     end
 end
 
