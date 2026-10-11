@@ -10,6 +10,7 @@ function [dSRPaccel_IN, dJacAccSRP_IN, dJacAccSRPWrtBias_IN, bDerivativeRegular]
 % leave force, units and analytical partials to EvalRHS_SRPLutWithBias.
 % Suppress SRP for eclipse or unavailable Sun data. Preserve the requested
 % output prefix so force-only calls skip derivative work.
+% Keep the table, pressure, mass, pointing and active/consider settings as runtime data.
 % Example: [dForce, dJac] = EvalFilterSRPLutWithBias(dxState, strParams, strMutable, strConstant);
 % Output: SRP acceleration [LU/s^2] and position partials [1/s^2].
 % -------------------------------------------------------------------------------------------------------------
@@ -18,7 +19,7 @@ function [dSRPaccel_IN, dJacAccSRP_IN, dJacAccSRPWrtBias_IN, bDerivativeRegular]
 % strDynParams           Resolved Sun-first dBodyEphemerides, bIsInEclipse,
 %                        reference pressure, mass and supplied strSrpPointing.
 % strFilterMutabConfig   Runtime active/consider-state flags.
-% strFilterConstConfig   Constant model/transverse selectors, units, state mapping and LUT.
+% strFilterConstConfig   Constant model/transverse selectors, units and state mapping.
 % -------------------------------------------------------------------------------------------------------------
 %% OUTPUT
 % dSRPaccel_IN           Inertial SRP acceleration [LU/s^2].
@@ -27,11 +28,13 @@ function [dSRPaccel_IN, dJacAccSRP_IN, dJacAccSRPWrtBias_IN, bDerivativeRegular]
 % bDerivativeRegular     Shared LUT smoothness indicator; true when inactive.
 % -------------------------------------------------------------------------------------------------------------
 %% CHANGELOG
-% 01-10-2026  Pietro Califano, Codex GPT-6  Correct nodal transverse samples and constant inclusion.
 % 29-09-2026  Pietro Califano, Codex gpt-6  Add SRP-only filter bias handoff.
 % 30-09-2026  Pietro Califano, Codex gpt-6  Keep only filter input adaptation; move force physics to SimulationGears.
+% 01-10-2026  Pietro Califano, Codex GPT-6  Correct nodal transverse samples and constant inclusion.
 % 01-10-2026  Pietro Califano, Codex gpt-6  Standardize SRP acronym in entry-point names.
 % 01-10-2026  Pietro Califano, Codex gpt-6  Clarify frames, physical inputs and generated struct types.
+% 04-10-2026  Pietro Califano, Codex GPT-6  Preserve large constants at shared-model calls.
+% 06-10-2026  Pietro Califano     Align runtime SRP response contracts.
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % BuildFilterSrpLutInputs, EvalRHS_SRPLutWithBias (SimulationGears).
@@ -69,24 +72,29 @@ end
 
 % Translate filter inputs once and pass only resolved physical data to SimulationGears.
 [bUseSrpLut, strResponseLut, strSrpData, bIncludeTransverse] = ...
-    BuildFilterSrpLutInputs(dxState, strDynParams, strFilterMutabConfig, strFilterConstConfig);
+    BuildFilterSrpLutInputs(dxState, strDynParams, strFilterMutabConfig, coder.const(strFilterConstConfig));
 assert(bUseSrpLut, 'EvalFilterSRPLutWithBias:ModelNotSelected', 'Select LUT SRP for this adapter.');
 
 % Form the inertial spacecraft-to-Sun displacement from the configured position rows.
 ui8PosVelIdx = strFilterConstConfig.strStatesIdx.ui8posVelIdx;
 dPosSCtoSun_IN = dSunPosition_IN - dxState(ui8PosVelIdx(1:3));
 
-% Preserve output specialization through the shared force call.
-if nargout < 2
-    dSRPaccel_IN = EvalRHS_SRPLutWithBias(dPosSCtoSun_IN, strSrpData, strResponseLut, bIncludeTransverse);
-elseif nargout < 3
+% Preserve output specialization while forwarding the same runtime table to every call.
+if coder.const(nargout < 2)
+    dSRPaccel_IN = EvalRHS_SRPLutWithBias(dPosSCtoSun_IN, strSrpData, ...
+                                       strResponseLut, bIncludeTransverse);
+elseif coder.const(nargout < 3)
     [dSRPaccel_IN, dJacAccSRP_IN] = ...
-        EvalRHS_SRPLutWithBias(dPosSCtoSun_IN, strSrpData, strResponseLut, bIncludeTransverse);
-elseif nargout < 4
+        EvalRHS_SRPLutWithBias(dPosSCtoSun_IN, strSrpData, ...
+                              strResponseLut, bIncludeTransverse);
+elseif coder.const(nargout < 4)
     [dSRPaccel_IN, dJacAccSRP_IN, dJacAccSRPWrtBias_IN] = ...
-        EvalRHS_SRPLutWithBias(dPosSCtoSun_IN, strSrpData, strResponseLut, bIncludeTransverse);
+        EvalRHS_SRPLutWithBias(dPosSCtoSun_IN, strSrpData, ...
+                              strResponseLut, bIncludeTransverse);
 else
     [dSRPaccel_IN, dJacAccSRP_IN, dJacAccSRPWrtBias_IN, bDerivativeRegular] = ...
-        EvalRHS_SRPLutWithBias(dPosSCtoSun_IN, strSrpData, strResponseLut, bIncludeTransverse);
+        EvalRHS_SRPLutWithBias(dPosSCtoSun_IN, strSrpData, ...
+                              strResponseLut, bIncludeTransverse);
 end
+
 end

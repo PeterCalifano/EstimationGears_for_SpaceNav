@@ -1,6 +1,8 @@
-function [dxState, strDynParams, strMutable, strConstant] = BuildSrpLutFilterTestFixture(bKilometers, bIncludeTransverse)
+function [dxState, strDynParams, strMutable, strConstant] = ...
+    BuildSrpLutFilterTestFixture(bKilometers, bIncludeTransverse, dAngularGridStep)
 %% SIGNATURE
-% [dxState, strDynParams, strMutable, strConstant] = BuildSrpLutFilterTestFixture(bKilometers, bIncludeTransverse)
+% [dxState, strDynParams, strMutable, strConstant] = ...
+%     BuildSrpLutFilterTestFixture(bKilometers, bIncludeTransverse, dAngularGridStep)
 % -------------------------------------------------------------------------------------------------------------
 %% DESCRIPTION
 % Build explicit synthetic orbital/Sun data for unit, state-mapping and filter
@@ -11,20 +13,23 @@ function [dxState, strDynParams, strMutable, strConstant] = BuildSrpLutFilterTes
 % Output: Ten states including an additive SRP bias and three residual accelerations.
 % -------------------------------------------------------------------------------------------------------------
 %% INPUT
-% bKilometers         Select kilometre instead of metre dynamics.
+% bKilometers          Select kilometre instead of metre dynamics.
 % bIncludeTransverse   Select transverse storage and compile-time evaluation; default true.
+% dAngularGridStep      Synthetic response-grid spacing [deg]; default five.
 % -------------------------------------------------------------------------------------------------------------
 %% OUTPUT
 % dxState       Fixed position/velocity/additive-bias/residual state [LU;LU/s;LU/s^2].
 % strDynParams  Constant ephemeris example, physical data and supplied attitude.
 % strMutable    Explicit active/consider-state flags.
-% strConstant   Explicit state mapping, model/transverse selectors and immutable LUT.
+% strConstant   Explicit state mapping and model/transverse selectors.
 % -------------------------------------------------------------------------------------------------------------
 %% CHANGELOG
-% 01-10-2026  Pietro Califano, Codex GPT-6  Cover nodal transverse data and constant inclusion.
 % 29-09-2026  Pietro Califano, Codex gpt-6  Add real filter-seam preparation fixtures.
 % 30-09-2026  Pietro Califano, Codex gpt-6  Separate state, ephemeris and configuration preparation.
+% 01-10-2026  Pietro Califano, Codex GPT-6  Cover nodal transverse data and constant inclusion.
 % 01-10-2026  Pietro Califano, Codex gpt-6  Remove unused illumination fields from pointing data.
+% 04-10-2026  Pietro Califano, Codex GPT-6  Support large two-degree configuration checks.
+% 06-10-2026  Pietro Califano     Align runtime SRP response contracts.
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % BuildSrpLutTestFixture; SimulationGears test fixture.
@@ -32,6 +37,7 @@ function [dxState, strDynParams, strMutable, strConstant] = BuildSrpLutFilterTes
 arguments (Input)
     bKilometers (1, 1) logical
     bIncludeTransverse (1, 1) logical = true
+    dAngularGridStep (1, 1) double {mustBeFinite, mustBePositive} = 5
 end
 
 arguments (Output)
@@ -68,8 +74,9 @@ strDynParams = struct('strMainData', struct('dGM', 3.003435675 / dLengthScale^3,
 
 % Keep the optional LUT and state mapping explicit for source and Coder tests.
 strMutable = struct('bConsiderStatesMode', false(10, 1));
+strDynParams.strResponseLut = BuildSrpLutTestFixture(false, bIncludeTransverse, dAngularGridStep);
 strConstant = struct('ui16StateSize', uint16(10), 'bUseKilometersScale', bKilometers, ...
     'bUseSrpLut', true, 'bIncludeTransverseSrp', bIncludeTransverse, 'bEstimateGravParam', false, ...
     'strStatesIdx', struct('ui8posVelIdx', uint16((1:6).'), 'ui8CoeffSRPidx', uint16(7), ...
-    'ui8ResidualAccelIdx', uint16((8:10).')), 'strResponseLut', BuildSrpLutTestFixture(false, bIncludeTransverse));
+    'ui8ResidualAccelIdx', uint16((8:10).')));
 end

@@ -479,3 +479,36 @@ Reviewer: Codex GPT-6. Keep evidence under
 SimulationGears worktree for these checks; keep dependency-pointer integration
 separate. Preserve unrelated plans, sibling indexes and dependency pointers.
 Run no mission simulation and create no commit.
+
+### Keep SRP response values in runtime dynamics — 7 October 2026
+
+- [x] Read the validated table from `strDynParams.strResponseLut` in force,
+  orbital and Jacobian consumers; keep only selection and architecture constant.
+- [x] Generate fixed types/capacities without embedding table values or pruning
+  the supplied runtime schema; keep existing output-prefix specialization.
+- [x] Verify scalar/transverse modes, metre/kilometre units, active/consider bias,
+  eclipse, and changed values/active counts in the same compiled consumers.
+- [x] Review public documentation, readable blocks, imperative comments and
+  chronological changelogs; exclude unrelated development plans.
+- [x] Validate and stage the twelve-path corrected runtime batch against the
+  committed SimulationGears contract; leave the commit to the user.
+
+The earlier uncommitted frozen-table strategy is superseded. Its parity results
+in `/tmp/cosmica-srp-compiled-consumer-20261004-rv2uCZOU` did not establish runtime
+mutability. The pure constant lookup helper is excluded from this implementation.
+
+Runtime qualification: 14 fixed-allocation MEX builds, 48 module queries,
+24 orbital cases and four native libraries with twelve update cases. Maximum
+absolute native discrepancy is `4.3715e-16`. COSMICA Stage 24 records the factory,
+navigation, guidance, control and preparation seams and their validation limits.
+Evidence: `/tmp/cosmica-srp-runtime-contract-20261006-5z_g1wf1`.
+
+No full simulation, physical-model recalibration or deployment is part of this
+consolidation. Keep the model-selection/YAML/factory ownership in Nav-Backend;
+complete its separately tracked transport handoff before using committed consumers.
+
+The committed-base consolidation candidate passes four fresh fixed-allocation
+MEX builds and 24 table-update/consider cases in both units and modes. Source
+contracts pass 12 cases, 16 pole queries and the 60-second STM check
+(`2.72105e-7` relative discrepancy). Ten MATLAB files are Analyzer-clean.
+Evidence: `/tmp/estimation-srp-runtime-consolidation-20261007-ux9nj26c`.

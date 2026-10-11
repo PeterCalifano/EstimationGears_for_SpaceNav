@@ -20,13 +20,14 @@ function strVerification = testSrpLutFilterModels()
 % strVerification   Contract counts and numerical discrepancies.
 % -------------------------------------------------------------------------------------------------------------
 %% CHANGELOG
-% 04-10-2026  Pietro Califano     Verify selected-SRP bias direction through filter dispatch.
-% 01-10-2026  Pietro Califano, Codex GPT-6  Cover nodal transverse data and constant inclusion.
 % 29-09-2026  Pietro Califano, Codex gpt-6  Validate optional SRP/filter integration and bias.
 % 30-09-2026  Pietro Califano, Codex gpt-6  Verify force reuse in the mapped Jacobian call.
 % 30-09-2026  Pietro Califano, Codex gpt-6  Review helper contracts and pole-case readability.
 % 30-09-2026  Pietro Califano, Codex gpt-6  Verify orbital model selection and optional bias inputs.
+% 01-10-2026  Pietro Califano, Codex GPT-6  Cover nodal transverse data and constant inclusion.
 % 01-10-2026  Pietro Califano, Codex gpt-6  Retain eclipse and attitude checks without penumbra inputs.
+% 04-10-2026  Pietro Califano     Verify selected-SRP bias direction through filter dispatch.
+% 06-10-2026  Pietro Califano     Align runtime SRP response contracts.
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % BuildSrpLutFilterTestFixture, EvalFilterSRPLutWithBias, EvalJac_SRPLutWithBias,
@@ -286,7 +287,7 @@ arguments (Input)
     dLengthScale (1, 1) double
 end
 
-strConstant.strResponseLut = BuildSrpLutTestFixture(true);
+strParams.strResponseLut = BuildSrpLutTestFixture(true);
 strConstant.bIncludeTransverseSrp = false;
 dPosSuntoSC_IN = dxState(1:3) - strParams.dBodyEphemerides;
 dRange = norm(dPosSuntoSC_IN);
@@ -341,7 +342,7 @@ for ui32Mode = uint32(1):uint32(3)
 end
 
 % Preserve the legacy/default selection when no LUT flag or payload is supplied.
-strLegacy = rmfield(strConstant, {'bUseSrpLut', 'strResponseLut'});
+strLegacy = rmfield(strConstant, 'bUseSrpLut');
 strExplicitLegacy = strLegacy;
 strExplicitLegacy.bUseSrpLut = false;
 assert(isequal(EvalFilterDynOrbit(0, dxState, strParams, strMutable, strLegacy), ...
@@ -392,7 +393,7 @@ assert(isequal(dAbsentOrbitJac, dDisabledOrbitJac));
 assert(all(dAbsentOrbitJac(:, strConstant.strStatesIdx.ui8CoeffSRPidx) == 0));
 
 % Keep the cannonball component independent of the orbital model selector.
-strCannonball = rmfield(strConstant, {'bUseSrpLut', 'strResponseLut'});
+strCannonball = rmfield(strConstant, 'bUseSrpLut');
 assert(isequal(EvalJac_SRPwithBias(dxState, strParams, strMutable, strConstant), ...
               EvalJac_SRPwithBias(dxState, strParams, strMutable, strCannonball)));
 end

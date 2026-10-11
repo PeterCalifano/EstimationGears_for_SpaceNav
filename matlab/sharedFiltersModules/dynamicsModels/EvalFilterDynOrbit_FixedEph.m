@@ -11,12 +11,13 @@ function dDrvDt = EvalFilterDynOrbit_FixedEph(dStateTimetag, dxState, strDynPara
 % over the integration interval while retaining Sun-line rotation with position.
 % Exclude considered bias/residual means and apply the supplied eclipse flag.
 % Suppress bias for zero nominal optical response. Leave force composition to SimulationGears.
+% Keep state indices constant and pass the fixed-size response table from runtime dynamics.
 % Example: dRhs = EvalFilterDynOrbit_FixedEph(0, dxState, strDynParams, strMutable, strConstant);
 % Output: Six derivatives using the selected SRP force and unchanged other dynamics.
 % -------------------------------------------------------------------------------------------------------------
 %% INPUT
 % dStateTimetag          Ephemeris epoch [s].
-% dxState                Filter state in configured length units [LU].
+% dxState                Filter position/velocity and optional biases [LU; LU/s; LU/s^2].
 % strDynParams           Supplied attitude, third-body orbit coefficients,
 %                        cached cannonball pressure and spacecraft data. Prepare
 %                        strSRPdata.dP_SRP at the interval start. Supply
@@ -28,13 +29,15 @@ function dDrvDt = EvalFilterDynOrbit_FixedEph(dStateTimetag, dxState, strDynPara
 % dDrvDt                 Six orbital derivatives [LU/s; LU/s^2].
 % -------------------------------------------------------------------------------------------------------------
 %% CHANGELOG
-% 01-10-2026  Pietro Califano, Codex GPT-6  Correct nodal transverse samples and constant inclusion.
 % 24-02-2025    Pietro Califano     Implement version taking from legact filterDynOrbit and
 %                                   for compatibility with EvalRHS_InertialDynOrbit
 % 29-09-2026  Pietro Califano, Codex gpt-6  Add SRP-only selection and bounded ephemeris capacity.
 % 30-09-2026  Pietro Califano, Codex gpt-6  Clarify supplied/interpolated inputs and SRP dispatch.
 % 30-09-2026  Pietro Califano, Codex gpt-6  Remove LUT force evaluation and residual injection from this wrapper.
+% 01-10-2026  Pietro Califano, Codex GPT-6  Correct nodal transverse samples and constant inclusion.
+% 04-10-2026  Pietro Califano, Codex GPT-6  Preserve large constant SRP inputs at orbital calls.
 % 04-10-2026  Pietro Califano, Codex GPT-6  Align consider, eclipse and inactive-force gates.
+% 06-10-2026  Pietro Califano     Align runtime SRP response contracts.
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % EvalRHS_InertialDynOrbit()
@@ -63,7 +66,8 @@ d3rdBodiesGM = coder.nullcopy(zeros(ui8NumOf3rdBodies, 1));
 dBodyEphemerides = strDynParams.dBodyEphemerides;
 dDCMmainAtt_INfromTF = zeros(3, 3);
 dResidualAccel = zeros(3, 1);
-ui16StatesIdx = uint16([strFilterConstConfig.strStatesIdx.ui8posVelIdx(1), strFilterConstConfig.strStatesIdx.ui8posVelIdx(end)]);
+ui16StatesIdx = coder.const(uint16([strFilterConstConfig.strStatesIdx.ui8posVelIdx(1), ...
+                                  strFilterConstConfig.strStatesIdx.ui8posVelIdx(end)]));
 
 % Clamp the interpolation epoch to the supplied main-body attitude interval.
 if dStateTimetag <= strDynParams.strMainData.strAttData.dTimeLowBound
@@ -100,7 +104,7 @@ end
 
 % Resolve optional physical inputs without evaluating the selected SRP model.
 [bUseSrpLut, strResponseLut, strSrpData, bIncludeTransverse] = ...
-    BuildFilterSrpLutInputs(dxState, strDynParams, strFilterMutabConfig, strFilterConstConfig);
+    BuildFilterSrpLutInputs(dxState, strDynParams, strFilterMutabConfig, coder.const(strFilterConstConfig));
 dCoeffSRP = 0;
 
 if ~coder.const(bUseSrpLut)
@@ -136,6 +140,7 @@ dDrvDt(strFilterConstConfig.strStatesIdx.ui8posVelIdx) = ...
                             dCoeffSRP, d3rdBodiesGM, dBodyEphemerides, ...
                             [], uint32(0), ... % Keep harmonics disabled in this filter model.
                             ui16StatesIdx, dResidualAccel, strDynParams.bIsInEclipse, ...
-                            bUseSrpLut, strResponseLut, strSrpData, bIncludeTransverse);
+                            bUseSrpLut, strResponseLut, ...
+                            strSrpData, bIncludeTransverse);
 
 end

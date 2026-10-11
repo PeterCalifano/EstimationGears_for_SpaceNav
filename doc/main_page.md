@@ -27,7 +27,8 @@ The native build is independent of MATLAB-only source/runtime checkouts under `l
 ## Optional SRP response-table model
 
 Select the response table with constant `strFilterConstConfig.bUseSrpLut=true`
-and supply the validated numeric payload in `strResponseLut`. The existing
+and supply the validated numeric payload in `strDynParams.strResponseLut`.
+The existing
 `EvalFilterDynOrbit` and `EvalFilterDynOrbit_FixedEph` prepare numerical inputs
 with `BuildFilterSrpLutInputs` and forward them to SimulationGears
 `EvalRHS_InertialDynOrbit` for force selection and composition. Use
@@ -90,7 +91,7 @@ with respect to the ignored nominal state value.
 ```matlab
 strConstant.bUseSrpLut = true;
 strConstant.bIncludeTransverseSrp = true;
-strConstant.strResponseLut = strPreparedLut;
+strDynParams.strResponseLut = strPreparedLut;
 % Request mapped partials and force together for identical inputs.
 [dSrpJacobian, dAcceleration] = EvalJac_SRPLutWithBias(dxState, strDynParams, ...
                                                        strMutable, strConstant);
@@ -105,8 +106,10 @@ configuration. Keep distinct integration stages separate.
 ### Code generation and validation
 
 Use `CodegenSrpLutFilterModules` to generate a fixed-size MEX or C++ library with the
-table and state mapping embedded in constant configuration. Constant inputs
-are removed from MEX signatures. Numerical kernels disable variable sizing
+state mapping in constant configuration and the table in runtime dynamics.
+Only configuration is removed from MEX signatures. Change table values within
+the fixed input schema without rebuilding the consumer. Numerical kernels disable
+variable sizing
 and dynamic allocation; MATLAB gateways still allocate output storage.
 
 | Entry point | Default MEX outputs | Default C++ outputs | Explicit output prefixes |

@@ -13,6 +13,7 @@ function [dJacSRPOrbital, dSRPaccel_IN] = ...
 % the nominal position partial. Reuse the exact same force contract as the RHS.
 % Return the acceleration from that same evaluation when requested. Use both
 % outputs instead of separate RHS/Jacobian calls at the same state and inputs.
+% Keep state mappings and selection constant while passing table values at runtime.
 % Example: [dJac, dAcc] = EvalJac_SRPLutWithBias(dxState, strDynParams, ...
 %     strMutable, strConstant);
 % Output: Six orbital Jacobian rows and the shared inertial SRP acceleration.
@@ -28,13 +29,14 @@ function [dJacSRPOrbital, dSRPaccel_IN] = ...
 % dSRPaccel_IN           Optional inertial SRP acceleration [LU/s^2].
 % -------------------------------------------------------------------------------------------------------------
 %% CHANGELOG
-% 01-10-2026  Pietro Califano, Codex GPT-6  Document constant transverse selection.
 % 29-09-2026  Pietro Califano, Codex gpt-6  Add the SRP-only analytical filter Jacobian.
 % 29-09-2026  Pietro Califano, Codex gpt-6  Compile out an absent bias output.
 % 30-09-2026  Pietro Califano, Codex gpt-6  Reuse acceleration for paired force/Jacobian requests.
 % 30-09-2026  Pietro Califano, Codex gpt-6  Document optional bias state and output requests.
+% 01-10-2026  Pietro Califano, Codex GPT-6  Document constant transverse selection.
 % 01-10-2026  Pietro Califano, Codex gpt-6  Standardize SRP acronym in entry-point names.
 % 01-10-2026  Pietro Califano, Codex gpt-6  Clarify frames, physical inputs and generated struct types.
+% 04-10-2026  Pietro Califano, Codex GPT-6  Preserve large constant configuration at adapter calls.
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % EvalFilterSRPLutWithBias.
@@ -61,11 +63,13 @@ end
 if coder.const(bHasBiasState)
     dJacSRPOrbital = zeros(6, 4);
     [dSRPaccel_IN, dJacAccSRP_IN, dJacAccSRPWrtBias_IN] = ...
-        EvalFilterSRPLutWithBias(dxState, strDynParams, strFilterMutabConfig, strFilterConstConfig);
+        EvalFilterSRPLutWithBias(dxState, strDynParams, strFilterMutabConfig, ...
+                                coder.const(strFilterConstConfig));
 else
     dJacSRPOrbital = zeros(6, 3);
-    [dSRPaccel_IN, dJacAccSRP_IN] = EvalFilterSRPLutWithBias(dxState, strDynParams, ...
-                                                             strFilterMutabConfig, strFilterConstConfig);
+    [dSRPaccel_IN, dJacAccSRP_IN] = ...
+        EvalFilterSRPLutWithBias(dxState, strDynParams, strFilterMutabConfig, ...
+                                coder.const(strFilterConstConfig));
 end
 
 % Map the shared partials without repeating interpolation or force evaluation.

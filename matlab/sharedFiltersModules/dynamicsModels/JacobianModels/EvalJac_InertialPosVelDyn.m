@@ -17,12 +17,14 @@ function [dDynMatrix_PosVel] = EvalJac_InertialPosVelDyn(dxState, ...
 % both SRP models and include bias sensitivity only for a positive state index.
 % Map the optional central gravitational parameter in log10 coordinates.
 % Consume resolved ephemerides; retain the epoch in the existing call interface.
+% Keep architecture and output dimensions constant while model values remain
+% runtime inputs, including the spacecraft response table in dynamics.
 % -------------------------------------------------------------------------------------------------------------
 %% INPUT
 % dxState              Filter state with configured orbital/bias components [LU; LU/s; LU/s^2].
 % dStateTimetag         Epoch [s]; retain for compatibility with dynamics callbacks.
 % strDynParams          Resolved gravity, Sun-first third-body and spacecraft inputs.
-% strFilterMutabConfig  Runtime SRP transverse and active/consider-state modes.
+% strFilterMutabConfig  Runtime active/consider-state modes.
 % strFilterConstConfig  Constant state layout, units and optional SRP-model selection.
 % -------------------------------------------------------------------------------------------------------------
 %% OUTPUT
@@ -33,6 +35,7 @@ function [dDynMatrix_PosVel] = EvalJac_InertialPosVelDyn(dxState, ...
 % 30-05-2025    Pietro Califano     Review, gravity param. design change (to log space), documentation    
 % 10-09-2026    Pietro Califano, Codex gpt-6    Remove the obsolete orbit-only ablation selector.
 % 30-09-2026    Pietro Califano, Codex gpt-6    Select SRP components and share state-column assembly.
+% 04-10-2026  Pietro Califano, Codex GPT-6  Retain state dimensions with large constant tables.
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % EvalJac_InertialMainBodyGrav, EvalJac_3rdBodyGrav,
@@ -62,17 +65,18 @@ if coder.target('MATLAB')
     end
 end
 
-ui16StateSize = strFilterConstConfig.ui16StateSize;
+% Fix output dimensions independently of the constant configuration's total size.
+ui16StateSize = coder.const(strFilterConstConfig.ui16StateSize);
 dDynMatrix_PosVel = zeros(6, ui16StateSize);
 
-% Get indices for allocation
-ui8PosVelIdx        = strFilterConstConfig.strStatesIdx.ui8posVelIdx;
+% Preserve compile-time state mappings across downstream component calls.
+ui8PosVelIdx        = coder.const(strFilterConstConfig.strStatesIdx.ui8posVelIdx);
 % ui8attBiasDeltaIdx  = strFilterConstConfig.strStatesIdx.ui8attBiasDeltaIdx; % NOTE: influences SH if any
-ui8ResidualAccelIdx = strFilterConstConfig.strStatesIdx.ui8ResidualAccelIdx;
+ui8ResidualAccelIdx = coder.const(strFilterConstConfig.strStatesIdx.ui8ResidualAccelIdx);
 % ui8LidarMeasBiasIdx = strFilterConstConfig.strStatesIdx.ui8LidarMeasBiasIdx;
 
 if coder.const(isfield(strFilterConstConfig.strStatesIdx, "ui8CoeffSRPidx"))
-    ui8CoeffSRPidx = strFilterConstConfig.strStatesIdx.ui8CoeffSRPidx;
+    ui8CoeffSRPidx = coder.const(strFilterConstConfig.strStatesIdx.ui8CoeffSRPidx);
 else
     ui8CoeffSRPidx = coder.const(0);
 end
@@ -91,7 +95,7 @@ dDCMmainAtt_INfromTF = zeros(3,3); % TODO (PC) TO REMOVE next
 
 [drvMainBodyGravityJac] = EvalJac_InertialMainBodyGrav(dxState, ...
                                                        strDynParams.strMainData.dGM, ...
-                                                       strFilterConstConfig, ...
+                                                       coder.const(strFilterConstConfig), ...
                                                        dDCMmainAtt_INfromTF, ...
                                                        [], ...          % strDynParams.strMainData.dSHcoeff
                                                        uint16(0), ... % strDynParams.strMainData.ui16MaxSHdegree
@@ -103,7 +107,7 @@ dDynMatrix_PosVel(ui8PosVelIdx, ui8PosVelIdx) = dDynMatrix_PosVel(ui8PosVelIdx, 
 %% Jacobian wrt 3rd bodies
 [drv3rdBodyGravityJac] = EvalJac_3rdBodyGrav(dxState, ...
                                              strDynParams, ...
-                                             strFilterConstConfig);
+                                             coder.const(strFilterConstConfig));
 
 dDynMatrix_PosVel(ui8PosVelIdx, ui8PosVelIdx) = dDynMatrix_PosVel(ui8PosVelIdx, ui8PosVelIdx) ...
                                                                 + drv3rdBodyGravityJac;
@@ -119,10 +123,10 @@ if not(strDynParams.bIsInEclipse)
     end
     if coder.const(bUseSrpLut)
         dSrpJacobian = EvalJac_SRPLutWithBias(dxState, strDynParams, ...
-                                              strFilterMutabConfig, strFilterConstConfig);
+                                              strFilterMutabConfig, coder.const(strFilterConstConfig));
     else
         dSrpJacobian = EvalJac_SRPwithBias(dxState, strDynParams, ...
-                                           strFilterMutabConfig, strFilterConstConfig);
+                                           strFilterMutabConfig, coder.const(strFilterConstConfig));
     end
 
     % Assemble either model's position partials and only a configured bias column.
@@ -143,7 +147,7 @@ end
 dDynMatrix_PosVel(ui8PosVelIdx(4:6), ui8ResidualAccelIdx) = dDynMatrix_PosVel(ui8PosVelIdx(4:6), ui8ResidualAccelIdx) + eye(3);
 
 %% Jacobian wrt gravity parameter (central force only)
-if strFilterConstConfig.bEstimateGravParam
+if coder.const(strFilterConstConfig.bEstimateGravParam)
 
     ui8GravParamIdx = strFilterConstConfig.strStatesIdx.ui8GravParamIdx;
 
@@ -161,5 +165,3 @@ if strFilterConstConfig.bEstimateGravParam
 end
 
 end
-
-
