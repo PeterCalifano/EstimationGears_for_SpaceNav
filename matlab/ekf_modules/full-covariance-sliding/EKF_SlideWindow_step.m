@@ -32,6 +32,8 @@ end
 %                                                                               strFilterConstConfig)%#codegen
 % -------------------------------------------------------------------------------------------------------------
 %% DESCRIPTION
+% Burn magnitude uncertainty is a dimensionless fraction; the impulse-noise
+% kernel applies the commanded delta-V magnitude exactly once.
 % Function performing one EKF SlideWindow Time-Measurement update step from current timestamp to timestamp 
 % determined by variable "dTargetTimetag". Measurement are processed only if available as determined by 
 % strMeasBus data. Sliding window is automatically managed according to feature tracking mode.
@@ -64,6 +66,7 @@ end
 %                                   in C/C++ programs; improve validation of inputs
 % 19-01-2026    Pietro Califano     [MAJOR] Upgrade to handle delay of measurements using backward
 %                                   integration of state and covariance (double staged time update)
+% 09-10-2026    Pietro Califano, Codex (GPT-6)     Preserve fractional burn uncertainty at the filter boundary.
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % [-]
@@ -257,7 +260,7 @@ if coder.const( isfield(strDynParams, "bFiringManoeuvre") && ...
                                                                             strDynParams.dManTimestamp, ...
                                                                             transpose(strMeasModelParams.dDCM_SCBiFromIN(:,:,1)), ...
                                                                             strFilterConstConfig.enumManCovModelType, ...
-                                                                            strFilterMutabConfig.dManSigmaMagErrFrac * norm(strDynParams.dManDeltaV_IN), ...
+                                                                            strFilterMutabConfig.dManSigmaMagErrFrac, ...
                                                                             strFilterMutabConfig.dManSigmaDirErrInRad, ...
                                                                             strFilterMutabConfig.dAttitudeManErrCov); %#ok<ASGLU>
     end
