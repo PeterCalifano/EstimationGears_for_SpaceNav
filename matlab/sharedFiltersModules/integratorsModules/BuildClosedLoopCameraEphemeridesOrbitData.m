@@ -103,8 +103,8 @@ if dIntegrTimestep <= 0.0
 end
 
 % Compute number of samples based on preferred step and limits
-dHorizonSec = dStopTimestamp - dStartTimestamp;
-ui32RequestedSamples = uint32(ceil(dHorizonSec / max(dPreferredSampleStepSec, eps('double')))) + uint32(1);
+dHorizon_s = dStopTimestamp - dStartTimestamp;
+ui32RequestedSamples = uint32(ceil(dHorizon_s / max(dPreferredSampleStepSec, eps('double')))) + uint32(1);
 ui32RequiredSamples = max(ui32MinSamples, ui32PolyDeg + uint32(1));
 ui32NumSamples = max(ui32RequiredSamples, min(ui32MaxSamples, ui32RequestedSamples));
 
